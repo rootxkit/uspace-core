@@ -28,6 +28,17 @@ paths = ['''^vectors/testdata/[^/]+\.json$''']
 regexTarget = "line"
 regexes = ['''"compare_key"\s*:''']
 
+# auth/detached_wire_test.go pins the RFC 7797 section 4.2 example, whose
+# HMAC key is the published example key of RFC 7515 Appendix A.1: it is
+# printed in the RFC and protects nothing. The exemption is limited to
+# this rule, that file and the keyB64 constant line.
+[[rules.allowlists]]
+description = "the RFC 7515 A.1 example key in the RFC 7797 example test"
+condition = "AND"
+paths = ['''^auth/detached_wire_test\.go$''']
+regexTarget = "line"
+regexes = ['''^\s*keyB64\s*=''']
+
 # jwt_verify.json (WP-11) carries test JWTs signed by a key generated at
 # run time by auth/internal/genvectors and discarded, so they grant
 # nothing anywhere; only the public JWKS is kept (spec 06 section 4). The
