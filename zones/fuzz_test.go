@@ -118,10 +118,10 @@ func FuzzJudgeVertical(f *testing.F) {
 		if r.Raise != nil && r.NotEvaluated {
 			t.Fatalf("raised and not evaluated: %+v", r)
 		}
-		if r.LimitNotJudged && (r.Raise == nil || r.Raise.Severity != core.SeverityWarning || r.Reason == "") {
+		if r.LimitNotJudged && (r.Raise == nil || r.Raise.Severity != core.SeverityWarning || r.Reasons == 0) {
 			t.Fatalf("limit not judged without a warning and a reason: %+v", r)
 		}
-		if r.NotEvaluated && r.Reason == "" {
+		if r.NotEvaluated && r.Reasons == 0 {
 			t.Fatalf("not evaluated without a reason: %+v", r)
 		}
 		if r.Raise != nil {

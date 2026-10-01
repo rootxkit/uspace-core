@@ -22,15 +22,15 @@ func JudgeHeightLimit(ac Aircraft, env Env, pol Policy) Result {
 	}
 	maxM := *pol.MaxHeightAGLM
 	if !core.IsFinite(maxM) || maxM < 0 {
-		return Result{NotEvaluated: true, Reason: ReasonInvalidPolicy, height: true}
+		return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonInvalidPolicy), height: true}
 	}
 	alt, widened, ok := altitude(ac)
 	if !ok {
-		return Result{NotEvaluated: true, Reason: ReasonNoAltitude, height: true}
+		return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonNoAltitude), height: true}
 	}
 	heightAGLM, why := heightIn(core.RefAGL, alt, env)
 	if why != "" {
-		return Result{NotEvaluated: true, Reason: why, height: true}
+		return Result{NotEvaluated: true, Reasons: ReasonsOf(why), height: true}
 	}
 	if heightAGLM <= maxM {
 		return Result{height: true}

@@ -3,6 +3,7 @@ package zones
 import (
 	"math"
 	"slices"
+	"strings"
 
 	"github.com/rootxkit/uspace-core/core"
 )
@@ -113,6 +114,60 @@ const (
 	ReasonInvalidPolicy Reason = "invalid_policy"
 )
 
+// reasonOrder fixes the bit of each Reason in a Reasons set and the
+// order List returns them in.
+var reasonOrder = [...]Reason{
+	ReasonNoAltitude, ReasonNoTerrain, ReasonGroundUnknown,
+	ReasonNoGeoid, ReasonInvalidZone, ReasonInvalidPolicy,
+}
+
+// Reasons is a set of Reason values: everything that was missing, so
+// that a zone with an AGL limit and no terrain and a WGS84 limit and no
+// geoid says both. The zero value is the empty set.
+type Reasons uint8
+
+// ReasonsOf is the set of rs; a value that is not one of the Reason
+// constants is ignored.
+func ReasonsOf(rs ...Reason) Reasons {
+	var s Reasons
+	for _, r := range rs {
+		for i, x := range reasonOrder {
+			if x == r {
+				s |= 1 << i
+			}
+		}
+	}
+	return s
+}
+
+// Has reports whether r is in the set.
+func (s Reasons) Has(r Reason) bool {
+	return r != "" && s&ReasonsOf(r) != 0
+}
+
+// List returns the reasons in the set in a fixed order.
+func (s Reasons) List() []Reason {
+	var out []Reason
+	for i, r := range reasonOrder {
+		if s&(1<<i) != 0 {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// String is the reasons joined with commas, for a log line.
+func (s Reasons) String() string {
+	var b strings.Builder
+	for i, r := range s.List() {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(string(r))
+	}
+	return b.String()
+}
+
 // Detail is what a raise says about the judgement. Every optional member
 // is a pointer (or a nil slice) so that "not said" differs from false or
 // 0; the vectors compare absent keys as nil. Numbers are at full
@@ -155,8 +210,9 @@ type Result struct {
 	Raise          *Raise
 	NotEvaluated   bool
 	LimitNotJudged bool
-	// Reason says what was missing when NotEvaluated or LimitNotJudged.
-	Reason Reason
+	// Reasons says everything that was missing when NotEvaluated or
+	// LimitNotJudged; empty otherwise.
+	Reasons Reasons
 
 	height bool
 }
@@ -315,7 +371,7 @@ func ptr[T any](v T) *T { return &v }
 // of something unknown.
 func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	if z == nil {
-		return Result{NotEvaluated: true, Reason: ReasonInvalidZone}
+		return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonInvalidZone)}
 	}
 	sev, raises := Severity(z.Type, pol)
 	if !raises {
@@ -332,7 +388,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 			continue
 		}
 		if !core.IsFinite(b.l.ValueM) || !b.l.Ref.Valid() {
-			return Result{NotEvaluated: true, Reason: ReasonInvalidZone}
+			return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonInvalidZone)}
 		}
 		if needsHeight(b.l, b.lower) {
 			bounds[n] = b
@@ -345,7 +401,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	}
 	alt, widened, ok := altitude(ac)
 	if !ok {
-		return Result{NotEvaluated: true, Reason: ReasonNoAltitude}
+		return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonNoAltitude)}
 	}
 	margin := 0.0
 	if widened {
@@ -354,16 +410,14 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	withinBand := true
 	judged := false
 	var notJudged []string
-	var reason Reason
+	var reasons Reasons
 	for _, b := range bounds[:n] {
 		h, why := heightIn(b.l.Ref, alt, env)
 		if why != "" {
 			if !slices.Contains(notJudged, string(b.l.Ref)) {
 				notJudged = append(notJudged, string(b.l.Ref))
 			}
-			if reason == "" {
-				reason = why
-			}
+			reasons |= ReasonsOf(why)
 			continue
 		}
 		judged = true
@@ -379,7 +433,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 			beyondM = b.l.ValueM - h
 		}
 		if math.IsNaN(beyondM) {
-			return Result{NotEvaluated: true, Reason: ReasonInvalidZone}
+			return Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonInvalidZone)}
 		}
 		if beyondM > margin {
 			return Result{} // judged, and outside even the widened band
@@ -400,10 +454,10 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 		return res
 	}
 	if !warnsUnjudged(z.Type) || len(notJudged) != 1 || notJudged[0] != string(core.RefAGL) {
-		return Result{NotEvaluated: true, Reason: reason}
+		return Result{NotEvaluated: true, Reasons: reasons}
 	}
 	res.LimitNotJudged = true
-	res.Reason = reason
+	res.Reasons = reasons
 	res.Raise.Severity = atMostWarning(sev)
 	res.Raise.Detail.VerticalKnown = ptr(false)
 	res.Raise.Detail.LimitNotJudged = ptr(true)

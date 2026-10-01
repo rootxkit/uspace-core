@@ -114,7 +114,7 @@ func TestVectorsZonesVertical(t *testing.T) {
 			}
 			res = JudgeVertical(z, ac, env, pol)
 		}
-		if (res.NotEvaluated || res.LimitNotJudged) && res.Reason == "" {
+		if (res.NotEvaluated || res.LimitNotJudged) && res.Reasons == 0 {
 			t.Errorf("not evaluated or not judged without a reason: %+v", res)
 		}
 		var counters core.Counters
@@ -134,8 +134,8 @@ func TestVectorsZonesVertical(t *testing.T) {
 		case len(exp.Raised) > 1:
 			t.Fatalf("vector raises %d; one observation raises at most one", len(exp.Raised))
 		case res.Raise == nil:
-			t.Fatalf("raised nothing (not evaluated %v, reason %q), want %s %s",
-				res.NotEvaluated, res.Reason, exp.Raised[0].Kind, exp.Raised[0].Severity)
+			t.Fatalf("raised nothing (not evaluated %v, reasons %q), want %s %s",
+				res.NotEvaluated, res.Reasons, exp.Raised[0].Kind, exp.Raised[0].Severity)
 		}
 		want := exp.Raised[0]
 		if !slices.Equal(want.Aircraft, []string{"A"}) {

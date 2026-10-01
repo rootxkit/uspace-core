@@ -45,8 +45,9 @@
 // Lifting a REQ_AUTHORISATION zone for an aircraft authorised there is
 // the caller's concern (U-05); nothing lifts PROHIBITED.
 //
-// Every Result is exactly one of raised, not evaluated (with a Reason),
-// or judged clear, and is never clear because something was unknown: a
+// Every Result is exactly one of raised, not evaluated (with its Reasons:
+// every reference that was missing), or judged clear, and is never clear
+// because something was unknown: a
 // non-finite altitude, ground or undulation is unknown, a non-finite
 // limit makes the zone not evaluated, and an invalid pressure margin is
 // unbounded. Result.Count adds the outcome to core.Counters as

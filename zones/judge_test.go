@@ -39,7 +39,7 @@ func isClear(t *testing.T, name string, r Result) {
 func raised(t *testing.T, name string, r Result, sev core.Severity) *Raise {
 	t.Helper()
 	if r.Raise == nil {
-		t.Fatalf("%s: raised nothing (not evaluated %v, reason %q), want %s", name, r.NotEvaluated, r.Reason, sev)
+		t.Fatalf("%s: raised nothing (not evaluated %v, reasons %q), want %s", name, r.NotEvaluated, r.Reasons, sev)
 	}
 	if r.NotEvaluated {
 		t.Errorf("%s: a raise is not also not evaluated", name)
@@ -50,11 +50,11 @@ func raised(t *testing.T, name string, r Result, sev core.Severity) *Raise {
 	return r.Raise
 }
 
-// notEvaluated asserts r is not evaluated for reason.
-func notEvaluated(t *testing.T, name string, r Result, reason Reason) {
+// notEvaluated asserts r is not evaluated for exactly reasons.
+func notEvaluated(t *testing.T, name string, r Result, reasons ...Reason) {
 	t.Helper()
-	if r.Raise != nil || !r.NotEvaluated || r.Reason != reason {
-		t.Errorf("%s: got %+v, want not evaluated for %q", name, r, reason)
+	if r.Raise != nil || !r.NotEvaluated || r.Reasons != ReasonsOf(reasons...) {
+		t.Errorf("%s: got %+v, want not evaluated for %v", name, r, ReasonsOf(reasons...))
 	}
 }
 
@@ -181,14 +181,14 @@ func TestNonFiniteEnvironmentIsUnknown(t *testing.T) {
 		env := Env{Ground: GroundKnown, GroundM: g}
 		r := JudgeVertical(agl, geodetic(5000), env, pol)
 		raised(t, "PROHIBITED, non-finite ground", r, core.SeverityWarning)
-		if !r.LimitNotJudged || r.Reason != ReasonGroundUnknown {
+		if !r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonGroundUnknown) {
 			t.Errorf("non-finite ground %v: %+v", g, r)
 		}
 		notEvaluated(t, "CONDITIONAL, non-finite ground", JudgeVertical(cond, geodetic(5000), env, pol), ReasonGroundUnknown)
 	}
 	// An out-of-range GroundKind is unknown ground too.
 	r := JudgeVertical(agl, geodetic(5000), Env{Ground: GroundKind(7), GroundM: 500}, pol)
-	if !r.LimitNotJudged || r.Reason != ReasonGroundUnknown {
+	if !r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonGroundUnknown) {
 		t.Errorf("unknown ground kind: %+v", r)
 	}
 
@@ -220,7 +220,7 @@ func TestUnjudgedAGLAndWGS84IsNotEvaluated(t *testing.T) {
 	pol := DefaultPolicy()
 	z := zoneOf(core.ZoneProhibited, limit(50, core.RefAGL), limit(600, core.RefWGS84))
 	r := JudgeVertical(z, geodetic(560), noTerrain, pol)
-	notEvaluated(t, "AGL and WGS84 both unknown", r, ReasonNoTerrain)
+	notEvaluated(t, "AGL and WGS84 both unknown", r, ReasonNoTerrain, ReasonNoGeoid)
 	var c core.Counters
 	r.Count(&c)
 	if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneLimitNotJudged) != 0 {
@@ -239,7 +239,7 @@ func TestLimitNotJudgedReasonAndCounter(t *testing.T) {
 	}{{noTerrain, ReasonNoTerrain}, {Env{Ground: GroundUnknown}, ReasonGroundUnknown}} {
 		r := JudgeVertical(z, geodetic(550), tc.env, pol)
 		d := raised(t, string(tc.reason), r, core.SeverityWarning).Detail
-		if !r.LimitNotJudged || r.Reason != tc.reason || len(d.NotJudged) != 1 || d.NotJudged[0] != "AGL" || d.HeightAGLM != nil {
+		if !r.LimitNotJudged || r.Reasons != ReasonsOf(tc.reason) || len(d.NotJudged) != 1 || d.NotJudged[0] != "AGL" || d.HeightAGLM != nil {
 			t.Errorf("%s: %+v %+v", tc.reason, r, d)
 		}
 		var c core.Counters
@@ -431,4 +431,34 @@ func TestUSpaceRaisesInfo(t *testing.T) {
 
 	n := &Zone{Identifier: "N", Type: core.ZoneNoRestriction, Upper: limit(120, core.RefAMSL)}
 	isClear(t, "inside NO_RESTRICTION", JudgeVertical(n, geodetic(100), noTerrain, pol))
+}
+
+// Every missing reference is reported, not only the first.
+func TestReasonsCarryEveryMissingReference(t *testing.T) {
+	pol := DefaultPolicy()
+	z := zoneOf(core.ZoneProhibited, limit(50, core.RefAGL), limit(600, core.RefWGS84))
+	r := JudgeVertical(z, geodetic(560), noTerrain, pol)
+	want := ReasonsOf(ReasonNoTerrain, ReasonNoGeoid)
+	if !r.NotEvaluated || r.Reasons != want {
+		t.Fatalf("got %+v, want not evaluated for %v", r, want)
+	}
+	if !r.Reasons.Has(ReasonNoTerrain) || !r.Reasons.Has(ReasonNoGeoid) || r.Reasons.Has(ReasonGroundUnknown) || r.Reasons.Has("") {
+		t.Errorf("Has: %v", r.Reasons)
+	}
+	if got := r.Reasons.String(); got != "no_terrain,no_geoid" {
+		t.Errorf("String: %q", got)
+	}
+	// Unknown ground and no geoid.
+	r = JudgeVertical(z, geodetic(560), Env{Ground: GroundUnknown}, pol)
+	if r.Reasons != ReasonsOf(ReasonGroundUnknown, ReasonNoGeoid) {
+		t.Errorf("unknown ground: %v", r.Reasons)
+	}
+	// The pair: one missing reference gives one reason.
+	r = JudgeVertical(z, geodetic(560), Env{UndulationM: f64(15)}, pol)
+	if !r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonNoTerrain) || len(r.Reasons.List()) != 1 {
+		t.Errorf("AGL only: %+v", r)
+	}
+	if Reasons(0).String() != "" || Reasons(0).List() != nil || ReasonsOf("bogus") != 0 {
+		t.Errorf("empty set")
+	}
 }
