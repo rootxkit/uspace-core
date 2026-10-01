@@ -47,6 +47,11 @@ for a behaviour change the line sits under the heading of the next major
 - auth/internal/genvectors: `-kind jws_detached` and `-kind jws_compact`
   write the JWS vector files proposed to uspace-lab (not vendored here)
   [WP-14 C1]
+- `geodesy/cell`: the `c5` (0.1 degree) and `c3` (1 degree) partition
+  cells of spec `05 §3` (M35): `Of`, the names `c5:<lat_idx>:<lon_idx>`
+  with a strict `Parse`, `Parent`, `Children`, `Ring1`, `BBox`,
+  `Centre` and a bounded `Cover` (`MaxCoverDefault`). No vector file
+  changes; the cell cases are proposed to the lab. [WP-15 C1]
 
 ## [1.0.0] (G-M3)
 

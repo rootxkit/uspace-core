@@ -44,6 +44,7 @@ github.com/rootxkit/uspace-core
 ├── core/          frozen base types (WP-0)                     deps: stdlib
 ├── vectors/       harness + testdata/*.json (WP-0)             deps: stdlib
 ├── geodesy/       WGS84 distance, bearing, tangent plane, containment (WP-1)   deps: core
+├── geodesy/cell/  c5/c3 partition cells: names, parent, ring-1, bbox cover (WP-15, C1)  deps: core, geodesy
 ├── internal/pgm/  PGM P5 container (WP-2)                      deps: core
 ├── terrain/       DEM tiles, cell names, bilinear, index (WP-2)  deps: core, internal/pgm
 ├── geoid/         GeographicLib grids, HAE <-> AMSL (WP-2)     deps: core, internal/pgm
@@ -71,6 +72,7 @@ the single root; `vectors` is imported by tests only.
 
 ```
 core <- geodesy <- identify, zones, cpa, ed318
+core, geodesy <- geodesy/cell   (nothing in geodesy imports cell)
 core <- internal/pgm <- terrain, geoid
 core <- odid <- rid
 core <- regnum, serial <- identify
@@ -165,6 +167,30 @@ func (p Polygon) BBox() BBox
 func (c Circle) Contains(pt core.LatLon) (inside bool, distanceM float64, err error) // geodesic distance (D-09)
 func (c Circle) BBox() BBox
 func ValidRing(r Ring, maxVertices int) error        // closed, >= 4 positions, finite, in range, <= maxVertices (Z-06)
+```
+
+`geodesy/cell` (WP-15, C1, `v1.1.0`; M35): the named partition key of
+spec `05 §3`, not H3 and not `cpa.Grid`. Indexes are
+`floor((lat_deg + 90) * n)` and `floor((lon_deg + 180) * n)` with
+`n` = 10 (`c5`) or 1 (`c3`), longitude in `[-180, 180)`, +90 in the last
+row; names `c5:<lat_idx>:<lon_idx>` / `c3:<lat_idx>:<lon_idx>`.
+
+```go
+type Level int                       // Level5 (0.1 degree, "c5"), Level3 (1 degree, "c3"); the zero Level is invalid
+func (l Level) StepDeg() float64     // 0.1, 1
+func (l Level) Valid() bool
+type ID struct{ Level Level; LatIdx, LonIdx int }
+func Of(p core.LatLon, l Level) (ID, error)          // *core.FieldError "level", "lat_deg", "lon_deg"
+func (c ID) String() string                          // "c5:1317:2248"; "" for an invalid ID
+func Parse(s string) (ID, error)                     // strict inverse of String; *core.FieldError "cell"
+func (c ID) Valid() bool
+func (c ID) Parent() ID                              // c5 -> its c3; a c3 returns itself
+func (c ID) Children() []ID                          // c3 -> its 100 c5 in row-major order; a c5 returns nil
+func (c ID) Ring1() []ID                             // up to 8 neighbours, longitude wrapped, 5 on the polar rows, sorted
+func (c ID) BBox() geodesy.BBox                      // [south, north) x [west, east); east 180 for the last column
+func (c ID) Centre() core.LatLon
+func Cover(b geodesy.BBox, l Level, maxCells int) ([]ID, error) // sorted; antimeridian split; MaxLon 180 adds column 0; > maxCells -> *core.FieldError "bbox", nil
+const MaxCoverDefault = 10_000
 ```
 
 ### 3.4 `internal/pgm`, `terrain`, `geoid` (WP-2)
