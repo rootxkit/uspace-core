@@ -16,6 +16,7 @@ var Manifest = []Entry{
 	{"alert_lifecycle.json", "alerting", 28},
 	{"cpa.json", "cpa", 27},
 	{"ed269_parse.json", "ed269", 52},
+	{"ed318_roundtrip.json", "ed318", 21},
 	{"fleet_match.json", "identify", 10},
 	{"geodesy.json", "geodesy", 17},
 	{"identification_status.json", "identify", 37},
@@ -34,5 +35,6 @@ var Manifest = []Entry{
 
 // TotalCases is the number of cases across every file: 596 at the pinned
 // lab commit (knowledge/README.md) plus the 16 of the local
-// jwt_verify.json (WP-11).
-const TotalCases = 612
+// jwt_verify.json (WP-11) and the 21 of the local ed318_roundtrip.json
+// (WP-12).
+const TotalCases = 633
