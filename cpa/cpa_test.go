@@ -316,7 +316,6 @@ func TestNonFiniteInputsAreNotJudged(t *testing.T) {
 		{"lon-out-of-range", func(s *State) { s.Pos.LonDeg = -181 }},
 		{"alt-nan", func(s *State) { s.AltAMSLM = nan }},
 		{"alt-inf", func(s *State) { s.AltAMSLM = -inf }},
-		{"alt-nan-pressure", func(s *State) { s.AltAMSLM, s.VerticalKnown = nan, false }},
 		{"vn-nan", func(s *State) { s.VNMS = nan }},
 		{"ve-inf", func(s *State) { s.VEMS = inf }},
 		{"vd-nan", func(s *State) { s.VDMS = nan }},
@@ -328,6 +327,48 @@ func TestNonFiniteInputsAreNotJudged(t *testing.T) {
 			tc.mut(&bad)
 			mustNotJudge(t, Evaluate(good, bad, DefaultPolicy), ReasonInvalidInput)
 			mustNotJudge(t, Evaluate(bad, good, DefaultPolicy), ReasonInvalidInput)
+		})
+	}
+}
+
+// TestNaNAltitudeOnPressureTrack: the altitude and vertical speed of a
+// track whose vertical is unknown take no part in the judgement, so a NaN
+// there is judged on the horizontal (a conflict here); the same NaN on a
+// track whose vertical is known is invalid input.
+func TestNaNAltitudeOnPressureTrack(t *testing.T) {
+	a := at(0, 0, 500).moving(10, 0, 0)
+	b := at(500, 0, 600).moving(-10, 0, 0)
+	nan := math.NaN()
+	for _, tc := range []struct {
+		name string
+		mut  func(*State)
+	}{
+		{"alt", func(s *State) { s.AltAMSLM = nan }},
+		{"alt-inf", func(s *State) { s.AltAMSLM = math.Inf(-1) }},
+		{"vd", func(s *State) { s.VDMS = nan }},
+		{"alt-and-vd", func(s *State) { s.AltAMSLM, s.VDMS = nan, nan }},
+	} {
+		t.Run(tc.name+"-pressure-judged", func(t *testing.T) {
+			bad := b.pressure()
+			tc.mut(&bad)
+			for _, r := range []Result{Evaluate(a, bad, DefaultPolicy), Evaluate(bad, a, DefaultPolicy)} {
+				mustJudge(t, r)
+				if !r.Conflict || r.VerticalKnown || r.DAltNowM != 0 || r.DAltAtCPAM != 0 {
+					t.Fatalf("%+v, want a horizontal conflict with the vertical unknown", r)
+				}
+			}
+			if ab, ba := Evaluate(a, bad, DefaultPolicy), Evaluate(bad, a, DefaultPolicy); ab != ba {
+				t.Fatalf("asymmetric: %+v vs %+v", ab, ba)
+			}
+			// Advanced from an older sample, too.
+			mustJudge(t, Evaluate(a.capturedAt(5), bad, DefaultPolicy))
+			mustJudge(t, Evaluate(a, bad.capturedAt(5), DefaultPolicy))
+		})
+		t.Run(tc.name+"-known-not-judged", func(t *testing.T) {
+			bad := b
+			tc.mut(&bad)
+			mustNotJudge(t, Evaluate(a, bad, DefaultPolicy), ReasonInvalidInput)
+			mustNotJudge(t, Evaluate(bad, a, DefaultPolicy), ReasonInvalidInput)
 		})
 	}
 }

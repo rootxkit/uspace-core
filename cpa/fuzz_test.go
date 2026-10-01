@@ -10,7 +10,9 @@ import (
 // FuzzEvaluate feeds arbitrary states (NaN, Inf, out of range and
 // overflowing values included) to Evaluate and Advance. None may panic,
 // and the verdict is fail-safe:
-//   - a non-finite or out-of-range input is never judged;
+//   - a non-finite or out-of-range input the judgement uses is never
+//     judged, and NaN in the altitude or vertical speed of a track whose
+//     vertical is unknown changes nothing;
 //   - a pair not judged is never a conflict and always names a reason;
 //   - a judged result has finite, non-negative numbers, and a pair inside
 //     both minima now is a conflict whatever t_cpa says (C-03);
@@ -41,6 +43,18 @@ func FuzzEvaluate(f *testing.F) {
 			if r.Judged || r.NotJudged != ReasonInvalidInput {
 				t.Fatalf("invalid input judged: %+v", r)
 			}
+		}
+		// The vertical numbers of a track whose vertical is unknown take
+		// no part: replacing them with NaN changes nothing.
+		an, bn := a, b
+		if !vkA {
+			an.AltAMSLM, an.VDMS = math.NaN(), math.NaN()
+		}
+		if !vkB {
+			bn.AltAMSLM, bn.VDMS = math.NaN(), math.NaN()
+		}
+		if rn := Evaluate(an, bn, pol); rn != r {
+			t.Fatalf("unknown-vertical NaN changed the result: %+v, was %+v", rn, r)
 		}
 		if !r.Judged {
 			if r.Conflict || r.NotJudged == ReasonNone {

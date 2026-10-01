@@ -40,11 +40,15 @@
 //
 // # Fail-safe on bad numbers (C-09)
 //
-// A NaN or infinite coordinate, altitude, velocity or time, a position out
-// of range, a policy value that is NaN, infinite or negative, or
-// arithmetic that leaves the finite domain makes the result Judged false
-// with a Reason, never a judged "no conflict". Not judged is not clear:
-// the caller keeps whatever it had and counts the reason.
+// A NaN or infinite coordinate, velocity, altitude or time that the
+// judgement uses, a position out of range, a policy value that is NaN,
+// infinite or negative, or arithmetic that leaves the finite domain makes
+// the result Judged false with a Reason, never a judged "no conflict".
+// Not judged is not clear: the caller keeps whatever it had and counts
+// the reason. The altitude and vertical velocity of a state whose
+// vertical is unknown take no part in the judgement and are not checked,
+// so a NaN there never hides a horizontal conflict: the pair is judged on
+// the horizontal alone.
 //
 // # Neighbour grid (C-15)
 //

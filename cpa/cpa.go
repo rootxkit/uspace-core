@@ -33,12 +33,25 @@ type State struct {
 	CapturedAtS float64
 }
 
-// valid reports whether every number is finite and the position is in
-// range (C-09).
+// valid reports whether every number the judgement uses is finite and
+// the position is in range (C-09). AltAMSLM and VDMS take part only when
+// VerticalKnown is true; on a track whose vertical is unknown they are
+// not checked, so a NaN there cannot hide a horizontal conflict.
 func (s State) valid() bool {
-	return s.Pos.Valid() && core.IsFinite(s.AltAMSLM) &&
-		core.IsFinite(s.VNMS) && core.IsFinite(s.VEMS) && core.IsFinite(s.VDMS) &&
-		core.IsFinite(s.CapturedAtS)
+	if !s.Pos.Valid() || !core.IsFinite(s.VNMS) || !core.IsFinite(s.VEMS) || !core.IsFinite(s.CapturedAtS) {
+		return false
+	}
+	return !s.VerticalKnown || (core.IsFinite(s.AltAMSLM) && core.IsFinite(s.VDMS))
+}
+
+// horizontalOnly clears the vertical numbers of a state whose vertical is
+// unknown: they take no part in the judgement, and a NaN left there would
+// break the canonical order and Advance's validity check.
+func (s State) horizontalOnly() State {
+	if !s.VerticalKnown {
+		s.AltAMSLM, s.VDMS = 0, 0
+	}
+	return s
 }
 
 // Policy holds the separation minima and the pair-selection limits
@@ -95,8 +108,11 @@ const (
 	// ReasonStaleNeighbour: the samples are more than NeighbourMaxAgeS
 	// apart (C-04).
 	ReasonStaleNeighbour Reason = "stale_neighbour"
-	// ReasonInvalidInput: a coordinate, altitude, velocity or time is NaN
-	// or infinite, or a position is out of range (C-09).
+	// ReasonInvalidInput: a coordinate, horizontal velocity or time is NaN
+	// or infinite, a position is out of range, or the altitude or vertical
+	// velocity is NaN or infinite on a state whose vertical is known
+	// (C-09). On a state whose vertical is unknown those two take no part
+	// and are not checked.
 	ReasonInvalidInput Reason = "invalid_input"
 	// ReasonInvalidPolicy: a policy value Evaluate uses is NaN, infinite
 	// or negative.
@@ -202,7 +218,9 @@ func before(a, b State) bool {
 //     d_v_min)) OR (t_cpa < t_max AND d_cpa_h < d_h_min AND (vertical
 //     unknown OR d_alt_at_cpa < d_v_min)).
 //
-// Fail-safe on bad numbers: a NaN or infinite input, an out-of-range
+// Fail-safe on bad numbers: a NaN or infinite input the judgement uses
+// (the altitude and vertical velocity of a state whose vertical is
+// unknown are not used, so they cannot block a judgement), an out-of-range
 // position, an invalid policy, or arithmetic that leaves the finite
 // domain gives Judged false with a Reason, never a judged "no conflict".
 // The result does not depend on the order of a and b.
@@ -213,6 +231,7 @@ func Evaluate(a, b State, pol Policy) Result {
 	if !a.valid() || !b.valid() {
 		return Result{NotJudged: ReasonInvalidInput}
 	}
+	a, b = a.horizontalOnly(), b.horizontalOnly()
 	if math.Abs(a.CapturedAtS-b.CapturedAtS) > pol.NeighbourMaxAgeS {
 		return Result{NotJudged: ReasonStaleNeighbour}
 	}
