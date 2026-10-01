@@ -104,12 +104,14 @@ func TestResolveBroadcastTable(t *testing.T) {
 			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-A"), ptr(regActive), nil, false, ptr("d-active"), bc}, false},
 		{"registered-folded-trimmed-secret", ptr("  sn-a "), ptr(" GEOABCD1234efgh-x9z "),
 			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("sn-a"), ptr("GEOABCD1234efgh-x9z"), nil, false, ptr("d-active"), bc}, false},
-		// regnum strips the secret only after a number that matches the
-		// configured pattern, which is case-sensitive (G-04 as WP-4 made
-		// it): a lower-case prefix with a secret is compared whole, so it
-		// is a mismatch. Open question in the PR.
-		{"lower-case-prefix-with-secret-is-compared-whole", ptr("SN-A"), ptr("geoabcd1234efgh-x9z"),
-			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorMismatch, ptr("SN-A"), ptr("geoabcd1234efgh-x9z"), ptr(regActive), true, ptr("d-active"), bc}, true},
+		// The secret is stripped after a lower-case prefix too (regnum
+		// matches the head ignoring its case), so this is the owner.
+		{"lower-case-prefix-with-secret-matches", ptr("SN-A"), ptr("geoabcd1234efgh-x9z"),
+			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-A"), ptr("geoabcd1234efgh-x9z"), nil, false, ptr("d-active"), bc}, false},
+		// Its twin: a lower-case number with the secret that is not the
+		// owner's is still a mismatch.
+		{"lower-case-other-number-with-secret-mismatch", ptr("SN-A"), ptr("geoother0000001-x9z"),
+			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorMismatch, ptr("SN-A"), ptr("geoother0000001-x9z"), ptr(regActive), true, ptr("d-active"), bc}, true},
 		{"lower-case-prefix-without-secret-matches", ptr("SN-A"), ptr("geoabcd1234efgh"),
 			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-A"), ptr("geoabcd1234efgh"), nil, false, ptr("d-active"), bc}, false},
 		{"no-serial", nil, ptr(regActive),
