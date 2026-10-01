@@ -108,6 +108,9 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 		"one Operator ID":         {pack(t, op, loc), 2},
 		"one Self-ID":             {pack(t, self, loc), 1},
 		"authentication repeated": {pack(t, auth, auth, auth), 0},
+		"1 trailing byte":         {append(pack(t, basic, loc), 0), 2},
+		"24 trailing bytes":       {append(pack(t, basic, loc), make([]byte, 24)...), 2},
+		"a trailing message":      {append(pack(t, loc), loc[:]...), 1},
 	}
 	for name, c := range accepted {
 		ms, err := Decode(c.frame, DecodeOptions{})
@@ -123,7 +126,6 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 		{"one byte", "frame", "1 bytes, a pack header is 3", []byte{0xF2}},
 		{"two bytes", "frame", "2 bytes, a pack header is 3", []byte{0xF2, 0x19}},
 		{"message size 26", "frame", "pack message size 26, expected 25", append([]byte{0xF2, 26, 1}, loc[:]...)},
-		{"longer than it says", "frame", "pack longer than it says", append(pack(t, loc), 0)},
 		{"shorter by one byte", "frame", "pack shorter than it says", pack(t, basic, loc)[:52]},
 		{"unknown type inside", "pack[1]", "message type 9 is not allowed in a pack", pack(t, loc, unknown)},
 		{"three Basic IDs", "pack[2]", "too many Basic ID messages in a pack", pack(t, basic, basic, basic)},

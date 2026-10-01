@@ -106,9 +106,9 @@ func decodePack(frame []byte, opts DecodeOptions) ([]Message, error) {
 	if len(frame) < want {
 		return nil, core.Fieldf("frame", "pack shorter than it says: %d bytes, %d messages need %d", len(frame), count, want)
 	}
-	if len(frame) > want {
-		return nil, core.Fieldf("frame", "pack longer than it says: %d bytes, %d messages need %d", len(frame), count, want)
-	}
+	// Bytes past the declared messages are transport padding (BLE and
+	// Wi-Fi NAN pad their payloads): ignored, never decoded.
+	frame = frame[:want]
 	var kinds [PackMaxMessages]MessageType
 	for i := range count {
 		kinds[i] = typeNibble(frame[offPackMessages+i*MessageSize])

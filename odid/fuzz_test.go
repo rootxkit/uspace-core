@@ -60,7 +60,7 @@ func FuzzDecode(f *testing.F) {
 		if !reflect.DeepEqual(all, again) {
 			t.Fatalf("round trip changed the values:\n%#v\n%#v", all, again)
 		}
-		if canonical(frame) && !bytes.Equal(enc, frame) {
+		if canonical(frame) && !bytes.Equal(enc, frame[:len(enc)]) {
 			t.Fatalf("canonical frame re-encoded differently:\n%x\n%x", frame, enc)
 		}
 	})
@@ -79,7 +79,9 @@ func canonical(frame []byte) bool {
 	msgs := [][]byte{frame}
 	if typeNibble(frame[0]) == TypeMessagePack {
 		msgs = msgs[:0]
-		for off := offPackMessages; off < len(frame); off += MessageSize {
+		// Only the declared messages; trailing padding is not re-encoded.
+		for i := range int(frame[offPackCount]) {
+			off := offPackMessages + i*MessageSize
 			msgs = append(msgs, frame[off:off+MessageSize])
 		}
 	}

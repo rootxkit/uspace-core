@@ -39,9 +39,11 @@
 //
 // Strings lose their trailing NUL padding only; case and every other byte
 // are kept as broadcast, so a decoded message always re-encodes to the
-// same field. A frame that is neither 25 bytes nor a pack of exactly the
-// length its header gives is refused (the predecessor read the first 25
-// bytes and ignored the rest).
+// same field. A lone message must be exactly 25 bytes (the receiver layer
+// strips its transport framing; the predecessor read the first 25 bytes
+// and ignored the rest). A pack must hold at least the messages its
+// header declares; bytes after them are transport padding (BLE, Wi-Fi
+// NAN) and are ignored.
 //
 // # Encoding
 //
