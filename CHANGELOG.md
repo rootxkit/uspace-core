@@ -16,6 +16,36 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.1.0] (C1)
+
+Additive to 1.0.0 for the cross-plan reconciliation C1: JWS helpers and
+audience lists in `auth`, grid cells in `geodesy/cell`, the provider
+identification basis in `core` and `SkipConflicts` in `alerting`.
+No vector changed; `uspace-lab@6b5b286` remains the pin.
+
+### API declared stable
+
+From `1.1.0` the new package `geodesy/cell` is stable, with the cell
+names `c5:<lat_idx>:<lon_idx>` and `c3:<lat_idx>:<lon_idx>` and the
+index formula as wire form. So are the new identifiers of:
+
+- `auth`: `KeyRing`, `SigningKey`, `MaxRingKeys`, `SignDetached`,
+  `DetachedHeader`, `ParseDetachedHeader`, `DetachedConfig`,
+  `DetachedVerifier`, `Signature`, `SignCompact`, `CompactClaims`,
+  `CompactConfig`, `CompactVerifier`, `DefaultDetachedMaxAge`,
+  `DefaultMaxDetachedPayloadBytes`, `Config.Audiences`,
+  `Config.StrictSessionClaims`, `Claims.Roles`, `Claims.Realm`, and the
+  wire forms of the detached (`X-JWS-Signature`) and compact delivery
+  JWS;
+- `core`: `BasisProvider`;
+- `alerting`: `Config.SkipConflicts`.
+
+The new counter names are stable too: `rejected_b64`, `rejected_crit`,
+`rejected_publisher`, `rejected_iat`, `rejected_too_large`,
+`key_ring_full` and `conflict_checks_skipped`. The `-kind jws_detached`
+and `-kind jws_compact` modes of `auth/internal/genvectors` are not
+stable, like the rest of that command.
+
 ### Added
 
 - `core`: `BasisProvider` (`"provider"`), the identification basis of a
