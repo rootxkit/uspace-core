@@ -54,7 +54,19 @@
 // on the sample's own source clock (T-03), from a disabled source (B-11)
 // and invalid samples are counted and judge nothing. Placement and
 // staleness use Track.CapturedAtS, the ingest's clock (T-01); zone
-// applicability is judged at it in UTC (T-09).
+// applicability is judged at it in UTC (T-09). A sample placed or
+// received ahead of the wall by more than Config.AheadToleranceS is
+// refused, and alert times use the placement capped at the wall time.
+//
+// wallS, on every call, is the monitor's own monotonic clock on the
+// ingest's time base. The caller never derives it from a sample's times.
+//
+// Source keys (Track.Source and Track.Station) are the ingest's
+// authenticated station and receiver ids. The source share
+// (Config.MaxSourceShare) and the per-source counters assume a source
+// cannot mint new keys at will: how many keys there can be is bounded
+// only by the upstream authentication (the receivers' HMAC keys, auth),
+// and the refusal rate limit by maxRefusalSources.
 //
 // # What the caller must do
 //

@@ -163,7 +163,11 @@ func (m *Monitor) Config() Config { return m.cfg }
 func (m *Monitor) Tracked() int { return len(m.aircraft) }
 
 // Observe takes one sample at the monitor's wall time wallS and returns
-// what it raised and cleared. In order:
+// what it raised and cleared. wallS is the monitor's own clock, on the
+// ingest's time base and never going back: the caller reads it from its
+// own monotonic clock and never derives it from a sample's times, or a
+// sample could vouch for its own lateness, staleness and hysteresis. In
+// order:
 //
 //  1. Admission: a sample with an empty id or a non-finite time is
 //     rejected_invalid; from a disabled source rejected_source_disabled;

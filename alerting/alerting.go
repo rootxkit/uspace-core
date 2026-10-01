@@ -233,7 +233,8 @@ type Track struct {
 	Flying *bool
 	// CapturedAtS is where the ingest placed the sample on its own clock
 	// (T-01); RxAtS when the ingest received it. Both in seconds on the
-	// clock wallS is on.
+	// clock wallS is on. They are the sample's claims, judged against
+	// wallS (late, ahead, stale); wallS itself is never derived from them.
 	CapturedAtS, RxAtS float64
 	// SourceTS is the sample's time on its source's own clock, used only
 	// to order samples within one source (T-03); nil when it has none.
@@ -242,7 +243,9 @@ type Track struct {
 	Backlog bool
 	// Source is the source type (relay, remote_id, ...) and Station the
 	// instance (station or receiver id; "" for none), as sources.State
-	// names them.
+	// names them. Station must be the ingest's authenticated id of the
+	// station or receiver (auth), never a value the sample asserts: the
+	// source share and the per-source counters key on it.
 	Source, Station string
 	// Transmitter is the Remote ID transmitter address, nil otherwise;
 	// Identified is false for a track with no fresh identity (I-02), nil
