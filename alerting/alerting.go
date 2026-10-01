@@ -94,8 +94,13 @@ const (
 	CounterAircraftEvicted = "aircraft_evicted"
 	// CounterRejectedCapacity counts samples of a new id refused because
 	// every aircraft in MaxAircraft holds an active alert (see
-	// Monitor.CapacityExceeded).
+	// Monitor.CapacityExceeded). Also counted per source under this name
+	// plus "/<source>/<station>".
 	CounterRejectedCapacity = "rejected_capacity"
+	// CounterRejectedSourceShare counts samples of a new id refused
+	// because its source holds MaxSourceShare of MaxAircraft. Also counted
+	// per source under this name plus "/<source>/<station>".
+	CounterRejectedSourceShare = "rejected_source_share"
 	// CounterSourceOrderEvicted counts per-source ordering entries evicted
 	// past MaxSourcesPerAircraft.
 	CounterSourceOrderEvicted = "source_order_evicted"
@@ -161,6 +166,15 @@ type Config struct {
 	// unidentified, then the least recently heard); with none, the new id
 	// is refused. An alert is never cleared to make room.
 	MaxAircraft int
+	// MaxSourceShare is the largest share of MaxAircraft one source key
+	// (type and station or receiver) may hold, in (0, 1]: a new id from a
+	// source already holding it is refused (rejected_source_share), so one
+	// flooding receiver leaves room for the others. Default 0.5.
+	MaxSourceShare float64
+	// RefusalEventIntervalS rate-limits Events.Refused: at most one
+	// Refusal per source key per interval of wall time, carrying how many
+	// were suppressed since the last. Default 1 s.
+	RefusalEventIntervalS float64
 	// MaxSourcesPerAircraft bounds the per-source ordering entries of one
 	// aircraft (T-03); the least recently updated is evicted and counted.
 	MaxSourcesPerAircraft int
@@ -169,8 +183,9 @@ type Config struct {
 // DefaultConfig is the policy alert_lifecycle.json pins: cpa.DefaultPolicy
 // (60 s, 60 m, 20 m, 800 m, 10 s), 3 s hysteresis, 15 s stale, 10 s live
 // age, 1 s ahead tolerance, zones.DefaultPolicy (250 m pressure margin), mismatch warning,
-// identification critical, 1000 m grid cells, 50 000 aircraft, 16 sources
-// per aircraft.
+// identification critical, 1000 m grid cells, 50 000 aircraft with at
+// most half of them from one source, one refusal event per source per
+// second, 16 sources per aircraft.
 func DefaultConfig() Config {
 	return Config{
 		Policy:                 cpa.DefaultPolicy,
@@ -184,6 +199,8 @@ func DefaultConfig() Config {
 		GridCellM:              1000,
 		MaxAircraft:            50_000,
 		MaxSourcesPerAircraft:  16,
+		MaxSourceShare:         0.5,
+		RefusalEventIntervalS:  1,
 	}
 }
 
@@ -278,10 +295,37 @@ type Cleared struct {
 	ClearingDetail map[string]any
 }
 
-// Events is what one call raised and cleared, in a deterministic order.
+// Events is what one call raised and cleared, in a deterministic order,
+// and the new aircraft it refused for capacity.
 type Events struct {
 	Raised  []Alert
 	Cleared []Cleared
+	// Refused is set when a new id was refused for capacity: the caller
+	// alerts on it, since that aircraft goes unjudged. Rate-limited per
+	// source (Config.RefusalEventIntervalS); every refusal is counted.
+	Refused []Refusal
+}
+
+// RefusalReason says why a new aircraft was refused.
+type RefusalReason string
+
+// The refusal reasons.
+const (
+	// RefusedSourceShare: its source already holds MaxSourceShare of
+	// MaxAircraft.
+	RefusedSourceShare RefusalReason = "source_share"
+	// RefusedCapacity: the monitor is at MaxAircraft and every aircraft
+	// holds an active alert (Monitor.CapacityExceeded).
+	RefusedCapacity RefusalReason = "capacity"
+)
+
+// Refusal is a new aircraft refused for capacity, and how many more
+// refusals from the same source the rate limit suppressed before it.
+type Refusal struct {
+	ID, Source, Station string
+	Reason              RefusalReason
+	AtS                 float64
+	Suppressed          uint64
 }
 
 // validTime reports whether a configured time is usable: finite and not
@@ -314,6 +358,11 @@ func sanitise(c Config, counters *core.Counters) Config {
 	fix(&c.StaleAfterS, d.StaleAfterS)
 	fix(&c.LiveMaxAgeS, d.LiveMaxAgeS)
 	fix(&c.AheadToleranceS, d.AheadToleranceS)
+	fix(&c.RefusalEventIntervalS, d.RefusalEventIntervalS)
+	if !(c.MaxSourceShare > 0 && c.MaxSourceShare <= 1) {
+		c.MaxSourceShare = d.MaxSourceShare
+		counters.Inc(CounterConfigInvalid)
+	}
 	if !validSeverity(c.MismatchSeverity) {
 		c.MismatchSeverity = d.MismatchSeverity
 		counters.Inc(CounterConfigInvalid)

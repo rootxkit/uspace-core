@@ -108,7 +108,12 @@ type Monitor struct {
 	aircraft map[string]*aircraft
 	// pools hold the aircraft without an active alert, each least recently
 	// heard first (E-10).
-	pools    [poolCount]*list.List
+	pools [poolCount]*list.List
+	// bySource counts the aircraft held per source of their last sample;
+	// refusals rate-limits Events.Refused per source (bounded by
+	// maxRefusalSources).
+	bySource map[sourceKey]int
+	refusals map[sourceKey]*refusalState
 	active   map[string]*alertState
 	counters core.Counters
 	// nextSweepS is the earliest wall time at which an aircraft or an
@@ -130,6 +135,8 @@ func NewMonitor(c Config) *Monitor {
 		aircraft:   make(map[string]*aircraft),
 		active:     make(map[string]*alertState),
 		nextSweepS: math.Inf(1),
+		bySource:   make(map[sourceKey]int),
+		refusals:   make(map[sourceKey]*refusalState),
 	}
 	for i := range m.pools {
 		m.pools[i] = list.New()
@@ -181,7 +188,7 @@ func (m *Monitor) Observe(tr Track, wallS float64) Events {
 		m.counters.Inc(CounterRejectedInvalid)
 		return ev
 	}
-	if ac, ok := m.admit(&tr, wallS); ok {
+	if ac, ok := m.admit(&tr, wallS, &ev); ok {
 		m.judge(ac, &tr, wallS, &ev)
 	}
 	m.sweep(wallS, &ev)
@@ -316,31 +323,96 @@ func (m *Monitor) CapacityExceeded() bool {
 	return true
 }
 
-// record returns the aircraft id and marks it heard. A new id past
-// MaxAircraft evicts one aircraft without an active alert (not flying
-// first, then unidentified, then the least recently heard), counted as
-// aircraft_evicted; when every aircraft holds an alert the new id is
-// refused, counted as rejected_capacity, and record returns nil. An
-// alert is never cleared to make room (owner decision on PR #15: a flood
-// of spoofed ids must not clear a real conflict).
-func (m *Monitor) record(id string) *aircraft {
+// maxRefusalSources bounds the per-source rate-limit state of refusal
+// events; past it the state is reset (E-10), which can only let one more
+// event per source through.
+const maxRefusalSources = 4096
+
+// refusalState is the rate limit of one source's refusal events.
+type refusalState struct {
+	lastS      float64
+	suppressed uint64
+}
+
+// sourceShareLimit is how many aircraft one source may hold.
+func (m *Monitor) sourceShareLimit() int {
+	return max(1, int(math.Floor(m.cfg.MaxSourceShare*float64(m.cfg.MaxAircraft))))
+}
+
+// record returns the aircraft id, heard from src, and marks it heard. A
+// new id is refused when src already holds MaxSourceShare of MaxAircraft
+// (rejected_source_share). Past MaxAircraft a new id evicts one aircraft
+// without an active alert (not flying first, then unidentified, then the
+// least recently heard), counted as aircraft_evicted; when every
+// aircraft holds an alert the new id is refused (rejected_capacity). A
+// refusal returns nil, is counted in total and per source, and is
+// reported in ev.Refused at a limited rate. An alert is never cleared to
+// make room (owner decision on PR #15: a flood of spoofed ids must not
+// clear a real conflict, nor fill the cap for every other source).
+func (m *Monitor) record(id string, src sourceKey, wallS float64, ev *Events) *aircraft {
 	if ac, ok := m.aircraft[id]; ok {
 		m.reclass(ac, true)
 		return ac
 	}
+	// A share of 1 is no share: the cap alone decides.
+	if limit := m.sourceShareLimit(); limit < m.cfg.MaxAircraft && m.bySource[src] >= limit {
+		m.refuse(id, src, RefusedSourceShare, CounterRejectedSourceShare, wallS, ev)
+		return nil
+	}
 	if len(m.aircraft) >= m.cfg.MaxAircraft {
 		victim := m.victim()
 		if victim == nil {
-			m.counters.Inc(CounterRejectedCapacity)
+			m.refuse(id, src, RefusedCapacity, CounterRejectedCapacity, wallS, ev)
 			return nil
 		}
 		m.counters.Inc(CounterAircraftEvicted)
 		m.forget(victim)
 	}
-	ac := &aircraft{id: id, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1), pool: poolNone}
+	ac := &aircraft{id: id, src: src, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1), pool: poolNone}
 	m.aircraft[id] = ac
+	m.bySource[src]++
 	m.reclass(ac, true)
 	return ac
+}
+
+// setSource moves ac's source count to src.
+func (m *Monitor) setSource(ac *aircraft, src sourceKey) {
+	if ac.src == src {
+		return
+	}
+	m.uncount(ac)
+	ac.src = src
+	m.bySource[src]++
+}
+
+// uncount takes ac out of its source's count.
+func (m *Monitor) uncount(ac *aircraft) {
+	if m.bySource[ac.src]--; m.bySource[ac.src] <= 0 {
+		delete(m.bySource, ac.src)
+	}
+}
+
+// refuse counts a refused new id in total and per source, and reports it
+// in ev.Refused unless its source reported one less than
+// RefusalEventIntervalS ago.
+func (m *Monitor) refuse(id string, src sourceKey, reason RefusalReason, counter string, wallS float64, ev *Events) {
+	m.counters.Inc(counter)
+	m.counters.Inc(counter + "/" + src.typ + "/" + src.station)
+	st, ok := m.refusals[src]
+	if !ok {
+		if len(m.refusals) >= maxRefusalSources {
+			clear(m.refusals)
+		}
+		m.refusals[src] = &refusalState{lastS: wallS}
+		ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS})
+		return
+	}
+	if !(wallS-st.lastS >= m.cfg.RefusalEventIntervalS) {
+		st.suppressed++
+		return
+	}
+	ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS, Suppressed: st.suppressed})
+	st.lastS, st.suppressed = wallS, 0
 }
 
 // victim is the aircraft to evict, or nil when every one holds an alert.
@@ -377,6 +449,7 @@ func (m *Monitor) forget(ac *aircraft) {
 		m.pools[ac.pool].Remove(ac.elem)
 		ac.elem = nil
 	}
+	m.uncount(ac)
 	delete(m.aircraft, ac.id)
 }
 

@@ -185,6 +185,28 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64,
 	if m.Tracked() > fuzzMaxAircraft {
 		t.Fatalf("%d aircraft held", m.Tracked())
 	}
+	evictable := false
+	perSource := map[sourceKey]int{}
+	for _, ac := range m.aircraft {
+		evictable = evictable || len(ac.alerts) == 0
+		perSource[ac.src]++
+	}
+	if m.CapacityExceeded() != (m.Tracked() >= fuzzMaxAircraft && !evictable) {
+		t.Fatalf("CapacityExceeded %v with %d held, evictable %v", m.CapacityExceeded(), m.Tracked(), evictable)
+	}
+	if len(perSource) != len(m.bySource) {
+		t.Fatalf("source counts %v, held %v", m.bySource, perSource)
+	}
+	for k, n := range perSource {
+		if m.bySource[k] != n {
+			t.Fatalf("source counts %v, held %v", m.bySource, perSource)
+		}
+	}
+	for i := range ev.Refused {
+		if r := ev.Refused[i]; r.ID == "" || (r.Reason != RefusedSourceShare && r.Reason != RefusedCapacity) {
+			t.Fatalf("refusal %+v", r)
+		}
+	}
 	pooled := 0
 	for _, p := range m.pools {
 		pooled += p.Len()

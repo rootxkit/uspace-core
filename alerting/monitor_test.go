@@ -645,7 +645,9 @@ func TestMismatchSurvivesLandingButNotDrop(t *testing.T) {
 
 func TestMaxAircraftEvicts(t *testing.T) {
 	const n = 50_001
-	m := NewMonitor(DefaultConfig())
+	cfg := DefaultConfig()
+	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
+	m := NewMonitor(cfg)
 	for i := range n {
 		tr := at(fmt.Sprintf("U%05d", i), 0, 0, 0)
 		tr.Flying = ptr(false) // on the ground: no pairing, cheap
@@ -670,6 +672,7 @@ func TestEvictionSparesAlertHolders(t *testing.T) {
 	// counted, the condition is exposed, and nothing is cleared.
 	cfg := DefaultConfig()
 	cfg.MaxAircraft = 2
+	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := headOn(t, cfg)
 	wantEvents(t, "C refused", m.Observe(at("C", 9000, 0, 0), 0), nil, nil)
 	if got := m.Counters().Get(CounterRejectedCapacity); got != 1 {
@@ -694,6 +697,7 @@ func TestEvictionSparesAlertHolders(t *testing.T) {
 func TestEvictionPrefersGroundThenUnidentified(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxAircraft = 5
+	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := headOn(t, cfg)
 	m.Observe(at("C", 9000, 0, 0), 0) // flying, identified, oldest
 	d := at("D", 12000, 0, 0)
@@ -720,7 +724,9 @@ func TestEvictionPrefersGroundThenUnidentified(t *testing.T) {
 func TestSpoofedFloodNeverClearsARealConflict(t *testing.T) {
 	// Review probe: 50 000 spoofed ids after a real conflict. The old
 	// least-recently-used eviction cleared it as evicted.
-	m := headOn(t, DefaultConfig())
+	cfg := DefaultConfig()
+	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
+	m := headOn(t, cfg)
 	for i := range 50_000 {
 		tr := at(fmt.Sprintf("S%05d", i), 20000, 0, 0.5)
 		tr.Flying = ptr(false)
@@ -760,6 +766,8 @@ func TestSanitiseConfig(t *testing.T) {
 	cfg.StaleAfterS = -1
 	cfg.LiveMaxAgeS = math.Inf(1)
 	cfg.AheadToleranceS = -1
+	cfg.MaxSourceShare = 2
+	cfg.RefusalEventIntervalS = math.NaN()
 	cfg.MismatchSeverity = "loud"
 	cfg.IdentificationSeverity = ""
 	cfg.GridCellM = 10
@@ -769,12 +777,13 @@ func TestSanitiseConfig(t *testing.T) {
 	got := m.Config()
 	d := DefaultConfig()
 	if got.ClearAfterS != d.ClearAfterS || got.StaleAfterS != d.StaleAfterS || got.LiveMaxAgeS != d.LiveMaxAgeS || got.AheadToleranceS != d.AheadToleranceS ||
+		got.MaxSourceShare != d.MaxSourceShare || got.RefusalEventIntervalS != d.RefusalEventIntervalS ||
 		got.MismatchSeverity != d.MismatchSeverity || got.IdentificationSeverity != d.IdentificationSeverity ||
 		got.GridCellM != d.GridCellM || got.MaxAircraft != d.MaxAircraft || got.MaxSourcesPerAircraft != d.MaxSourcesPerAircraft {
 		t.Fatalf("config %+v", got)
 	}
-	if n := m.Counters().Get(CounterConfigInvalid); n != 6 {
-		t.Fatalf("config_invalid = %d, want 6", n)
+	if n := m.Counters().Get(CounterConfigInvalid); n != 8 {
+		t.Fatalf("config_invalid = %d, want 8", n)
 	}
 	// An invalid separation policy is kept and counted, and every pair it
 	// refuses is counted: no conflict is ever silently missing.
@@ -1205,4 +1214,95 @@ func TestPlacedAheadIsRefused(t *testing.T) {
 			t.Fatalf("rejected_placed_ahead = %d, active %+v", got, m.Active())
 		}
 	})
+}
+
+// floodAboveHeightLimit has one receiver report n unidentified ids above
+// the height limit, spread 1 km apart: each holds a height alert, so none
+// is evictable.
+func floodAboveHeightLimit(m *Monitor, n int, wallS float64) Events {
+	var all Events
+	for i := range n {
+		tr := at(fmt.Sprintf("X%04d", i), float64(i)*1000+50_000, 0, wallS)
+		tr.Source, tr.Station = "remote_id", "rx-evil"
+		tr.Identified = ptr(false)
+		tr.Env = zones.Env{Ground: zones.GroundKnown, GroundM: 0}
+		ev := m.Observe(tr, wallS)
+		all.Raised = append(all.Raised, ev.Raised...)
+		all.Cleared = append(all.Cleared, ev.Cleared...)
+		all.Refused = append(all.Refused, ev.Refused...)
+	}
+	return all
+}
+
+func TestOneSourceFloodCannotFillTheCap(t *testing.T) {
+	// Review probe: one receiver floods 1000 unidentified ids above the
+	// height limit. A registered pair from a relay must still be judged.
+	cfg := DefaultConfig()
+	cfg.MaxAircraft = 1000
+	cfg.ZonePolicy.MaxHeightAGLM = ptr(120.0)
+	m := NewMonitor(cfg)
+	floodAboveHeightLimit(m, 1000, 0)
+	a := at("A", 0, 10, 0)
+	a.Station = "gs-1"
+	a.Identification = ident(core.IdentRegistered, core.ReasonMatched, false)
+	b := at("B", 500, -10, 0)
+	b.Station = "gs-1"
+	b.Identification = ident(core.IdentRegistered, core.ReasonMatched, false)
+	m.Observe(a, 0)
+	ev := m.Observe(b, 0)
+	if len(ev.Raised) != 1 || ev.Raised[0].Key != "conflict:A:B" {
+		t.Fatalf("registered pair not judged: %+v, %d tracked", ev, m.Tracked())
+	}
+	if got := m.Counters().Get(CounterRejectedSourceShare + "/remote_id/rx-evil"); got != 500 {
+		t.Fatalf("rejected_source_share/remote_id/rx-evil = %d, want 500", got)
+	}
+	if got := m.Counters().Get(CounterRejectedSourceShare); got != 500 || m.CapacityExceeded() {
+		t.Fatalf("rejected_source_share = %d, exceeded %v", got, m.CapacityExceeded())
+	}
+}
+
+func TestRefusalEventsAreRateLimited(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MaxAircraft = 10
+	cfg.ZonePolicy.MaxHeightAGLM = ptr(120.0)
+	m := NewMonitor(cfg)
+	// 5 held, 15 refused at one wall time: one event.
+	ev := floodAboveHeightLimit(m, 20, 0)
+	if len(ev.Refused) != 1 {
+		t.Fatalf("refused events %+v", ev.Refused)
+	}
+	r := ev.Refused[0]
+	if r.ID != "X0005" || r.Source != "remote_id" || r.Station != "rx-evil" || r.Reason != RefusedSourceShare || r.Suppressed != 0 {
+		t.Fatalf("refusal %+v", r)
+	}
+	// A second after it, the next refusal reports the 14 suppressed.
+	tr := at("X9999", 90_000, 0, 1)
+	tr.Source, tr.Station = "remote_id", "rx-evil"
+	ev = m.Observe(tr, 1)
+	if len(ev.Refused) != 1 || ev.Refused[0].Suppressed != 14 || ev.Refused[0].AtS != 1 {
+		t.Fatalf("refused %+v", ev.Refused)
+	}
+	// Twin: another source is admitted, with no refusal.
+	ok := at("OK", 0, 0, 1)
+	ok.Station = "gs-1"
+	if ev := m.Observe(ok, 1); len(ev.Refused) != 0 || m.aircraft["OK"] == nil {
+		t.Fatalf("other source refused: %+v", ev.Refused)
+	}
+	// Capacity refusals: the cap full of alert holders from two sources.
+	m2cfg := cfg
+	m2cfg.MaxAircraft = 2
+	m2 := NewMonitor(m2cfg)
+	a := at("A", 0, 10, 0)
+	a.Station = "gs-1"
+	b := at("B", 500, -10, 0)
+	b.Station = "gs-2"
+	m2.Observe(a, 0)
+	m2.Observe(b, 0)
+	c := at("C", 9000, 0, 0)
+	c.Station = "gs-3"
+	ev = m2.Observe(c, 0)
+	if len(ev.Refused) != 1 || ev.Refused[0].Reason != RefusedCapacity || !m2.CapacityExceeded() ||
+		m2.Counters().Get(CounterRejectedCapacity+"/relay/gs-3") != 1 {
+		t.Fatalf("capacity refusal %+v", ev.Refused)
+	}
 }
