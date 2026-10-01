@@ -121,7 +121,7 @@ type ZoneType string     // ZoneProhibited, ZoneReqAuthorization, ZoneConditiona
                          // Valid(), ED269() string, IncidentZone() bool; ZoneTypeFromED269(string) (ZoneType, bool)
 type IdentStatus string  // IdentRegistered, IdentSuspended, IdentUnknownOperator, IdentUnidentified; IncidentStatus()
 type IdentReason string  // the 15 reasons of 04 §3.2 (ReasonMatched ... ReasonRegistryUnavailable)
-type IdentBasis string   // BasisAuthenticated, BasisAsBroadcast
+type IdentBasis string   // BasisAuthenticated, BasisAsBroadcast, BasisProvider ("provider", C1)
 type Identification struct{ Status; Reason; Serial, OperatorReg, RegisteredOperatorReg *string; Mismatch bool; RegistryUASID *string; Basis }
 type Counters struct{...} // Inc, Add, Get, Snapshot, Names; concurrency-safe
 type FieldError struct{ Field, Reason string }; func Fieldf(field, format string, args ...any) *FieldError
@@ -395,7 +395,7 @@ func (g *Grid) Near(p core.LatLon, radiusM float64) []string   // candidates wit
 ### 3.12 `alerting` (WP-10)
 
 ```go
-type Config struct{ Policy cpa.Policy; ClearAfterS, StaleAfterS, LiveMaxAgeS float64 (3, 15, 10); PressureUncertaintyM float64 (250); Zones []*zones.Zone; ZonePolicy zones.Policy; MismatchSeverity, IdentificationSeverity core.Severity (warning, critical) }
+type Config struct{ Policy cpa.Policy; ClearAfterS, StaleAfterS, LiveMaxAgeS float64 (3, 15, 10); PressureUncertaintyM float64 (250); Zones []*zones.Zone; ZonePolicy zones.Policy; MismatchSeverity, IdentificationSeverity core.Severity (warning, critical); SkipConflicts bool (false; C1: no grid, no cpa.Evaluate, counted as conflict_checks_skipped) }
 type Track struct{ ID string; Pos core.LatLon; AltAMSLM *float64; AltSource core.AltSource; VNMS, VEMS, VDMS float64; Flying *bool; CapturedAtS, RxAtS float64; SourceTS *float64; Backlog bool; Source, Station string; Transmitter *string; Identified *bool; Identification *core.Identification; Env zones.Env }
 type Alert struct{ Key string; Kind string ("conflict"|"zone"|"identification"|"identification_mismatch"|"height"); Severity core.Severity; Aircraft []string; Detail map[string]any; RaisedAtS, LastTrueS, LastFalseS float64 }
 type ClearReason string  // "resolved", "stale", "source_disabled"

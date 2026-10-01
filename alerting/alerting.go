@@ -186,6 +186,17 @@ type Config struct {
 	// MaxSourcesPerAircraft bounds the per-source ordering entries of one
 	// aircraft (T-03); the least recently updated is evicted and counted.
 	MaxSourcesPerAircraft int
+	// SkipConflicts turns the conflict check off: no neighbour grid lookup
+	// and no cpa.Evaluate for any sample, so no conflict alert is ever
+	// raised or refreshed. Zone, height and identification alerts are
+	// judged as before. For a monitor whose owner discards conflict alerts
+	// (the authority's violation detector, which raises none). Default
+	// false. Counted per flying sample under conflict_checks_skipped.
+	// NewMonitor reads it once and the monitor has no setter, so a monitor
+	// skips for its whole life or never: no conflict is ever active under
+	// it, so there is nothing to clear, whereas a switch at run time would
+	// leave active conflicts with no judgement to clear them.
+	SkipConflicts bool
 }
 
 // DefaultConfig is the policy alert_lifecycle.json pins: cpa.DefaultPolicy

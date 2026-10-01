@@ -76,6 +76,10 @@ const (
 	// BasisAsBroadcast is direct or network Remote ID, "as broadcast
 	// and unverified". Every display of such a status says so.
 	BasisAsBroadcast IdentBasis = "as_broadcast"
+	// BasisProvider is a flight reported by a USSP through the F3411
+	// network (display provider) or an F3548 peer: a provider's claim,
+	// neither an authenticated session nor a broadcast heard by a receiver.
+	BasisProvider IdentBasis = "provider"
 )
 
 // Identification is the block carried in every track/telemetry/v1 and

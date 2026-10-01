@@ -86,6 +86,13 @@
 //   - Treat an identification raise or clear as the incident seam (G-03).
 //   - Watch the counters: an invalid separation policy is counted as
 //     config_invalid and every pair it refuses as not judged.
+//   - Set Config.SkipConflicts only on a monitor whose owner discards
+//     conflict alerts (the authority's violation detector): it pays for
+//     neither the neighbour grid nor cpa.Evaluate, raises no conflict,
+//     counts every flying sample under conflict_checks_skipped, and
+//     judges zones, the height limit and identification as before. It is
+//     fixed for the monitor's life: NewMonitor reads it and there is no
+//     setter.
 //
 // It depends on core, cpa, zones and sources (ed269 in its tests).
 // Vectors: vectors/testdata/alert_lifecycle.json (35 cases), run by
