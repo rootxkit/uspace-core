@@ -10,9 +10,12 @@ LAB     ?= ../uspace-lab
 # both files together. `make tools` installs them into $(go env GOPATH)/bin.
 GOLANGCI_LINT_VERSION ?= v2.14.0
 STATICCHECK_VERSION   ?= v0.8.1
+# The gitleaks version gitleaks-action runs in CI (GITLEAKS_VERSION there).
+# .gitleaks.toml relies on how this version applies allowlists.
+GITLEAKS_VERSION      ?= v8.24.3
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
-        check-vectors sync-vectors fuzz-smoke bench tidy ci clean
+        check-vectors sync-vectors fuzz-smoke bench tidy secrets ci clean
 
 all: ci
 
@@ -31,6 +34,7 @@ fmt-check:
 tools:
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$(GO) install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
+	$(GO) install github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION)
 
 staticcheck:
 	$(GO) run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) $(PKGS)
@@ -40,6 +44,11 @@ staticcheck:
 lint: fmt-check vet staticcheck
 	@v="v$$(golangci-lint version --short 2>/dev/null)"; 	if [ "$$v" != "$(GOLANGCI_LINT_VERSION)" ]; then 	  echo "golangci-lint $$v found, CI runs $(GOLANGCI_LINT_VERSION): run 'make tools'"; exit 1; fi
 	golangci-lint run $(PKGS)
+
+# Secret scan of the history and the working tree with .gitleaks.toml.
+secrets:
+	gitleaks detect --no-banner --redact
+	gitleaks detect --no-banner --redact --no-git --source .
 
 tidy:
 	$(GO) mod tidy

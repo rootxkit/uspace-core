@@ -158,3 +158,6 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pinned (and in the Makefile): .gitleaks.toml relies on how this
+          # version applies allowlists. Change both together.
+          GITLEAKS_VERSION: "8.24.3"
