@@ -74,6 +74,14 @@ type Config struct {
 	// must contain Audience or any one of them. Empty means Audience
 	// alone, as in v1.0.0. Added in v1.1.0.
 	Audiences []string
+	// StrictSessionClaims refuses, as rejected_claims, a token whose
+	// roles is present but not an array of strings or whose realm is
+	// present but not a string (M20 session tokens). Off (the default,
+	// and v1.0.0's judgement), such a claim is ignored: Roles is nil and
+	// Realm empty, and the token is judged on its other claims. Every
+	// uspace system enables it; it is opt-in only so that v1.1.0 changes
+	// no judgement of v1.0.0. Added in v1.1.0.
+	StrictSessionClaims bool
 	// MaxSkew is the clock skew allowed on exp, nbf and iat.
 	MaxSkew time.Duration
 	// JWKSCacheTTL is how long a fetched JWKS is fresh. From
@@ -124,9 +132,12 @@ type Claims struct {
 	// IssuedAt is zero when the token has no iat.
 	IssuedAt time.Time
 	// Roles is the roles claim, a JSON array of strings (M20 session
-	// tokens); nil when absent. Never required. Added in v1.1.0.
+	// tokens); nil when absent, and when malformed unless
+	// Config.StrictSessionClaims refuses it. Never required. Added in
+	// v1.1.0.
 	Roles []string
-	// Realm is the realm claim, a string (M20); empty when absent. Never
+	// Realm is the realm claim, a string (M20); empty when absent, and
+	// when malformed unless Config.StrictSessionClaims refuses it. Never
 	// required. Added in v1.1.0.
 	Realm string
 }
@@ -401,13 +412,19 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 	var roles []string
 	if raw, has := cl["roles"]; has {
 		if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &roles) != nil || roles == nil {
-			return Claims{}, refuseToken(CounterRejectedClaims, "roles", "not an array of strings")
+			if v.cfg.StrictSessionClaims {
+				return Claims{}, refuseToken(CounterRejectedClaims, "roles", "not an array of strings")
+			}
+			roles = nil
 		}
 	}
 	var realm string
 	if raw, has := cl["realm"]; has {
 		if realm, ok = jsonString(raw); !ok {
-			return Claims{}, refuseToken(CounterRejectedClaims, "realm", "not a string")
+			if v.cfg.StrictSessionClaims {
+				return Claims{}, refuseToken(CounterRejectedClaims, "realm", "not a string")
+			}
+			realm = ""
 		}
 	}
 	return Claims{

@@ -50,8 +50,11 @@
 // From v1.1.0, Config.Audiences lists further ids (hosts, M18) beside
 // Audience: aud must contain one of them, and Claims.Audience is the one
 // matched. Claims.Roles (a JSON array of strings) and Claims.Realm (a
-// string) are read when present (M20 session tokens) and never required;
-// a roles or realm of another type is rejected_claims.
+// string) are read when present (M20 session tokens) and never required.
+// With Config.StrictSessionClaims a roles or realm of another type is
+// rejected_claims; without it (the default, v1.0.0's judgement) it is
+// ignored. Every uspace system sets StrictSessionClaims; it is opt-in
+// only so that v1.1.0 is additive.
 //
 // # Three signed forms, and when a system uses which
 //

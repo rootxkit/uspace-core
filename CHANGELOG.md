@@ -30,10 +30,13 @@ for a behaviour change the line sits under the heading of the next major
 - auth: `SignCompact` and `CompactVerifier` for the compact delivery JWS
   (M19: a JWT carrying `iss`, `aud`, `sub`, `iat`, `jti` and the message
   as `body`, returned byte for byte). No vector changed [WP-14 C1]
-- auth: `Config.Audiences`, `Claims.Roles` and `Claims.Realm` (M18,
-  M20). With `Audiences` empty the verifier behaves as in 1.0.0; a token
-  whose `roles` is not an array of strings, or whose `realm` is not a
-  string, is now `rejected_claims`. No vector changed [WP-14 C1]
+- auth: `Config.Audiences`, `Claims.Roles`, `Claims.Realm` and
+  `Config.StrictSessionClaims` (M18, M20). With `Audiences` empty the
+  verifier behaves as in 1.0.0. `StrictSessionClaims` (default off)
+  refuses a token whose `roles` is not an array of strings, or whose
+  `realm` is not a string, as `rejected_claims`; off, such a claim is
+  ignored as in 1.0.0, so no judgement changes. Every uspace system
+  enables it. No vector changed [WP-14 C1]
 - auth/internal/genvectors: `-kind jws_detached` and `-kind jws_compact`
   write the JWS vector files proposed to uspace-lab (not vendored here)
   [WP-14 C1]

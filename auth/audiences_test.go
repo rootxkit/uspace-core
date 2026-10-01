@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -80,47 +81,73 @@ func TestNewVerifierAudiencesConfig(t *testing.T) {
 	}
 }
 
-// roles and realm are read when present and never required; a malformed
-// one is rejected_claims.
+// roles and realm are read when present and never required, with and
+// without StrictSessionClaims. A malformed one is rejected_claims with
+// the option, and ignored without it (v1.0.0's judgement: the token is
+// accepted). Each refusal beside the same token accepted (E-01).
 func TestVerifierRolesAndRealm(t *testing.T) {
-	v := staticVerifier(t, publicSet(t, testKID, testKey()), func() time.Time { return testNow })
 	sign := func(kv ...any) string { return compact(goodHeader(), with(goodClaims(), kv...), rs256(testKey())) }
-
-	c, err := v.Verify(context.Background(), sign("roles", []string{"operator", "viewer"}, "realm", "ge", "scope", "session"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(c.Roles, []string{"operator", "viewer"}) || c.Realm != "ge" || !c.HasScope("session") {
-		t.Errorf("claims %+v", c)
-	}
-	c, err = v.Verify(context.Background(), sign())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.Roles != nil || c.Realm != "" {
-		t.Errorf("absent roles and realm read as %v %q", c.Roles, c.Realm)
-	}
-	c, err = v.Verify(context.Background(), sign("roles", []string{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.Roles == nil || len(c.Roles) != 0 {
-		t.Errorf("an empty roles array read as %#v", c.Roles)
-	}
-	for _, tc := range []struct {
-		name  string
-		token string
-		claim string
-	}{
-		{"roles a string", sign("roles", "operator"), "roles"},
-		{"roles with a number", sign("roles", []any{"operator", 1}), "roles"},
-		{"roles null", sign("roles", []any(nil)), "roles"},
-		{"realm a number", sign("realm", 1), "realm"},
-		{"realm an array", sign("realm", []string{"ge"}), "realm"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := v.Verify(context.Background(), tc.token)
-			wantTokenRefused(t, err, CounterRejectedClaims, tc.claim)
+	for _, strict := range []bool{false, true} {
+		t.Run(fmt.Sprintf("strict=%v", strict), func(t *testing.T) {
+			v, err := NewVerifier(context.Background(), Config{
+				Issuers:             map[string]IssuerConfig{testIss: {Keys: publicSet(t, testKID, testKey())}},
+				Audience:            testAud,
+				StrictSessionClaims: strict,
+				Now:                 func() time.Time { return testNow },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, err := v.Verify(context.Background(), sign("roles", []string{"operator", "viewer"}, "realm", "ge", "scope", "session"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(c.Roles, []string{"operator", "viewer"}) || c.Realm != "ge" || !c.HasScope("session") {
+				t.Errorf("claims %+v", c)
+			}
+			c, err = v.Verify(context.Background(), sign())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Roles != nil || c.Realm != "" {
+				t.Errorf("absent roles and realm read as %v %q", c.Roles, c.Realm)
+			}
+			c, err = v.Verify(context.Background(), sign("roles", []string{}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Roles == nil || len(c.Roles) != 0 {
+				t.Errorf("an empty roles array read as %#v", c.Roles)
+			}
+			for _, tc := range []struct {
+				name  string
+				token string
+				claim string
+			}{
+				{"roles a string", sign("roles", "operator", "realm", "ge"), "roles"},
+				{"roles with a number", sign("roles", []any{"operator", 1}, "realm", "ge"), "roles"},
+				{"roles null", sign("roles", []any(nil), "realm", "ge"), "roles"},
+				{"realm a number", sign("realm", 1, "roles", []string{"operator"}), "realm"},
+				{"realm an array", sign("realm", []string{"ge"}, "roles", []string{"operator"}), "realm"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					c, err := v.Verify(context.Background(), tc.token)
+					if strict {
+						wantTokenRefused(t, err, CounterRejectedClaims, tc.claim)
+						return
+					}
+					if err != nil {
+						t.Fatalf("v1.0.0 accepted this token; refused: %v", err)
+					}
+					// The malformed claim is ignored; the well-formed one is read.
+					if tc.claim == "roles" && (c.Roles != nil || c.Realm != "ge") {
+						t.Errorf("claims %+v", c)
+					}
+					if tc.claim == "realm" && (c.Realm != "" || !slices.Equal(c.Roles, []string{"operator"})) {
+						t.Errorf("claims %+v", c)
+					}
+				})
+			}
 		})
 	}
 }

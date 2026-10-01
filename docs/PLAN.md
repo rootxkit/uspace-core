@@ -403,7 +403,8 @@ func (v *Verifier) Counters() *core.Counters                    // rejected_<rea
 type Issuer struct{...};  func NewIssuer(iss string, key *rsa.PrivateKey, kid string) *Issuer
 func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now time.Time) (string, error);  func (i *Issuer) JWKS() jwk.Set
 // v1.1.0 (WP-14 C1), additive. Verifier: Config.Audiences []string (aud must contain Audience or one of them; Audience may then be empty);
-// Claims.Roles []string ("roles", an array of strings) and Claims.Realm string ("realm"), read when present, never required.
+// Claims.Roles []string ("roles", an array of strings) and Claims.Realm string ("realm"), read when present, never required;
+// Config.StrictSessionClaims bool (default false; every uspace system sets it): a malformed roles or realm is rejected_claims, else ignored.
 type SigningKey struct{ KID string; Key *rsa.PrivateKey }
 type KeyRing struct{...};  func NewKeyRing(active SigningKey, retired ...SigningKey) (*KeyRing, error)   // NewIssuer's key checks; duplicate kid refused; <= MaxRingKeys (16)
 func (r *KeyRing) Rotate(next SigningKey) error;  func (r *KeyRing) Retire(kid string) error           // Rotate past the bound counted key_ring_full; Retire refuses the active key
