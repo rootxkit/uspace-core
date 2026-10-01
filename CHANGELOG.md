@@ -17,6 +17,12 @@ Each entry names the work package and the vectors it affects.
   the 16 knowledge vector files (596 cases) vendored from
   `uspace-lab@c6b7f33` (generated from `utm@484cd22`), CI, lint and
   Makefile. [WP-0]
+- `odid` codec: `Decode`, `DecodeMessage`, `Encode`, `EncodePack`,
+  `TypeOf` and the wire sentinels, from the opendroneid-core-c layout;
+  passes `odid_decode.json` (187/187, every accepted frame re-encoded byte
+  for byte); `FuzzDecode`, `FuzzEncodeLocation` and the three codec
+  benchmarks. Adds `odid.Unknown` for undefined types kept with
+  `KeepSkipped`. [WP-3]
 
 ## [0.1.0] - unreleased (G-M1)
 
