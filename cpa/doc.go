@@ -46,6 +46,22 @@
 // with a Reason, never a judged "no conflict". Not judged is not clear:
 // the caller keeps whatever it had and counts the reason.
 //
+// # Neighbour grid (C-15)
+//
+// Grid selects the pairs to judge. It cuts the sphere into latitude bands
+// cellM metres high and, per band, into longitude columns at least cellM
+// metres wide at the band's poleward edge (per-band longitude scaling, so
+// it works at any latitude, not only near a reference one); the columns
+// divide 360 degrees exactly and wrap across the antimeridian, and a band
+// at a pole has one column. Near returns every id that may be within a
+// radius, a superset the caller filters by exact distance; it is checked
+// against brute force. Size the cells at least one
+// Policy.NeighbourRadiusM wide, so a lookup visits the 3x3 ring; a larger
+// radius is still answered correctly, by visiting more cells, or by
+// scanning the occupied cells when that is cheaper. Non-finite positions
+// are refused before they reach the index and counted. A Grid is not
+// safe for concurrent use.
+//
 // It depends on core and geodesy. Vectors: vectors/testdata/cpa.json (27
 // cases), run by TestVectorsCPA. Owned by WP-9. The alert lifecycle built
 // on it is package alerting.
