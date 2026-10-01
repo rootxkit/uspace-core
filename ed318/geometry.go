@@ -16,7 +16,7 @@ var (
 	layerFields      = []string{"upper", "upperReference", "lower", "lowerReference", "uom"}
 	verticalRefs     = []string{"AGL", "AMSL", "WGS84"}
 	uomValues        = []string{UomMetres, UomFeet}
-	unsupportedTypes = []string{"LineString", "MultiPoint", "MultiLineString", "MultiPolygon"}
+	unsupportedTypes = []string{"LineString", "MultiPoint", "MultiLineString"}
 )
 
 // geometry reads a zone's geometry: a Polygon, a Point with a Circle
@@ -54,6 +54,11 @@ func (p *parser) geometry(v *value, where string, member bool) (Geometry, bool) 
 		}
 	case t.s == GeometryCollection:
 		p.ps.add(join(where, "type"), "a GeometryCollection inside a GeometryCollection is not allowed")
+		return Geometry{}, false
+	case t.s == "MultiPolygon":
+		// Not in this release (owner decision on PR #16): refused whole,
+		// never imported part by part.
+		p.ps.add(join(where, "type"), "'MultiPolygon' is not supported in this release; the zone is refused whole, not imported part by part: publish each polygon as its own feature")
 		return Geometry{}, false
 	case slices.Contains(unsupportedTypes, t.s):
 		p.ps.add(join(where, "type"), quote(t.s)+" is not supported for a UAS zone; give a Polygon, a Point with a Circle extent, or a GeometryCollection of those")

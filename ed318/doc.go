@@ -57,7 +57,9 @@
 // offset (T-09); an empty zoneAuthority; a feature without properties or
 // geometry (the schema allows null; a zone needs both); a geometry other
 // than a Polygon, a Point with a Circle extent, or a GeometryCollection
-// of those (a line has no inside; MultiPolygon is not supported); a
+// of those (a line has no inside; a MultiPolygon is refused whole in
+// this release, with a problem that names it, never imported part by
+// part, owner decision on PR #16); a
 // position with a third (altitude) member; a layer given both on a
 // collection and on its members; a shape across the antimeridian.
 //

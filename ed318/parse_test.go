@@ -465,3 +465,49 @@ func TestExportRefusesWhatParseCannotProduce(t *testing.T) {
 		t.Errorf("built DateTime: %v %s", err, out)
 	}
 }
+
+// A MultiPolygon is refused whole with a problem that names it, never
+// imported part by part (owner decision on PR #16), at the top and inside
+// a GeometryCollection; the same polygons as Polygon features are
+// accepted (E-01).
+func TestMultiPolygonRefusedWhole(t *testing.T) {
+	a := []any{[]any{44.7, 41.65}, []any{44.75, 41.65}, []any{44.75, 41.7}, []any{44.7, 41.65}}
+	b := []any{[]any{44.8, 41.65}, []any{44.85, 41.65}, []any{44.85, 41.7}, []any{44.8, 41.65}}
+	layer := map[string]any{"upper": 120, "upperReference": "AGL"}
+	multi := map[string]any{"type": "MultiPolygon", "coordinates": []any{[]any{a}, []any{b}}, "layer": layer}
+	for name, g := range map[string]any{
+		"top":           multi,
+		"in collection": map[string]any{"type": "GeometryCollection", "geometries": []any{multi}},
+	} {
+		d := baseDocument(t)
+		at(t, d, "features", 0).(map[string]any)["geometry"] = g
+		raw, _ := json.Marshal(d)
+		fc, probs := Parse(raw, Limits{})
+		if fc != nil {
+			t.Fatalf("%s: a MultiPolygon was accepted", name)
+		}
+		found := false
+		for _, p := range probs.List {
+			if strings.HasSuffix(p.Field, ".type") && strings.Contains(p.Reason, "'MultiPolygon' is not supported in this release") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no problem names the MultiPolygon: %v", name, probs)
+		}
+	}
+	d := baseDocument(t)
+	f0 := at(t, d, "features", 0).(map[string]any)
+	f0["geometry"] = map[string]any{"type": "Polygon", "coordinates": []any{a}, "layer": layer}
+	second := map[string]any{}
+	raw0, _ := json.Marshal(f0)
+	_ = json.Unmarshal(raw0, &second)
+	second["geometry"] = map[string]any{"type": "Polygon", "coordinates": []any{b}, "layer": layer}
+	second["properties"].(map[string]any)["identifier"] = "TSU002"
+	delete(second, "id")
+	d["features"] = append(d["features"].([]any), second)
+	raw, _ := json.Marshal(d)
+	if _, probs := Parse(raw, Limits{}); probs != nil {
+		t.Errorf("the polygons as two features: %v", probs)
+	}
+}
