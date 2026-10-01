@@ -21,6 +21,11 @@ Each entry names the work package and the vectors it affects.
   local tangent plane with antimeridian wrapping, circle and polygon
   containment with holes, bounding boxes and ring validation; passes
   `geodesy.json` (17 cases). [WP-1]
+- `ed269`: strict ED-269 parse and export (both wrappers, UTF-8 BOM,
+  every problem with its JSON path, capped at 100; bounded bytes, depth
+  and ring vertices; shapes past 180 degrees of longitude refused) and
+  zone applicability; passes `ed269_parse.json` (52 cases) and
+  `zones_applicability.json` (32 cases). [WP-5]
 
 ## [0.1.0] - unreleased (G-M1)
 
