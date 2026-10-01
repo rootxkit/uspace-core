@@ -95,6 +95,12 @@ may add exported functions and types; it may not rename, remove or change
 the meaning of what is listed here without updating this plan. Pointer
 results mean "unknown / none" (a vector's `null`), never a zero value.
 
+**Stable since `v1.0.0`.** This API, with what the work packages added to
+it, is declared stable (G-M3). From `v1.0.0` the rule above is the semver
+rule of §10: an addition is a minor, a removal, rename or change of
+meaning is a major. `CHANGELOG.md` under `[1.0.0]` lists what is
+deliberately left unstable.
+
 ### 3.1 `core` (frozen, written)
 
 ```go
@@ -133,7 +139,7 @@ func (c Case) Decode(t TB, in, exp any);  func (c Case) ExpectedIsNull() bool
 func Unmarshal(t TB, raw json.RawMessage, v any);  func StrictUnmarshal(raw []byte, v any) error
 func Near(t TB, field string, got, want, tol float64);  func NearPtr(t TB, field string, got, want *float64, tol float64)
 func EqualTime(t TB, field string, got, want time.Time);  func EqualTimePtr(...);  func EqualStrPtr(t TB, field string, got, want *string)
-var Manifest []Entry;  const TotalCases = 660
+var Manifest []Entry;  const TotalCases = 682
 ```
 
 ### 3.3 `geodesy` (WP-1)
@@ -682,11 +688,21 @@ from `go.mod`:
 5. `bench`: all benchmarks, `scripts/bench-report.sh` writes the
    target table into the job summary; artifact uploaded; never gating.
 6. `gitleaks` (06 §4).
-7. (WP-13) `semver-gate`: a diff under `vectors/testdata/` on a PR
-   requires `CHANGELOG.md` to add a new major heading and the PR label
-   `behaviour-change`; otherwise the job fails (`00 §6.3`).
+7. (WP-13) `tag`, on `v*` tags only, after jobs 1-4, 6 and
+   govulncheck: `scripts/release-check.sh` (tag equals the top CHANGELOG
+   heading, module path, `local_files` empty from v1, manifest coverage
+   strict, the lab diff required), `scripts/consumer-check.sh` on the
+   published module, then the GitHub release from the CHANGELOG.
 
-Branch protection on `main` requires jobs 1-4 and 6.
+The semver gate (WP-13) is its own workflow, `semver-gate.yml`, on pull
+requests only: a diff under `vectors/testdata/` requires a CHANGELOG line
+with the clause and a new lab pin, and a behaviour change also a new
+major heading and the PR label `behaviour-change` (`00 §6.3`). It is not
+a job of this workflow because a label change must start a fresh run
+with fresh labels. `docs/RELEASING.md` §3.2 has the rules.
+
+Branch protection on `main` requires jobs 1-4 and 6 and `semver-gate`
+(the exact check names are in `docs/RELEASING.md` §7).
 
 ---
 
@@ -722,7 +738,7 @@ Branch protection on `main` requires jobs 1-4 and 6.
 | 4 | `alert_lifecycle.json#disarming-clears-as-stale` records the old behaviour that C-14 says the new system should improve (`landed`). `04 §3.3` lists `flight_ended` as a clear reason. | **Resolved:** the owner decided `landed` (C-14). The lab vector is now `disarming-clears-as-landed` (`uspace-lab@aa5187e`), and `alerting` passes it as written, with no override. `Monitor.Drop` still takes a reason the caller chooses (`flight_ended`). | None. |
 | 5 | `identification_status.json` names the authenticated-session reason `session_binding` only through the `bound` kind, and `04 §3.2` lists `registry_unavailable` with no vector. | `identify.Unavailable` implemented from the spec text and unit-tested; a vector is proposed to the lab. The vector now uses the spec's codes (`matched`, `session_binding`) since `uspace-lab@aa5187e`, so the test maps nothing. | Lab to add the `registry_unavailable` case. |
 | 6 | ED-269 refusals: the vectors list every problem the old reader found but bind only `must_include`. | `ed269` must produce `must_include`; the full list is compared and logged as a diff, not failed (§6). A stricter or looser reader is visible in CI logs. | Decide whether the full list becomes binding at `v1`. |
-| 7 | `jwt_verify` vector "to add" (`00 §6.3`) and an ED-318 round-trip vector (`07` G-M2) did not exist. Vectors are generated in the lab from utm, which has neither. | WP-11 and WP-12 write the vector files in this repo under `vectors/testdata/` in the same shape, with `generated` saying "hand-written in uspace-core, not from utm" and `utm_commit` left as the pinned commit; they are proposed upstream to `uspace-lab/knowledge/vectors/` so the sync script keeps working (until merged, `check-vectors.sh` must ignore files listed in `VERSION` under `local_files`). `jwt_verify.json` is in the lab since `uspace-lab@aa5187e` and has left `local_files`. | Owner merges the ED-318 vector into the lab. |
+| 7 | `jwt_verify` vector "to add" (`00 §6.3`) and an ED-318 round-trip vector (`07` G-M2) did not exist. Vectors are generated in the lab from utm, which has neither. | WP-11 and WP-12 write the vector files in this repo under `vectors/testdata/` in the same shape, with `generated` saying "hand-written in uspace-core, not from utm" and `utm_commit` left as the pinned commit; they are proposed upstream to `uspace-lab/knowledge/vectors/` so the sync script keeps working (until merged, `check-vectors.sh` must ignore files listed in `VERSION` under `local_files`). `jwt_verify.json` is in the lab since `uspace-lab@aa5187e`. **Resolved:** `ed318_roundtrip.json` is in the lab since `uspace-lab@6b5b286` (lab PR #5); `local_files` is empty. | None. |
 | 8 | `rid_identity` expected `rx_ts` values assume the tracker's `now_s` is offset from `2026-09-29T12:00:00Z`; the file says ids may differ but "one serial is always one id". | The test maps `now_s` onto that epoch; `rid.AircraftID` keeps the utm uuid5 namespace so ids match exactly (stronger than required). | None. |
 | 9 | Registration number format (Q5) and whether the secret part is on air. | `regnum` keeps the pattern configurable. It strips the secret part (a hyphen and three ASCII letters or digits) only when what precedes it is a registration number under the pattern, so `GEO-OP-ABC` stays whole, and folds ASCII only (G-04, G-12). The vectors pin this per case with the pattern (`uspace-lab@aa5187e`). | GCAA (open question Q5). |
 | 10 | `source_control.json` has no version/epoch cases; B-09 specifies them. | `sources.Follower.Apply` implemented from B-09 with unit tests; a vector proposed. | Lab to add cases. |

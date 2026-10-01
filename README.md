@@ -9,12 +9,13 @@ verification.
 A library, not a service: no process, no port, no database. Each system
 compiles it in and pins a semver tag. Every safety judgement lives here
 once and is pinned by the knowledge vectors of `uspace-lab`
-(`vectors/testdata/`, 17 files, 660 cases).
+(`vectors/testdata/`, 18 files, 682 cases).
 
 - Plan and architecture: [`docs/PLAN.md`](docs/PLAN.md)
 - Work packages: [`docs/WORKPACKAGES/`](docs/WORKPACKAGES/)
 - Rules for contributors and agents: [`CLAUDE.md`](CLAUDE.md)
 - Versioning and history: [`CHANGELOG.md`](CHANGELOG.md)
+- Releases, behaviour changes and upgrading: [`docs/RELEASING.md`](docs/RELEASING.md)
 
 ```
 make build vet lint    # gofmt, go vet, staticcheck, golangci-lint
