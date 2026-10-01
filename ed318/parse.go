@@ -56,6 +56,11 @@ const anyDay = "ANY"
 // sets them.
 const MaxFreeTextChars = 2000
 
+// MaxTexts bounds the entries of one text list (a name, a message, ...
+// in several languages), E-10: the schema sets no bound, and no zone is
+// published in more languages than this.
+const MaxTexts = 32
+
 // Lengths the schema sets.
 const (
 	countryLen   = 3
@@ -428,6 +433,10 @@ func (p *parser) texts(v *value, where string, maxLen int) []Text {
 	}
 	if v.kind != kindArray {
 		p.ps.add(where, "must be a list of {text, lang}, not "+describe(v))
+		return nil
+	}
+	if len(v.arr) > MaxTexts {
+		p.ps.add(where, fmt.Sprintf("has %d entries; at most %d", len(v.arr), MaxTexts))
 		return nil
 	}
 	out := make([]Text, 0, len(v.arr))

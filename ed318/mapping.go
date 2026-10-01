@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rootxkit/uspace-core/core"
 	"github.com/rootxkit/uspace-core/ed269"
@@ -88,6 +89,18 @@ func FromED269(doc *ed269.Document, meta Metadata, lang string) (*FeatureCollect
 			return nil, err
 		}
 		fc.Features = append(fc.Features, *f)
+	}
+	// What FromED269 returns, Parse accepts: an ED-269 value ED-318
+	// bounds more tightly (a longer title, a "/" in an identifier, deeper
+	// extendedProperties) is refused here, naming the ED-318 field, never
+	// handed on to be refused later.
+	raw, err := Export(fc)
+	if err != nil {
+		return nil, err
+	}
+	if _, probs := Parse(raw, Limits{}); probs != nil {
+		first := probs.List[0]
+		return nil, core.Fieldf(first.Field, "the ED-318 this mapping writes would be refused: %s", first.Reason)
 	}
 	return fc, nil
 }
@@ -223,12 +236,9 @@ func carriedTexts(raw json.RawMessage, path string) (map[string][]Text, map[stri
 			return nil, nil, core.Fieldf(where+"."+textsKey, "must map members to lists of {text, lang}")
 		}
 		for member, list := range lists {
-			ts := make([]Text, 0, len(list))
-			for _, w := range list {
-				if w.Lang == "" {
-					return nil, nil, core.Fieldf(where+"."+textsKey+"."+member, "has an entry without lang")
-				}
-				ts = append(ts, Text{Text: w.Text, Lang: w.Lang})
+			ts, err := restoredList(list, member, where+"."+textsKey+"."+member)
+			if err != nil {
+				return nil, nil, err
 			}
 			carried[member] = ts
 		}
@@ -243,6 +253,39 @@ func carriedTexts(raw json.RawMessage, path string) (map[string][]Text, map[stri
 		rest = nil
 	}
 	return carried, rest, nil
+}
+
+// restoredList checks a carried list against the limits Parse applies to
+// the same member, so that FromED269 never produces a list Parse refuses:
+// at most MaxTexts entries, each lang 1 to 5 characters and given once,
+// each text within the member's length (messages MessageMax, the rest
+// NameMax, both of ed269.DefaultLimits).
+func restoredList(list []wireText, member, where string) ([]Text, error) {
+	if len(list) == 0 || len(list) > MaxTexts {
+		return nil, core.Fieldf(where, "has %d entries; 1 to %d", len(list), MaxTexts)
+	}
+	maxLen := ed269.DefaultLimits.NameMax
+	if member == "message" {
+		maxLen = ed269.DefaultLimits.MessageMax
+	}
+	seen := make(map[string]bool, len(list))
+	out := make([]Text, 0, len(list))
+	for i, w := range list {
+		here := index(where, i)
+		if w.Lang == "" || utf8.RuneCountInString(w.Lang) > langMax || strings.TrimSpace(w.Lang) == "" {
+			return nil, core.Fieldf(here+".lang", "must be 1 to %d characters", langMax)
+		}
+		key := strings.ToLower(w.Lang)
+		if seen[key] {
+			return nil, core.Fieldf(here+".lang", "%q is given twice", w.Lang)
+		}
+		seen[key] = true
+		if w.Text != nil && utf8.RuneCountInString(*w.Text) > maxLen {
+			return nil, core.Fieldf(here+".text", "is %d characters; at most %d", utf8.RuneCountInString(*w.Text), maxLen)
+		}
+		out = append(out, Text{Text: w.Text, Lang: w.Lang})
+	}
+	return out, nil
 }
 
 // wireText is one carried text as JSON.

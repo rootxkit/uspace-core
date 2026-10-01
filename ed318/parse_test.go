@@ -589,3 +589,23 @@ func TestCircleRadius(t *testing.T) {
 		}
 	}
 }
+
+// A text list of MaxTexts entries is accepted; one more is refused.
+func TestTextListBound(t *testing.T) {
+	for _, c := range []struct {
+		n  int
+		ok bool
+	}{{MaxTexts, true}, {MaxTexts + 1, false}} {
+		d := baseDocument(t)
+		var list []any
+		for i := range c.n {
+			list = append(list, map[string]any{"text": "n", "lang": fmt.Sprintf("l%d", i)})
+		}
+		props(t, d, 0)["name"] = list
+		raw, _ := json.Marshal(d)
+		_, probs := Parse(raw, Limits{})
+		if c.ok != (probs == nil) {
+			t.Errorf("%d names: %v", c.n, probs)
+		}
+	}
+}

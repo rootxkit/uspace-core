@@ -3,6 +3,8 @@ package ed318
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand/v2"
 	"reflect"
 	"strings"
 	"testing"
@@ -405,10 +407,14 @@ func TestFromED269CarriedTextsRefusals(t *testing.T) {
 		field string
 	}{
 		"edited text":     {`{"ed269":{"texts":{"name":[{"text":"old","lang":"en"},{"text":"ძველი","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"duplicate lang":  {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"EN"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
+		"long lang":       {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"en-GB-x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
+		"long text":       {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"` + strings.Repeat("y", 201) + `","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].text"},
+		"empty list":      {`{"ed269":{"texts":{"name":[]}}}`, "features[0].extendedProperties.ed269.texts.name"},
 		"absent member":   {`{"ed269":{"texts":{"zoneAuthority[3].name":[{"text":"x","lang":"en"}]}}}`, "features[0].extendedProperties.ed269.texts.zoneAuthority[3].name"},
 		"other member":    {`{"ed269":{"names":{}}}`, "features[0].extendedProperties.ed269.names"},
 		"texts not lists": {`{"ed269":{"texts":[]}}`, "features[0].extendedProperties.ed269.texts"},
-		"no lang":         {`{"ed269":{"texts":{"name":[{"text":"x"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"no lang":         {`{"ed269":{"texts":{"name":[{"text":"x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[0].lang"},
 		"not an object":   {`{"ed269":1}`, "features[0].extendedProperties.ed269"},
 	}
 	for name, c := range cases {
@@ -485,4 +491,105 @@ func TestKeptRadiusRefused(t *testing.T) {
 			t.Errorf("%s: %v", bad, err)
 		}
 	}
+}
+
+// The carried-text limits match Parse's: at MaxTexts entries a list is
+// restored and the result parses; past it, it is refused.
+func TestCarriedTextsAtTheBound(t *testing.T) {
+	base := only(validED269(t), "TST001")
+	list := func(n int) string {
+		var es []string
+		es = append(es, `{"text":"Test prohibited square with a hole","lang":"en"}`)
+		for i := 1; i < n; i++ {
+			es = append(es, fmt.Sprintf(`{"text":"t%d","lang":"x%d"}`, i, i))
+		}
+		return `{"ed269":{"texts":{"name":[` + strings.Join(es, ",") + `]}}}`
+	}
+	for _, c := range []struct {
+		n  int
+		ok bool
+	}{{MaxTexts, true}, {MaxTexts + 1, false}} {
+		d := *base
+		d.Zones = []ed269.GeoZone{base.Zones[0]}
+		d.Zones[0].ExtendedProperties = json.RawMessage(list(c.n))
+		fc, err := FromED269(&d, Metadata{}, "en")
+		if (err == nil) != c.ok {
+			t.Errorf("%d entries: %v", c.n, err)
+		}
+		if err == nil && len(fc.Features[0].Properties.Name) != c.n {
+			t.Errorf("%d entries restored as %d", c.n, len(fc.Features[0].Properties.Name))
+		}
+	}
+}
+
+// Property: whatever FromED269 returns, Parse accepts after Export. ED-269
+// zones are built from the valid fixture with random texts, languages,
+// carried lists, identifiers and free text, some within ED-318's bounds
+// and some past them; a refusal is fine, an output Parse refuses is not.
+func TestFromED269OutputAlwaysParses(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	base := only(validED269(t), "TST001")
+	str := func(most int) string {
+		n := rng.IntN(most + 1)
+		var b strings.Builder
+		for range n {
+			b.WriteRune([]rune("aZ ა/\"é")[rng.IntN(7)])
+		}
+		return b.String()
+	}
+	langs := []string{"en", "en-GB", "ka", "ka-GE", "EN", "", "fr-FR-x", " "}
+	accepted, refused := 0, 0
+	for range 3000 {
+		d := *base
+		z := base.Zones[0]
+		name := str(260)
+		z.Name = &name
+		if rng.IntN(3) == 0 {
+			id := str(7)
+			z.Identifier = id
+		}
+		if rng.IntN(3) == 0 {
+			m := str(260)
+			z.Message = &m
+		}
+		if rng.IntN(3) == 0 {
+			z.RestrictionConditions = []string{str(1200), str(1200)}
+		}
+		if rng.IntN(3) == 0 {
+			title := str(2500)
+			d.Title = &title
+		}
+		if rng.IntN(2) == 0 {
+			var es []string
+			n := 1 + rng.IntN(MaxTexts+3)
+			for i := range n {
+				text := name
+				if i > 0 || rng.IntN(5) == 0 {
+					text = str(230)
+				}
+				tb, _ := json.Marshal(text)
+				lb, _ := json.Marshal(langs[rng.IntN(len(langs))])
+				es = append(es, `{"text":`+string(tb)+`,"lang":`+string(lb)+`}`)
+			}
+			z.ExtendedProperties = json.RawMessage(`{"ed269":{"texts":{"name":[` + strings.Join(es, ",") + `]}}}`)
+		}
+		d.Zones = []ed269.GeoZone{z}
+		fc, err := FromED269(&d, Metadata{}, langs[rng.IntN(4)])
+		if err != nil {
+			refused++
+			continue
+		}
+		accepted++
+		raw, err := Export(fc)
+		if err != nil {
+			t.Fatalf("FromED269 output does not export: %v", err)
+		}
+		if _, probs := Parse(raw, Limits{}); probs != nil {
+			t.Fatalf("FromED269 output refused by Parse: %v\n%s", probs, raw)
+		}
+	}
+	if accepted == 0 || refused == 0 {
+		t.Errorf("accepted %d, refused %d: the property ran one branch only", accepted, refused)
+	}
+	t.Logf("%d accepted and parsed, %d refused by FromED269", accepted, refused)
 }
