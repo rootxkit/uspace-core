@@ -61,6 +61,24 @@ Each entry names the work package and the vectors it affects.
   and ring vertices; shapes past 180 degrees of longitude refused) and
   zone applicability; passes `ed269_parse.json` (52 cases) and
   `zones_applicability.json` (32 cases). [WP-5]
+- `identify`: registry `Snapshot` with exact-then-unambiguous-fold serial
+  lookup, `ResolveBroadcast`, `ResolveRemoteID`, `ResolveBound`,
+  `SerialConflict`, `Unavailable` (no vector yet), `IsOurs` and the
+  spoofing guard `JudgeFleet`. `identification_status.json` 37/37 and
+  `fleet_match.json` 10/10, with the predecessor's reasons `fleet` and
+  `relay_binding` read as the spec's `matched` and `session_binding`
+  (04 §3.2). Decisions without a vector: an unrecognised registration
+  status is `unknown_operator` (`not_in_registry` for the UAS,
+  `owner_unknown` for its owner) so it raises an identification
+  incident; a bound aircraft whose owner is not projected is
+  `owner_unknown`; a bound track without a registry is
+  `registry_unavailable`; a serial shared by two aircraft, or a replaced
+  row's serial, matches nothing; `JudgeFleet` withholds with a
+  `FieldError` on an unusable live window or spoof distance. `serial.FoldKey`
+  folds ASCII letters only, so a look-alike such as U+017F never folds
+  onto one of our serials; `regnum` matches the head before the EU secret
+  part ignoring its case, so `geoabcd1234efgh-x9z` compares as
+  `GEOABCD1234EFGH`. [WP-7]
 
 ## [0.1.0] - unreleased (G-M1)
 

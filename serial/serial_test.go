@@ -137,6 +137,11 @@ func TestNormalizeFoldKey(t *testing.T) {
 		{"DJI-0042", "DJI-0042", "DJI-0042"},
 		{"\t1A2B1X\n", "1A2B1X", "1A2B1X"},
 		{"", "", ""},
+		// Only ASCII folds: U+017F (long s) and U+0131 (dotless i) are
+		// kept, so they never meet the ASCII key SN-FLEET or I.
+		{"ſn-fleet", "ſn-fleet", "ſN-FLEET"},
+		{"ı", "ı", "ı"},
+		{"éa", "éa", "éA"},
 	}
 	for _, tt := range tests {
 		if got := Normalize(tt.in); got != tt.norm {
@@ -151,6 +156,37 @@ func TestNormalizeFoldKey(t *testing.T) {
 	if Normalize("abc1") == Normalize("ABC1") || FoldKey("abc1") != FoldKey("ABC1") {
 		t.Error("case must be kept by Normalize and folded by FoldKey")
 	}
+	// A non-ASCII look-alike never folds onto an ASCII key; its ASCII
+	// twin does.
+	if FoldKey("ſn-fleet") == FoldKey("SN-FLEET") {
+		t.Error("a non-ASCII look-alike folds onto an ASCII serial")
+	}
+	if FoldKey("sn-fleet") != FoldKey("SN-FLEET") {
+		t.Error("the ASCII spelling does not fold")
+	}
+}
+
+// FuzzFoldKey: a fold key changes only ASCII lower-case letters, and a
+// key with a non-ASCII byte is never an ASCII key.
+func FuzzFoldKey(f *testing.F) {
+	for _, s := range []string{"sn-fleet", "ſn-fleet", " dji-0042 ", "", "ÿ"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		n, k := Normalize(s), FoldKey(s)
+		if len(n) != len(k) {
+			t.Fatalf("FoldKey(%q) changed the length", s)
+		}
+		for i := range len(n) {
+			c, d := n[i], k[i]
+			if c != d && (c < 'a' || c > 'z' || d != c-('a'-'A')) {
+				t.Fatalf("FoldKey(%q) changed byte %d from %q to %q", s, i, c, d)
+			}
+		}
+		if FoldKey(k) != k {
+			t.Fatalf("not idempotent: %q", s)
+		}
+	})
 }
 
 func FuzzValidateCTA2063A(f *testing.F) {
