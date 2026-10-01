@@ -178,13 +178,16 @@ func TestDescribe(t *testing.T) {
 	}
 }
 
-// The zero Period never applies; its permanent twin always does.
-func TestZeroPeriodNeverApplies(t *testing.T) {
+// The zero Period applies always: a zone is a restriction, so a period
+// that says nothing about when fails towards enforcing it. Its twin, a
+// bounded period outside its bounds, does not apply.
+func TestZeroPeriodAppliesAlways(t *testing.T) {
 	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	if Applies([]Period{{}}, at) || (Period{Schedule: []DailyPeriod{}}).Contains(at) {
-		t.Error("a period with nothing that says when it applies applies")
+	if !Applies([]Period{{}}, at) || !(Period{Schedule: []DailyPeriod{}}).Contains(at) {
+		t.Error("a period with nothing that says when it applies does not apply")
 	}
-	if !Applies([]Period{{Permanent: true}}, at) {
-		t.Error("a permanent period does not apply")
+	before := at.Add(-time.Hour)
+	if Applies([]Period{{End: &before}}, at) {
+		t.Error("a period that ended an hour ago applies")
 	}
 }

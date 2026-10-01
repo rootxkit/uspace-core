@@ -30,12 +30,13 @@ type DailyPeriod struct {
 // times. Otherwise Start and End (both included) bound it and Schedule,
 // when given, narrows it to daily windows.
 //
-// The zero value never applies: a period that is not permanent and has
-// no Start, no End and no Schedule says nothing about when it applies.
-// Parse refuses one ("permanent NO needs a startDateTime, an endDateTime
-// or a schedule"), and Contains guards against one built in code rather
-// than reading it as "always". Set Permanent for a period that always
-// applies.
+// The zero value applies always: a period that is not permanent and has
+// no Start, no End and no Schedule says nothing about when it applies,
+// and a zone is a restriction, so such a period fails towards enforcing
+// it. A false alert is recoverable; a missed violation is not. Parse
+// refuses such a period ("permanent NO needs a startDateTime, an
+// endDateTime or a schedule"), so it only arises from a period built in
+// code. Set Permanent to say "always" explicitly.
 type Period struct {
 	Permanent bool
 	Start     *time.Time
@@ -84,7 +85,7 @@ func (p Period) Contains(at time.Time) bool {
 		return true
 	}
 	if p.Start == nil && p.End == nil && len(p.Schedule) == 0 {
-		return false
+		return true // fail towards enforcing the zone; see Period
 	}
 	if p.Start != nil && at.Before(*p.Start) {
 		return false
