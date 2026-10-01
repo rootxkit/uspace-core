@@ -29,6 +29,7 @@ const (
 	DefaultMaxTokenBytes      = 8 << 10
 	DefaultMaxJWKSBytes       = 1 << 20
 	DefaultHTTPTimeout        = 10 * time.Second
+	DefaultJWKSFetchTimeout   = 2 * time.Second
 	// MinRSABits is the shortest RSA modulus a JWKS key may have.
 	MinRSABits = 2048
 )
@@ -80,6 +81,10 @@ type Config struct {
 	MaxTokenBytes int
 	// MaxJWKSBytes bounds a JWKS response body.
 	MaxJWKSBytes int64
+	// JWKSFetchTimeout bounds one JWKS fetch. A fetch runs detached from
+	// the context of the request that triggered it, so a caller that
+	// cancels cannot make it fail.
+	JWKSFetchTimeout time.Duration
 	// HTTPClient fetches JWKS; nil uses a client with DefaultHTTPTimeout
 	// that refuses a redirect to a non-HTTPS URL.
 	HTTPClient *http.Client
@@ -153,7 +158,8 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	if c.Audience == "" {
 		return nil, core.Fieldf("audience", "empty")
 	}
-	if c.MaxSkew < 0 || c.JWKSCacheTTL < 0 || c.MinRefreshInterval < 0 || c.MaxTokenBytes < 0 || c.MaxJWKSBytes < 0 {
+	if c.MaxSkew < 0 || c.JWKSCacheTTL < 0 || c.MinRefreshInterval < 0 || c.MaxTokenBytes < 0 || c.MaxJWKSBytes < 0 ||
+		c.JWKSFetchTimeout < 0 {
 		return nil, core.Fieldf("config", "a duration or size is negative")
 	}
 	if c.MaxSkew == 0 {
@@ -170,6 +176,9 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	}
 	if c.MaxJWKSBytes == 0 {
 		c.MaxJWKSBytes = DefaultMaxJWKSBytes
+	}
+	if c.JWKSFetchTimeout == 0 {
+		c.JWKSFetchTimeout = DefaultJWKSFetchTimeout
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = defaultHTTPClient()

@@ -482,6 +482,8 @@ type jwksServer struct {
 	body   []byte
 	status int
 	hits   atomic.Int64
+	// gate, when set, holds every response until it is closed.
+	gate chan struct{}
 }
 
 func newJWKSServer(t *testing.T, set jwk.Set) *jwksServer {
@@ -490,6 +492,12 @@ func newJWKSServer(t *testing.T, set jwk.Set) *jwksServer {
 	s.setKeys(t, set)
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		s.hits.Add(1)
+		s.mu.Lock()
+		gate := s.gate
+		s.mu.Unlock()
+		if gate != nil {
+			<-gate
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		w.WriteHeader(s.status)
@@ -569,6 +577,69 @@ func TestJWKSUnknownKIDRefreshIsRateLimited(t *testing.T) {
 	}
 	if s.hits.Load() != 3 || v.Counters().Get(CounterJWKSRefreshLimited) != 5 {
 		t.Fatalf("fetches %d, rate-limited %d", s.hits.Load(), v.Counters().Get(CounterJWKSRefreshLimited))
+	}
+}
+
+// The rate-limit attack: an unauthenticated request with an unknown kid
+// and a cancelled context must not spend the issuer's refresh. Before
+// the fix it stamped a failed fetch and kept a rotated key out for a
+// minute; repeated, for ever. The legitimate token under the new kid is
+// accepted right after the attack (presence), while the plain rate limit
+// of TestJWKSUnknownKIDRefreshIsRateLimited still holds.
+func TestJWKSCancelledCallerCannotHoldDownRotation(t *testing.T) {
+	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
+	clk := newClock(testNow)
+	v := urlVerifier(t, s, clk)
+	s.setKeys(t, publicSet(t, testKID, testKey(), otherKey()))
+	clk.add(DefaultMinRefreshInterval)
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	for range 3 {
+		_, err := v.Verify(cancelled, tokenAt(testKey(), "k-attacker", clk.now()))
+		wantTokenRefused(t, err, CounterRejectedKID, "kid")
+	}
+	if s.hits.Load() != 1 || v.Counters().Get(CounterJWKSRefreshFailed) != 0 || v.Counters().Get(CounterJWKSRefreshLimited) != 0 {
+		t.Fatalf("a cancelled caller spent the refresh: fetches %d, %v", s.hits.Load(), v.Counters().Snapshot())
+	}
+	if _, err := v.Verify(context.Background(), tokenAt(otherKey(), testKID+"-1", clk.now())); err != nil {
+		t.Fatalf("the rotated key is held down by the attack: %v", err)
+	}
+}
+
+// A caller that cancels while the fetch is in flight cannot fail it: the
+// fetch completes and installs the rotated key for the next request.
+func TestJWKSFetchSurvivesCallerCancellation(t *testing.T) {
+	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
+	clk := newClock(testNow)
+	v := urlVerifier(t, s, clk)
+	s.setKeys(t, publicSet(t, testKID, testKey(), otherKey()))
+	clk.add(DefaultMinRefreshInterval)
+	gate := make(chan struct{})
+	s.mu.Lock()
+	s.gate = gate
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := v.Verify(ctx, tokenAt(testKey(), "k-attacker", clk.now()))
+		done <- err
+	}()
+	for s.hits.Load() < 2 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	time.Sleep(20 * time.Millisecond) // a fetch on the caller's context would fail here
+	close(gate)
+	if err := <-done; err == nil {
+		t.Fatal("unknown kid accepted")
+	}
+	if v.Counters().Get(CounterJWKSRefresh) != 2 || v.Counters().Get(CounterJWKSRefreshFailed) != 0 {
+		t.Fatalf("the fetch did not survive the caller: %v", v.Counters().Snapshot())
+	}
+	if _, err := v.Verify(context.Background(), tokenAt(otherKey(), testKID+"-1", clk.now())); err != nil {
+		t.Fatalf("the rotated key is not installed: %v", err)
 	}
 }
 

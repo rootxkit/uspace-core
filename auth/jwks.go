@@ -117,7 +117,17 @@ func (v *Verifier) key(ctx context.Context, ik *issuerKeys, kid string) (keyEntr
 // maybeRefresh fetches ik's JWKS unless a fetch was attempted less than
 // MinRefreshInterval ago. A failure is counted and the cached set kept;
 // it is not an error of the token being verified.
+//
+// The caller's context cannot fail the fetch: a request whose context is
+// already done starts no fetch and leaves the rate limit untouched, and a
+// started fetch runs under context.WithoutCancel with JWKSFetchTimeout.
+// Otherwise an unauthenticated request with an unknown kid and a
+// cancelled context would stamp the rate limit with a failed fetch and
+// keep a rotated key out for MinRefreshInterval, again and again.
 func (v *Verifier) maybeRefresh(ctx context.Context, ik *issuerKeys, now time.Time) {
+	if ctx.Err() != nil {
+		return
+	}
 	ik.refreshMu.Lock()
 	defer ik.refreshMu.Unlock()
 	if now.Sub(ik.lastAttempt) < v.cfg.MinRefreshInterval {
@@ -132,7 +142,9 @@ func (v *Verifier) maybeRefresh(ctx context.Context, ik *issuerKeys, now time.Ti
 // owns ik exclusively.
 func (v *Verifier) refresh(ctx context.Context, ik *issuerKeys, now time.Time) error {
 	ik.lastAttempt = now
-	keys, err := v.fetch(ctx, ik.url)
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), v.cfg.JWKSFetchTimeout)
+	defer cancel()
+	keys, err := v.fetch(fctx, ik.url)
 	if err != nil {
 		v.counters.Inc(CounterJWKSRefreshFailed)
 		return err
