@@ -13,26 +13,25 @@ type Entry struct {
 // here. A new file in uspace-lab is added here with its owning package,
 // never run "somewhere".
 var Manifest = []Entry{
-	{"alert_lifecycle.json", "alerting", 28},
-	{"cpa.json", "cpa", 27},
-	{"ed269_parse.json", "ed269", 52},
-	{"fleet_match.json", "identify", 10},
+	{"alert_lifecycle.json", "alerting", 35},
+	{"cpa.json", "cpa", 37},
+	{"ed269_parse.json", "ed269", 54},
+	{"fleet_match.json", "identify", 14},
 	{"geodesy.json", "geodesy", 17},
-	{"identification_status.json", "identify", 37},
+	{"identification_status.json", "identify", 43},
 	{"jwt_verify.json", "auth", 16},
 	{"odid_decode.json", "odid", 187},
 	{"pressure_altitude.json", "rid", 16},
 	{"rid_identity.json", "rid", 24},
 	{"rid_receiver_auth.json", "auth", 14},
 	{"rid_time.json", "timeplace", 25},
-	{"serials_and_registration.json", "serial", 33},
+	{"serials_and_registration.json", "serial", 41},
 	{"source_control.json", "sources", 8},
 	{"terrain_geoid.json", "terrain", 48},
 	{"zones_applicability.json", "ed269", 32},
-	{"zones_vertical.json", "zones", 38},
+	{"zones_vertical.json", "zones", 49},
 }
 
-// TotalCases is the number of cases across every file: 596 at the pinned
-// lab commit (knowledge/README.md) plus the 16 of the local
-// jwt_verify.json (WP-11).
-const TotalCases = 612
+// TotalCases is the number of cases across every file at the pinned lab
+// commit (knowledge/README.md), jwt_verify.json included.
+const TotalCases = 660

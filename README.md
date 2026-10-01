@@ -9,7 +9,7 @@ verification.
 A library, not a service: no process, no port, no database. Each system
 compiles it in and pins a semver tag. Every safety judgement lives here
 once and is pinned by the knowledge vectors of `uspace-lab`
-(`vectors/testdata/`, 16 files, 596 cases).
+(`vectors/testdata/`, 17 files, 660 cases).
 
 - Plan and architecture: [`docs/PLAN.md`](docs/PLAN.md)
 - Work packages: [`docs/WORKPACKAGES/`](docs/WORKPACKAGES/)

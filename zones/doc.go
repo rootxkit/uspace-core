@@ -30,9 +30,10 @@
 //     type (Z-10): PROHIBITED critical, REQ_AUTHORISATION warning,
 //     CONDITIONAL as Policy.ConditionalSeverity, USPACE info (so that
 //     presence in U-space airspace is visible), NO_RESTRICTION nothing.
-//     A PROHIBITED or REQ_AUTHORISATION zone whose only unjudged limit is
-//     AGL warns with limit_not_judged (Z-09); any other unjudged limit
-//     leaves the zone not evaluated. A pressure altitude is widened by
+//     A PROHIBITED or REQ_AUTHORISATION zone with a limit it cannot judge
+//     (AGL without the ground, WGS84 without the geoid; S-37) warns with
+//     limit_not_judged (Z-09); a CONDITIONAL zone with one is not
+//     evaluated, since a warning would exceed an info zone's severity. A pressure altitude is widened by
 //     Policy.PressureUncertaintyM each way (R-09): inside as indicated
 //     keeps the severity, inside only the widened band warns (capped at
 //     the zone's own severity: an info zone stays info), both flagged

@@ -124,6 +124,12 @@ func FuzzJudgeVertical(f *testing.F) {
 		if r.NotEvaluated && r.Reasons == 0 {
 			t.Fatalf("not evaluated without a reason: %+v", r)
 		}
+		// Z-09 with S-37: a PROHIBITED or REQ_AUTHORIZATION zone is never
+		// silent because a height reference is missing; it warns.
+		missingOnly := r.Reasons&^ReasonsOf(ReasonNoTerrain, ReasonGroundUnknown, ReasonNoGeoid) == 0
+		if r.NotEvaluated && warnsUnjudged(z.Type) && missingOnly {
+			t.Fatalf("%s zone silent for a missing reference: %+v", z.Type, r)
+		}
 		if r.Raise != nil {
 			switch r.Raise.Severity {
 			case core.SeverityInfo, core.SeverityWarning, core.SeverityCritical:

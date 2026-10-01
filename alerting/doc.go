@@ -88,7 +88,6 @@
 //     config_invalid and every pair it refuses as not judged.
 //
 // It depends on core, cpa, zones and sources (ed269 in its tests).
-// Vectors: vectors/testdata/alert_lifecycle.json (28 cases), run by
-// TestVectorsAlertLifecycle with one counted override
-// (disarming-clears-as-stale clears as landed). Owned by WP-10.
+// Vectors: vectors/testdata/alert_lifecycle.json (35 cases), run by
+// TestVectorsAlertLifecycle as written. Owned by WP-10.
 package alerting
