@@ -79,6 +79,16 @@ Each entry names the work package and the vectors it affects.
   onto one of our serials; `regnum` matches the head before the EU secret
   part ignoring its case, so `geoabcd1234efgh-x9z` compares as
   `GEOABCD1234EFGH`. [WP-7]
+- `zones`: zones from ED-269 (one volume, feet exact), horizontal
+  containment (bounding box, polygon with holes, circle by geodesic
+  distance, antimeridian), applicability at captured_at, each vertical
+  limit in its own reference with the unjudged-AGL warning and the
+  pressure margin (capped at the zone's own severity), the height limit
+  over known ground, USPACE at info, a bounding-box grid `Index` bounded
+  per zone and in total (`IndexLimits`), every missing reference in
+  `Result.Reasons`, and the counters `zone_checks_not_evaluated`,
+  `zone_limits_not_judged`, `height_checks_not_evaluated`; passes
+  `zones_vertical.json` (38 cases). [WP-8]
 - `cpa`: closest point of approach in the mid-latitude tangent plane
   with the older sample advanced, `t_cpa` clamped to >= 0, the vertical
   gap at `t_cpa`, a conflict as a loss of separation anywhere in the
