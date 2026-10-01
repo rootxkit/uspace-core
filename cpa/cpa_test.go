@@ -298,6 +298,10 @@ func TestAdvanceAcrossAntimeridian(t *testing.T) {
 	}
 }
 
+// TestNonFiniteInputsAreNotJudged: every number that takes part in the
+// judgement refuses it when non-finite; the altitude and vertical speed
+// of a track whose vertical is unknown take no part, and those rows are
+// the presence twins: judged, and a conflict.
 func TestNonFiniteInputsAreNotJudged(t *testing.T) {
 	good := at(0, 0, 550)
 	near := at(10, 0, 550) // a conflict when judged
@@ -306,27 +310,39 @@ func TestNonFiniteInputsAreNotJudged(t *testing.T) {
 	}
 	nan, inf := math.NaN(), math.Inf(1)
 	for _, tc := range []struct {
-		name string
-		mut  func(*State)
+		name   string
+		mut    func(*State)
+		judged bool
 	}{
-		{"lat-nan", func(s *State) { s.Pos.LatDeg = nan }},
-		{"lat-inf", func(s *State) { s.Pos.LatDeg = inf }},
-		{"lat-out-of-range", func(s *State) { s.Pos.LatDeg = 91 }},
-		{"lon-nan", func(s *State) { s.Pos.LonDeg = nan }},
-		{"lon-out-of-range", func(s *State) { s.Pos.LonDeg = -181 }},
-		{"alt-nan", func(s *State) { s.AltAMSLM = nan }},
-		{"alt-inf", func(s *State) { s.AltAMSLM = -inf }},
-		{"vn-nan", func(s *State) { s.VNMS = nan }},
-		{"ve-inf", func(s *State) { s.VEMS = inf }},
-		{"vd-nan", func(s *State) { s.VDMS = nan }},
-		{"captured-nan", func(s *State) { s.CapturedAtS = nan }},
-		{"captured-inf", func(s *State) { s.CapturedAtS = inf }},
+		{"lat-nan", func(s *State) { s.Pos.LatDeg = nan }, false},
+		{"lat-inf", func(s *State) { s.Pos.LatDeg = inf }, false},
+		{"lat-out-of-range", func(s *State) { s.Pos.LatDeg = 91 }, false},
+		{"lon-nan", func(s *State) { s.Pos.LonDeg = nan }, false},
+		{"lon-out-of-range", func(s *State) { s.Pos.LonDeg = -181 }, false},
+		{"alt-nan", func(s *State) { s.AltAMSLM = nan }, false},
+		{"alt-inf", func(s *State) { s.AltAMSLM = -inf }, false},
+		{"vn-nan", func(s *State) { s.VNMS = nan }, false},
+		{"ve-inf", func(s *State) { s.VEMS = inf }, false},
+		{"vd-nan", func(s *State) { s.VDMS = nan }, false},
+		{"captured-nan", func(s *State) { s.CapturedAtS = nan }, false},
+		{"captured-inf", func(s *State) { s.CapturedAtS = inf }, false},
+		{"alt-nan-pressure", func(s *State) { s.AltAMSLM, s.VerticalKnown = nan, false }, true},
+		{"alt-inf-pressure", func(s *State) { s.AltAMSLM, s.VerticalKnown = inf, false }, true},
+		{"vd-nan-pressure", func(s *State) { s.VDMS, s.VerticalKnown = nan, false }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bad := near
 			tc.mut(&bad)
-			mustNotJudge(t, Evaluate(good, bad, DefaultPolicy), ReasonInvalidInput)
-			mustNotJudge(t, Evaluate(bad, good, DefaultPolicy), ReasonInvalidInput)
+			for _, r := range []Result{Evaluate(good, bad, DefaultPolicy), Evaluate(bad, good, DefaultPolicy)} {
+				if !tc.judged {
+					mustNotJudge(t, r, ReasonInvalidInput)
+					continue
+				}
+				mustJudge(t, r)
+				if !r.Conflict || r.VerticalKnown {
+					t.Fatalf("%+v, want a horizontal conflict with the vertical unknown", r)
+				}
+			}
 		})
 	}
 }

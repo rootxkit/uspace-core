@@ -33,24 +33,39 @@ type State struct {
 	CapturedAtS float64
 }
 
-// valid reports whether every number the judgement uses is finite and
-// the position is in range (C-09). AltAMSLM and VDMS take part only when
-// VerticalKnown is true; on a track whose vertical is unknown they are
-// not checked, so a NaN there cannot hide a horizontal conflict.
-func (s State) valid() bool {
-	if !s.Pos.Valid() || !core.IsFinite(s.VNMS) || !core.IsFinite(s.VEMS) || !core.IsFinite(s.CapturedAtS) {
-		return false
+// judgedNumbers is the one definition of which numbers of a state take
+// part in the judgement. AltAMSLM and VDMS take part only when
+// VerticalKnown is true; on a track whose vertical is unknown they read
+// as zero here, so a NaN there can hide no horizontal conflict. valid,
+// the re-check after Advance and the canonical order all read the state
+// through it, so they cannot disagree about it.
+func (s State) judgedNumbers() [7]float64 {
+	altAMSLM, vdMS := s.AltAMSLM, s.VDMS
+	if !s.VerticalKnown {
+		altAMSLM, vdMS = 0, 0
 	}
-	return !s.VerticalKnown || (core.IsFinite(s.AltAMSLM) && core.IsFinite(s.VDMS))
+	return [...]float64{s.Pos.LatDeg, s.Pos.LonDeg, altAMSLM, s.VNMS, s.VEMS, vdMS, s.CapturedAtS}
 }
 
-// horizontalOnly clears the vertical numbers of a state whose vertical is
-// unknown: they take no part in the judgement, and a NaN left there would
-// break the canonical order and Advance's validity check.
-func (s State) horizontalOnly() State {
-	if !s.VerticalKnown {
-		s.AltAMSLM, s.VDMS = 0, 0
+// valid reports whether every number the judgement uses is finite and
+// the position is in range (C-09).
+func (s State) valid() bool {
+	if !s.Pos.Valid() {
+		return false
 	}
+	for _, v := range s.judgedNumbers() {
+		if !core.IsFinite(v) {
+			return false
+		}
+	}
+	return true
+}
+
+// horizontalOnly returns s with the numbers judgedNumbers leaves out set
+// to zero, so the arithmetic after it never meets them.
+func (s State) horizontalOnly() State {
+	n := s.judgedNumbers()
+	s.AltAMSLM, s.VDMS = n[2], n[5]
 	return s
 }
 
@@ -191,10 +206,11 @@ func Advance(s State, toS float64) State {
 
 // before is a total order on valid states, used to put a pair in one
 // canonical order so that Evaluate(a, b) and Evaluate(b, a) run the same
-// arithmetic and return bit-identical results.
+// arithmetic and return bit-identical results. It compares the numbers
+// that take part in the judgement (judgedNumbers), which are finite for
+// a valid state.
 func before(a, b State) bool {
-	fa := [...]float64{a.Pos.LatDeg, a.Pos.LonDeg, a.AltAMSLM, a.VNMS, a.VEMS, a.VDMS, a.CapturedAtS}
-	fb := [...]float64{b.Pos.LatDeg, b.Pos.LonDeg, b.AltAMSLM, b.VNMS, b.VEMS, b.VDMS, b.CapturedAtS}
+	fa, fb := a.judgedNumbers(), b.judgedNumbers()
 	for i := range fa {
 		if fa[i] != fb[i] {
 			return fa[i] < fb[i]
