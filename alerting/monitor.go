@@ -59,7 +59,10 @@ type aircraft struct {
 	// wall time): an aircraft with neither a track nor an identity is
 	// forgotten StaleAfterS after it.
 	heardS float64
-	order  []orderEntry
+	// placedS is the latest CapturedAtS admitted: placedS, heardS, seenS,
+	// identitySeenS and state.CapturedAtS never go backwards (T-06).
+	placedS float64
+	order   []orderEntry
 	// alerts holds the keys of the active alerts this aircraft is part of.
 	alerts map[string]struct{}
 	elem   *list.Element
@@ -125,7 +128,9 @@ func (m *Monitor) Tracked() int { return len(m.aircraft) }
 //     flagged backlog rejected_backlog; with wallS -
 //     RxAtS > LiveMaxAgeS rejected_late; older on its source's clock than
 //     the one held from that source and not received later
-//     rejected_out_of_order. A rejected sample judges nothing.
+//     rejected_out_of_order; placed before the latest sample of the same
+//     aircraft from any source rejected_older_than_held (T-06). A
+//     rejected sample judges nothing.
 //  2. Flying (C-05): a flying sample with a valid position is paired with
 //     its neighbours and judged against the zones and the height limit.
 //     A sample saying not flying clears the aircraft's alerts as landed
@@ -263,7 +268,7 @@ func (m *Monitor) record(id string, ev *Events) *aircraft {
 		m.counters.Inc(CounterAircraftEvicted)
 		m.dropAircraft(oldest, ClearEvicted, ev)
 	}
-	ac := &aircraft{id: id, alerts: make(map[string]struct{})}
+	ac := &aircraft{id: id, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1)}
 	ac.elem = m.lru.PushBack(ac)
 	m.aircraft[id] = ac
 	return ac

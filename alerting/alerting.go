@@ -58,6 +58,11 @@ const (
 	// clock than the one held from that source, and not received later
 	// (T-03).
 	CounterRejectedOutOfOrder = "rejected_out_of_order"
+	// CounterRejectedOlderPlacement counts samples placed (CapturedAtS)
+	// before the latest sample admitted for the same aircraft, from any
+	// source: a newer state is never overwritten by an older one (T-06).
+	// The caller records them as history.
+	CounterRejectedOlderPlacement = "rejected_older_than_held"
 	// CounterRejectedSourceDisabled counts samples from a switched-off
 	// source (B-11).
 	CounterRejectedSourceDisabled = "rejected_source_disabled"

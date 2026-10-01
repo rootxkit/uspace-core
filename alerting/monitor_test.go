@@ -947,3 +947,40 @@ func TestClearingDetailVerticalUnknown(t *testing.T) {
 		t.Fatalf("clearing detail %v", cd)
 	}
 }
+
+func TestOlderPlacementNeverRewindsTheTrack(t *testing.T) {
+	// Review probe (T-06): A and B head-on, reporting every second up to
+	// t=14. One A sample placed at t=0 arrives at 14.5, with no source
+	// time (so T-03 cannot order it), or from another station.
+	for _, variant := range []string{"no source time", "other station"} {
+		t.Run(variant, func(t *testing.T) {
+			m := NewMonitor(DefaultConfig())
+			for s := 0.0; s <= 14; s++ {
+				m.Observe(at("A", 10*s, 10, s), s)
+				m.Observe(at("B", 500-10*s, -10, s), s)
+			}
+			old := at("A", 0, 10, 0)
+			old.RxAtS = 14.5
+			if variant == "no source time" {
+				old.SourceTS = nil
+			} else {
+				old.Station = "gs-2"
+			}
+			wantEvents(t, "older sample", m.Observe(old, 14.5), nil, nil)
+			if got := m.Counters().Get(CounterRejectedOlderPlacement); got != 1 {
+				t.Fatalf("rejected_older_than_held = %d", got)
+			}
+			if a := m.aircraft["A"]; a.state.CapturedAtS != 14 || a.seenS != 14 || a.heardS != 14 {
+				t.Fatalf("track rewound: captured %v seen %v heard %v", a.state.CapturedAtS, a.seenS, a.heardS)
+			}
+			wantEvents(t, "tick 15.5", m.Tick(15.5), nil, nil)
+			m.Observe(at("B", 350, -10, 15), 15.5)
+			if got := m.Counters().Get(CounterPairsNotJudged + "_stale_neighbour"); got != 0 {
+				t.Fatalf("stale_neighbour pairs = %d", got)
+			}
+			if len(m.Active()) != 1 || m.Active()[0].LastTrueS != 15 {
+				t.Fatalf("active %+v", m.Active())
+			}
+		})
+	}
+}

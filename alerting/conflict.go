@@ -59,8 +59,12 @@ func (m *Monitor) judgeFlying(ac *aircraft, tr *Track, wallS float64, ev *Events
 	if tr.Transmitter != nil {
 		ac.transmitter = *tr.Transmitter
 	}
+	seenS := math.Min(atS, wallS)
+	if ac.hasTrack {
+		seenS = math.Max(ac.seenS, seenS)
+	}
 	ac.hasTrack = true
-	ac.seenS = math.Min(atS, wallS)
+	ac.seenS = seenS
 	m.noteSeen(ac.seenS)
 	m.grid.Upsert(ac.id, tr.Pos)
 	m.judgeConflicts(ac, atS, ev)

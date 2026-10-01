@@ -6,8 +6,8 @@ import (
 	"github.com/rootxkit/uspace-core/core"
 )
 
-// admit decides whether tr is judged at all (T-03, T-04, T-05, B-11,
-// C-09), counts each refusal under its own name, and on admission returns
+// admit decides whether tr is judged at all (T-03, T-04, T-05, T-06,
+// B-11, C-09), counts each refusal under its own name, and on admission returns
 // the aircraft record with tr's source ordering and source noted. A
 // refused sample judges nothing and therefore clears nothing.
 func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) {
@@ -40,9 +40,17 @@ func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) 
 			return nil, false
 		}
 	}
+	// A newer state is never overwritten by an older one, whatever the
+	// source (T-06): CapturedAtS is on the ingest's clock, so samples of
+	// one aircraft from any source compare. The caller keeps it as history.
+	if known && tr.CapturedAtS < ac.placedS {
+		m.counters.Inc(CounterRejectedOlderPlacement)
+		return nil, false
+	}
 	ac = m.record(tr.ID, ev)
 	ac.src = src
-	ac.heardS = math.Min(tr.CapturedAtS, wallS)
+	ac.placedS = tr.CapturedAtS
+	ac.heardS = math.Max(ac.heardS, math.Min(tr.CapturedAtS, wallS))
 	m.noteSeen(ac.heardS)
 	if tr.SourceTS != nil {
 		m.noteOrder(ac, src, *tr.SourceTS, tr.CapturedAtS)

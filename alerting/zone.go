@@ -201,8 +201,12 @@ func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Even
 		return
 	}
 	atS := tr.CapturedAtS
+	seenS := math.Min(atS, wallS)
+	if ac.hasIdentity {
+		seenS = math.Max(ac.identitySeenS, seenS)
+	}
 	ac.hasIdentity = true
-	ac.identitySeenS = math.Min(atS, wallS)
+	ac.identitySeenS = seenS
 	m.noteSeen(ac.identitySeenS)
 	key := keyOf(KindIdentificationMismatch, ac.id)
 	if !ident.Mismatch {
