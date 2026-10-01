@@ -12,7 +12,8 @@ import (
 // standard's unknown value. Encode refuses, with a *core.FieldError that
 // names the field, a value the wire cannot carry: one outside its field,
 // one that would encode as the unknown sentinel (pass nil instead), NaN
-// or an infinity, and a string longer than its field or ending in NUL. It
+// or an infinity, a string longer than its field or ending in NUL, and an
+// Authentication.Raw that is not exactly 23 bytes. It
 // does not judge plausibility: a decoded message always re-encodes.
 //
 // Quantisation follows opendroneid-core-c: values round half away from
@@ -116,8 +117,10 @@ func encodeAuthentication(b *[MessageSize]byte, m Authentication) error {
 	if err := nibbleField("page_number", m.PageNumber); err != nil {
 		return err
 	}
-	if len(m.Raw) > AuthDataSize {
-		return core.Fieldf("raw", "%d bytes, a page holds %d", len(m.Raw), AuthDataSize)
+	// A short page is refused rather than zero-padded: padding would
+	// invent authentication bytes the caller never had.
+	if len(m.Raw) != AuthDataSize {
+		return core.Fieldf("raw", "%d bytes, a page is %d", len(m.Raw), AuthDataSize)
 	}
 	b[offHeader] = header(TypeAuthentication)
 	b[offAuthTypePage] = m.AuthType<<4 | m.PageNumber

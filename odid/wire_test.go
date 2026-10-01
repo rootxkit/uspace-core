@@ -14,6 +14,9 @@ import (
 
 func ptr(v float64) *float64 { return &v }
 
+// authPage is an Authentication page of the one length the wire carries.
+func authPage() Authentication { return Authentication{Raw: make([]byte, AuthDataSize)} }
+
 func baseLocation() Location {
 	return Location{
 		Status:            StatusAirborne,
@@ -187,7 +190,7 @@ func TestHeaderByte(t *testing.T) {
 		m    Message
 		want byte
 	}{
-		{BasicID{}, 0x02}, {baseLocation(), 0x12}, {Authentication{}, 0x22},
+		{BasicID{}, 0x02}, {baseLocation(), 0x12}, {authPage(), 0x22},
 		{SelfID{}, 0x32}, {baseSystem(), 0x42}, {OperatorID{}, 0x52},
 	} {
 		b, err := Encode(c.m)

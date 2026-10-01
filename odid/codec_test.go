@@ -93,7 +93,7 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 	sys := mustEncode(t, baseSystem())
 	op := mustEncode(t, OperatorID{OperatorID: "OP"})
 	self := mustEncode(t, SelfID{Description: "survey"})
-	auth := mustEncode(t, Authentication{AuthType: 1})
+	auth := mustEncode(t, Authentication{AuthType: 1, Raw: make([]byte, AuthDataSize)})
 	var unknown [MessageSize]byte
 	unknown[0] = 0x92
 
@@ -470,7 +470,9 @@ func TestEncodeOtherRefusals(t *testing.T) {
 		{"ua_type 16", "ua_type", "4 bits", BasicID{UAType: 16}},
 		{"operator_id 21 bytes", "operator_id", "21 bytes", OperatorID{OperatorID: long}},
 		{"description 24 bytes", "description", "24 bytes, the field holds 23", SelfID{Description: strings.Repeat("d", 24)}},
-		{"auth raw 24 bytes", "raw", "24 bytes, a page holds 23", Authentication{Raw: make([]byte, 24)}},
+		{"auth raw 24 bytes", "raw", "24 bytes, a page is 23", Authentication{Raw: make([]byte, 24)}},
+		{"auth raw 22 bytes", "raw", "22 bytes, a page is 23", Authentication{Raw: make([]byte, 22)}},
+		{"auth raw nil", "raw", "0 bytes, a page is 23", Authentication{}},
 		{"auth type 16", "auth_type", "4 bits", Authentication{AuthType: 16}},
 		{"auth page 16", "page_number", "4 bits", Authentication{PageNumber: 16}},
 		{"unknown with a known type", "raw", "has its own message struct", Unknown{Raw: [MessageSize]byte{0x12}}},
@@ -505,7 +507,7 @@ func (foreign) Type() MessageType { return TypeLocation }
 func TestEncodePackRefusals(t *testing.T) {
 	loc := baseLocation()
 	basic := BasicID{UAID: "X"}
-	nine := []Message{basic, basic, loc, baseSystem(), OperatorID{}, SelfID{}, Authentication{}, Authentication{}, Authentication{}}
+	nine := []Message{basic, basic, loc, baseSystem(), OperatorID{}, SelfID{}, authPage(), authPage(), authPage()}
 	if _, err := EncodePack(nine); err != nil {
 		t.Fatalf("nine messages: %v", err)
 	}
@@ -516,7 +518,7 @@ func TestEncodePackRefusals(t *testing.T) {
 		ms                  []Message
 	}{
 		{"empty", "pack", "pack of 0 messages", nil},
-		{"ten", "pack", "pack of 10 messages", append(nine[:9:9], Authentication{})},
+		{"ten", "pack", "pack of 10 messages", append(nine[:9:9], authPage())},
 		{"nested", "pack[1]", "a pack inside a pack", []Message{loc, Unknown{Raw: [MessageSize]byte{0xF2}}}},
 		{"three Basic IDs", "pack[2]", "too many Basic ID messages in a pack", []Message{basic, basic, basic}},
 		{"two Locations", "pack[1]", "more than one LOCATION message in a pack", []Message{loc, loc}},
