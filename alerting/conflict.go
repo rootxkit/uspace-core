@@ -164,7 +164,7 @@ func (m *Monitor) judgeConflicts(ac *aircraft, atS float64, ev *Events) {
 		case r.Conflict:
 			m.refresh(conflictRaise(key, ac.id, id, r), atS, ev)
 		case active:
-			m.showFalse(key, atS, ev)
+			m.showFalse(key, atS, clearingDetail(atS, r), ev)
 		}
 	}
 }
@@ -174,6 +174,25 @@ func (m *Monitor) judgeConflicts(ac *aircraft, atS float64, ev *Events) {
 func horizontalDistanceM(a, b core.LatLon) float64 {
 	northM, eastM := geodesy.LocalOffsetAboutMidLatM(a, b)
 	return math.Hypot(northM, eastM)
+}
+
+// clearingDetail is the separation of a judged non-conflict, carried by
+// the resolved clear it leads to (C-14). The vertical values are nil when
+// the vertical is unknown (R-09).
+func clearingDetail(atS float64, r cpa.Result) map[string]any {
+	var dAltNowM, dAltAtCPAM any
+	if r.VerticalKnown {
+		dAltNowM, dAltAtCPAM = r.DAltNowM, r.DAltAtCPAM
+	}
+	return map[string]any{
+		"clearing_at_s":                      atS,
+		"clearing_d_horizontal_now_m":        r.DHorizontalNowM,
+		"clearing_d_alt_now_m":               dAltNowM,
+		"clearing_t_cpa_s":                   r.TCPAS,
+		"clearing_d_cpa_horizontal_m":        r.DCPAHorizontalM,
+		"clearing_d_alt_at_cpa_m":            dAltAtCPAM,
+		"clearing_vertical_separation_known": r.VerticalKnown,
+	}
 }
 
 // conflictRaise is the conflict alert of a judged pair (C-03). Detail

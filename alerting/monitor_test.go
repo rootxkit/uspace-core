@@ -872,3 +872,61 @@ func TestIdentityKeepsAircraftWithoutTrack(t *testing.T) {
 		t.Fatalf("A still held at 15.5 s (%d held)", m.Tracked())
 	}
 }
+
+func TestResolvedClearCarriesClearingNumbers(t *testing.T) {
+	// The vectors' diverging pair: inside until t=3 (55 m), shown false
+	// from t=4, cleared at t=7 at 75 m. Detail keeps the last true numbers
+	// (alert_lifecycle.json); ClearingDetail the clearing judgement (C-14).
+	m := NewMonitor(DefaultConfig())
+	m.Observe(at("A", 0, 0, 0), 0)
+	var ev Events
+	for s := 0.0; s <= 7; s++ {
+		ev = m.Observe(at("B", 40+5*s, 5, s), s)
+	}
+	if len(ev.Cleared) != 1 || ev.Cleared[0].Reason != ClearResolved {
+		t.Fatalf("cleared %+v", ev.Cleared)
+	}
+	c := ev.Cleared[0]
+	near := func(name string, got any, want float64) {
+		t.Helper()
+		g, ok := got.(float64)
+		if !ok || math.Abs(g-want) > 0.5 {
+			t.Fatalf("%s = %v, want about %v", name, got, want)
+		}
+	}
+	near("d_horizontal_now_m", c.Detail["d_horizontal_now_m"], 55)
+	cd := c.ClearingDetail
+	near("clearing_d_horizontal_now_m", cd["clearing_d_horizontal_now_m"], 75)
+	near("clearing_d_cpa_horizontal_m", cd["clearing_d_cpa_horizontal_m"], 75)
+	near("clearing_t_cpa_s", cd["clearing_t_cpa_s"], 0)
+	near("clearing_d_alt_now_m", cd["clearing_d_alt_now_m"], 0)
+	near("clearing_d_alt_at_cpa_m", cd["clearing_d_alt_at_cpa_m"], 0)
+	near("clearing_at_s", cd["clearing_at_s"], 7)
+	if cd["clearing_vertical_separation_known"] != true || len(cd) != 7 {
+		t.Fatalf("clearing detail %v", cd)
+	}
+	// Twin: a clear that rests on no judgement carries none.
+	m = headOn(t, DefaultConfig())
+	ev = m.Tick(16)
+	if len(ev.Cleared) != 1 || ev.Cleared[0].Reason != ClearStale || ev.Cleared[0].ClearingDetail != nil {
+		t.Fatalf("stale clear %+v", ev.Cleared)
+	}
+}
+
+func TestClearingDetailVerticalUnknown(t *testing.T) {
+	m := NewMonitor(DefaultConfig())
+	m.Observe(at("A", 0, 0, 0), 0)
+	var ev Events
+	for s := 0.0; s <= 7; s++ {
+		b := at("B", 40+5*s, 5, s)
+		b.AltSource = core.AltPressure
+		ev = m.Observe(b, s)
+	}
+	if len(ev.Cleared) != 1 {
+		t.Fatalf("cleared %+v", ev.Cleared)
+	}
+	cd := ev.Cleared[0].ClearingDetail
+	if cd["clearing_d_alt_now_m"] != nil || cd["clearing_d_alt_at_cpa_m"] != nil || cd["clearing_vertical_separation_known"] != false {
+		t.Fatalf("clearing detail %v", cd)
+	}
+}

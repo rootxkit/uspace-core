@@ -213,7 +213,8 @@ type Alert struct {
 	Aircraft []string
 	// Detail is the judgement's numbers at the last time the condition was
 	// shown true, at full precision (a display rounds them). A clear
-	// carries the detail the alert held (C-14).
+	// carries the detail the alert held; a resolved conflict also carries
+	// Cleared.ClearingDetail (C-14).
 	Detail map[string]any
 	// RaisedAtS is when the condition was first raised; LastTrueS when it
 	// was last shown true; LastFalseS when it was last shown false, valid
@@ -222,10 +223,24 @@ type Alert struct {
 	ShownFalse                       bool
 }
 
-// Cleared is an alert that cleared, with its reason.
+// Cleared is an alert that cleared, with its reason. Alert.Detail keeps
+// the numbers of the last judgement that showed the condition true (the
+// values alert_lifecycle.json pins); ClearingDetail holds the numbers of
+// the judgement that cleared it (C-14).
 type Cleared struct {
 	Alert
 	Reason ClearReason
+	// ClearingDetail is set on a resolved conflict: the separation of the
+	// judgement that cleared it, with clearing_d_horizontal_now_m,
+	// clearing_d_alt_now_m (nil when the vertical is unknown),
+	// clearing_t_cpa_s, clearing_d_cpa_horizontal_m,
+	// clearing_d_alt_at_cpa_m (nil when unknown),
+	// clearing_vertical_separation_known and clearing_at_s (the placed
+	// time of that judgement). Nil for every other clear: a zone, height
+	// or identification alert is cleared by a judgement with no numbers
+	// of its own, and stale, landed, source_disabled, the Drop reason and
+	// evicted rest on no judgement at all.
+	ClearingDetail map[string]any
 }
 
 // Events is what one call raised and cleared, in a deterministic order.

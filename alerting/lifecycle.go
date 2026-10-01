@@ -14,6 +14,9 @@ type alertState struct {
 	// losStartS ranks conflicts in Active (cpa.Result.LoSStartS); 0 for
 	// other kinds.
 	losStartS float64
+	// falseDetail holds the numbers of the last judgement that showed the
+	// condition false (conflicts only), carried by a resolved clear.
+	falseDetail map[string]any
 }
 
 // snapshot is a copy of the alert the caller can keep and change.
@@ -97,15 +100,18 @@ func (m *Monitor) refresh(r raise, atS float64, ev *Events) {
 }
 
 // showFalse records that a message judged the condition false at atS,
-// and clears the alert as resolved once the hysteresis has passed. A
-// check that could not judge never calls it (C-09, hysteresis_rule).
-func (m *Monitor) showFalse(key string, atS float64, ev *Events) {
+// with the numbers of that judgement when it has any (clearing, nil
+// otherwise), and clears the alert as resolved once the hysteresis has
+// passed. A check that could not judge never calls it (C-09,
+// hysteresis_rule).
+func (m *Monitor) showFalse(key string, atS float64, clearing map[string]any, ev *Events) {
 	s, ok := m.active[key]
 	if !ok {
 		return
 	}
 	s.LastFalseS = atS
 	s.ShownFalse = true
+	s.falseDetail = clearing
 	if s.resolved(m.cfg.ClearAfterS) {
 		m.clear(s, ClearResolved, ev)
 	}
@@ -119,7 +125,11 @@ func (m *Monitor) clear(s *alertState, reason ClearReason, ev *Events) {
 			delete(ac.alerts, s.Key)
 		}
 	}
-	ev.Cleared = append(ev.Cleared, Cleared{Alert: s.snapshot(), Reason: reason})
+	c := Cleared{Alert: s.snapshot(), Reason: reason}
+	if reason == ClearResolved {
+		c.ClearingDetail = maps.Clone(s.falseDetail)
+	}
+	ev.Cleared = append(ev.Cleared, c)
 }
 
 // clearAll clears, in key order, every alert of ac that match selects,

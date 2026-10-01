@@ -125,7 +125,7 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 	}
 	slices.Sort(falseKeys)
 	for _, key := range falseKeys {
-		m.showFalse(key, atS, ev)
+		m.showFalse(key, atS, nil, ev)
 	}
 }
 
@@ -195,7 +195,7 @@ func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Even
 	m.noteSeen(ac.identitySeenS)
 	key := keyOf(KindIdentificationMismatch, ac.id)
 	if !ident.Mismatch {
-		m.showFalse(key, atS, ev)
+		m.showFalse(key, atS, nil, ev)
 		return
 	}
 	m.refresh(raise{
