@@ -27,6 +27,13 @@ Each entry names the work package and the vectors it affects.
   for byte); `FuzzDecode`, `FuzzEncodeLocation` and the three codec
   benchmarks. Adds `odid.Unknown` for undefined types kept with
   `KeepSkipped`. [WP-3]
+- `serial` (CTA-2063-A and the class rule), `regnum` (configurable
+  registration format, public part and compare key) and `sources`
+  (source switches, follower by version and epoch).
+  `serials_and_registration.json` 33/33 and `source_control.json` 8/8,
+  with `public-part-GEO-OP-ABC` a known deviation: the EU secret part is
+  stripped only after a valid public number, so `GEO-OP-ABC` no longer
+  compares as `GEO-OP` (LESSONS G-04). [WP-4]
 
 ## [0.1.0] - unreleased (G-M1)
 
