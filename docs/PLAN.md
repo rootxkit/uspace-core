@@ -119,7 +119,7 @@ type ZoneType string     // ZoneProhibited, ZoneReqAuthorization, ZoneConditiona
                          // Valid(), ED269() string, IncidentZone() bool; ZoneTypeFromED269(string) (ZoneType, bool)
 type IdentStatus string  // IdentRegistered, IdentSuspended, IdentUnknownOperator, IdentUnidentified; IncidentStatus()
 type IdentReason string  // the 15 reasons of 04 §3.2 (ReasonMatched ... ReasonRegistryUnavailable)
-type IdentBasis string   // BasisAuthenticated, BasisAsBroadcast
+type IdentBasis string   // BasisAuthenticated, BasisAsBroadcast, BasisProvider ("provider", C1)
 type Identification struct{ Status; Reason; Serial, OperatorReg, RegisteredOperatorReg *string; Mismatch bool; RegistryUASID *string; Basis }
 type Counters struct{...} // Inc, Add, Get, Snapshot, Names; concurrency-safe
 type FieldError struct{ Field, Reason string }; func Fieldf(field, format string, args ...any) *FieldError

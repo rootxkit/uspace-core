@@ -16,6 +16,12 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `core`: `BasisProvider` (`"provider"`), the identification basis of a
+  flight a USSP reports through the F3411 network or an F3548 peer
+  (Q-A8); nothing in `identify` sets it. [WP-16 C1]
+
 ## [1.0.0] (G-M3)
 
 The first stable release. Every vector file comes from `uspace-lab`
