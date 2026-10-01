@@ -110,6 +110,11 @@ func TestVectorsRidIdentity(t *testing.T) {
 		}
 		if v := in.Settings.IdentifyWithinS; v != nil {
 			s.IdentifyWithinS = *v
+			if *v == 0 {
+				// The vector's 0 is "no wait"; a zero Go field is the
+				// default (NewTracker), so the test says it explicitly.
+				s.IdentifyWithinS = IdentifyAtOnceS
+			}
 		}
 		tr := NewTracker(s)
 		for i, step := range in.Steps {

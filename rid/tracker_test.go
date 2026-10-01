@@ -231,7 +231,7 @@ func TestTrackerBound(t *testing.T) {
 }
 
 func TestTrackerSmallBoundEvictsEveryReceiver(t *testing.T) {
-	tr := NewTracker(Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: 4, MaxTransmitters: 1})
+	tr := NewTracker(Settings{MaxTransmitters: 1})
 	a := frame(0, serial("SN-1"), loc(41.7))
 	tr.Take(a)
 	a.Receiver = "rx-2"
@@ -351,8 +351,50 @@ func TestIdentityReceiverOwn(t *testing.T) {
 	}
 	// Unidentified: no lender.
 	u := Frame{Receiver: "rx-z", Transmitter: "ZZ", Messages: []odid.Message{loc(41.7)}, NowS: 10, RxTS: rxAt(10)}
-	tr2 := NewTracker(Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: -1})
+	tr2 := NewTracker(Settings{IdentifyWithinS: IdentifyAtOnceS})
 	if o := tr2.Take(u); o == nil || o.Identified || o.IdentityReceiver != "" {
 		t.Errorf("unidentified: %+v, want no lender", o)
+	}
+}
+
+// Settings{} is DefaultSettings(). The probe that found the trap: a Basic
+// ID at 0 s and a Location at 0.5 s with zero settings counted a silence
+// and an unidentified track; with the defaults it is one identified
+// observation.
+func TestZeroSettingsAreTheDefaults(t *testing.T) {
+	for _, s := range []Settings{
+		{},
+		{IdentityTTLS: math.NaN(), MaxGapS: -1, IdentifyWithinS: math.Inf(1), MaxTransmitters: -5},
+		{IdentityTTLS: math.Inf(1), MaxGapS: math.Inf(1), IdentifyWithinS: math.NaN()},
+	} {
+		tr := NewTracker(s)
+		if got := tr.Settings(); got != DefaultSettings() {
+			t.Errorf("NewTracker(%+v).Settings() = %+v, want the defaults", s, got)
+		}
+		tr.Take(frame(0, serial("SN-1")))
+		o := tr.Take(frame(0.5, loc(41.7)))
+		if o == nil || !o.Identified {
+			t.Errorf("%+v: %+v, want identified", s, o)
+		}
+		c := tr.Counters()
+		if c.Get(CounterSilences) != 0 || c.Get(CounterUnidentified) != 0 {
+			t.Errorf("%+v: counters %v", s, c.Snapshot())
+		}
+	}
+}
+
+// The presence pair: explicit settings are kept, and a negative wait is
+// kept as "no wait".
+func TestExplicitSettingsAreKept(t *testing.T) {
+	want := Settings{IdentityTTLS: 1, MaxGapS: 0.5, IdentifyWithinS: IdentifyAtOnceS, MaxTransmitters: 7}
+	tr := NewTracker(want)
+	if got := tr.Settings(); got != want {
+		t.Fatalf("Settings() = %+v, want %+v", got, want)
+	}
+	tr.Take(frame(0, serial("SN-1")))
+	o := tr.Take(frame(0.6, loc(41.7)))
+	if o == nil || o.Identified || tr.Counters().Get(CounterSilences) != 1 {
+		t.Errorf("0.6 s after a 0.5 s gap: %+v, silences %d, want unidentified at once after a silence",
+			o, tr.Counters().Get(CounterSilences))
 	}
 }

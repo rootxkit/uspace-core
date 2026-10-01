@@ -2,6 +2,7 @@ package rid
 
 import (
 	"container/list"
+	"math"
 	"time"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -39,13 +40,19 @@ type Settings struct {
 	// same aircraft. Default 3 s: three 1 s Location periods.
 	MaxGapS float64
 	// IdentifyWithinS is how long a Location without a fresh identity is
-	// held for one before it is published unidentified. Default 4 s.
+	// held for one before it is published unidentified. Default 4 s. A
+	// negative value (IdentifyAtOnceS) publishes it at once.
 	IdentifyWithinS float64
 	// MaxTransmitters bounds the number of addresses held. When a new
 	// address arrives at the bound, the address heard longest ago is
 	// dropped and counted as evicted. 0 or less means the default, 50000.
 	MaxTransmitters int
 }
+
+// IdentifyAtOnceS is the IdentifyWithinS that publishes a Location
+// without a fresh identity at once, unidentified. Zero cannot say this:
+// a zero field is the default (see NewTracker).
+const IdentifyAtOnceS = -1.0
 
 // DefaultSettings returns utm's thresholds: 15 s, 3 s, 4 s, and 50000
 // addresses.
@@ -160,11 +167,25 @@ type Tracker struct {
 	counters core.Counters
 }
 
-// NewTracker returns an empty tracker with settings s. A MaxTransmitters
-// of 0 or less is the default.
+// NewTracker returns an empty tracker with settings s. A field that is
+// zero, NaN or infinite takes its default, and so does a negative one
+// except IdentifyWithinS (negative is "no wait", IdentifyAtOnceS). So
+// Settings{} is DefaultSettings(): a zero TTL or gap would forget every
+// identity at once, which is never what a caller who left the field out
+// meant.
 func NewTracker(s Settings) *Tracker {
+	d := DefaultSettings()
+	if !positive(s.IdentityTTLS) {
+		s.IdentityTTLS = d.IdentityTTLS
+	}
+	if !positive(s.MaxGapS) {
+		s.MaxGapS = d.MaxGapS
+	}
+	if s.IdentifyWithinS == 0 || math.IsNaN(s.IdentifyWithinS) || math.IsInf(s.IdentifyWithinS, 0) {
+		s.IdentifyWithinS = d.IdentifyWithinS
+	}
 	if s.MaxTransmitters <= 0 {
-		s.MaxTransmitters = defaultMaxTransmitters
+		s.MaxTransmitters = d.MaxTransmitters
 	}
 	return &Tracker{
 		s:         s,
@@ -173,6 +194,14 @@ func NewTracker(s Settings) *Tracker {
 		recency:   list.New(),
 	}
 }
+
+// positive reports whether v is a finite number above zero.
+func positive(v float64) bool {
+	return v > 0 && !math.IsInf(v, 1)
+}
+
+// Settings returns the settings in use, after defaulting.
+func (t *Tracker) Settings() Settings { return t.s }
 
 // Counters returns the tracker's counters: identity_changes, silences,
 // unidentified, address_conflicts and evicted.
