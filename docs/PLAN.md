@@ -133,7 +133,7 @@ func (c Case) Decode(t TB, in, exp any);  func (c Case) ExpectedIsNull() bool
 func Unmarshal(t TB, raw json.RawMessage, v any);  func StrictUnmarshal(raw []byte, v any) error
 func Near(t TB, field string, got, want, tol float64);  func NearPtr(t TB, field string, got, want *float64, tol float64)
 func EqualTime(t TB, field string, got, want time.Time);  func EqualTimePtr(...);  func EqualStrPtr(t TB, field string, got, want *string)
-var Manifest []Entry;  const TotalCases = 596
+var Manifest []Entry;  const TotalCases = 660
 ```
 
 ### 3.3 `geodesy` (WP-1)
@@ -215,7 +215,7 @@ const SpecialDirection = 361; SpecialSpeedH = 255; SpecialSpeedV = 63; SpecialAl
 const DefaultPattern = `^[A-Z]{3}[A-Za-z0-9]{8,16}$`          // G-07, configuration
 type Validator struct{...};  func NewValidator(pattern string) (*Validator, error)
 func (v *Validator) Validate(value string) error             // *core.FieldError{Field:"registration_number"}; refuses a hyphen (the secret part is never registered)
-func PublicPart(value string) string                         // trim; strip "-XYZ" (any 3 alphanumerics) once
+func PublicPart(value string) string                         // trim; strip "-XYZ" (3 ASCII alphanumerics) only after a number under the pattern (G-04)
 func CompareKey(value string) string                         // strings.ToUpper(PublicPart(value))
 func Public(value string) (public, compareKey string)
 
@@ -440,16 +440,16 @@ package implements; the package's tests name them.
 | `geodesy` | `geodesy.json` (17): `vincenty_inverse`, `compare`, `in_circle`, `in_polygon`, `local_offset_m`, `haversine_6371008.8` | D-09, D-10, D-11, Z-06 (ring bound), Z-11 (circle by centre and radius) |
 | `terrain`, `geoid`, `internal/pgm` | `terrain_geoid.json` (48): `cell_name` 4, `geoid_undulation` 38 (8 synthetic, 30 GeographicLib references skipped without the grid file), `terrain_tile_elevation` 6 | D-02, D-04, D-05, D-07 (documented), D-08, R-07, B-06 |
 | `odid` | `odid_decode.json` (187): 160 reference messages, 10 reference packs, 10 refusals, 7 edge cases | E-03, R-01, R-02, R-03, R-04, R-11 (Status.Airborne), R-12 (height reference kept), R-15 (raw kept by the caller; Authentication.Raw) |
-| `regnum`, `serial` | `serials_and_registration.json` (33): `cta2063` 12, `serial_for_class` 9, `registration_number` 4, `public_registration_number` 8 | G-04, G-05, G-06, G-07 |
+| `regnum`, `serial` | `serials_and_registration.json` (41): `cta2063` 12, `serial_for_class` 9, `registration_number` 4, `public_registration_number` 12, `serial_fold` 4 | G-04, G-05, G-06, G-07, G-12 |
 | `sources` | `source_control.json` (8) | B-09, B-10 (503 semantics documented for callers), B-11 (the reason travels), U-15 |
-| `ed269` | `ed269_parse.json` (52), `zones_applicability.json` (32) | Z-01, Z-02, Z-03, Z-04, Z-05, Z-06, Z-07, T-09 |
+| `ed269` | `ed269_parse.json` (54), `zones_applicability.json` (32) | Z-01, Z-02, Z-03, Z-04, Z-05, Z-06, Z-07, T-09 |
 | `timeplace` | `rid_time.json` (25): 18 broadcast, 7 network | T-01, T-02, T-05 (documented), T-07, T-08, T-12 |
 | `rid` | `rid_identity.json` (24), `pressure_altitude.json` (16) | I-01, I-02, I-03, I-04, I-06, I-07 (documented limit), R-07, R-08, R-10, R-11, R-13, E-09, E-10 |
-| `identify` | `identification_status.json` (37), `fleet_match.json` (10) | G-01, G-02, G-04, G-05, I-05, I-06, I-08, I-09, D-11 |
-| `zones` | `zones_vertical.json` (38) | Z-06, Z-08, Z-09, Z-10, Z-11, R-09, D-01, D-04, T-09 |
-| `cpa` | `cpa.json` (27) | C-01, C-02, C-03, C-04, C-09, C-10, C-15, D-10 |
-| `alerting` | `alert_lifecycle.json` (28) | C-05, C-06, C-07, C-08 (republish hook), C-09, C-14, T-03, T-04, T-05, T-06, T-10, B-11, G-02, G-03, I-02, I-04, INV-03 |
-| `auth` | `rid_receiver_auth.json` (14); `jwt_verify.json` (new, G-M3) | R-06, B-14 (duplicate credential is a startup error), 06 §3 |
+| `identify` | `identification_status.json` (43), `fleet_match.json` (14) | G-01, G-02, G-03, G-04, G-05, G-12, I-05, I-06, I-08, I-09, D-11, E-15 |
+| `zones` | `zones_vertical.json` (49) | Z-06, Z-08, Z-09 (with S-37), Z-10, Z-11, R-09, D-01, D-04, T-09 |
+| `cpa` | `cpa.json` (37) | C-01, C-02, C-03, C-04, C-09, C-10, C-15, C-19, D-10, E-15 |
+| `alerting` | `alert_lifecycle.json` (35) | C-05, C-06, C-07, C-08 (republish hook), C-09, C-14, C-18, T-03, T-04, T-05, T-06, T-10, T-13, B-11, G-02, G-03, I-02, I-04, INV-03 |
+| `auth` | `rid_receiver_auth.json` (14); `jwt_verify.json` (16, G-M3; written here by WP-11, now a lab file) | R-06, B-14 (duplicate credential is a startup error), 06 §3, E-14 |
 | `ed318`, `f3411`, `f3548` | schema examples of `uas_standards`; an ED-318 round-trip vector (new, G-M2) | Z-03, Z-05, 04 §3.1 special values, 09 §1.4-1.6 |
 
 ---
@@ -716,15 +716,15 @@ Branch protection on `main` requires jobs 1-4 and 6.
 
 | # | Gap | Resolution in this plan | Needs the owner? |
 |---|---|---|---|
-| 1 | `00 §6.3` lists the alert lifecycle under `cpa` and `pressure_altitude` under `zones`; `fleet_match` under `regnum`/`serial`; `rid_receiver_auth` under both `odid` and `auth`; `rid_identity` under `odid`. | Packages `alerting` and `rid` added; `fleet_match` in `identify`; receiver auth in `auth` only; `rid_identity` and `pressure_altitude` in `rid`. Import paths the spec names still exist. | Confirm; the spec table should be updated to match (`uspace-lab` PR). |
+| 1 | `00 §6.3` lists the alert lifecycle under `cpa` and `pressure_altitude` under `zones`; `fleet_match` under `regnum`/`serial`; `rid_receiver_auth` under both `odid` and `auth`; `rid_identity` under `odid`. | Packages `alerting` and `rid` added; `fleet_match` in `identify`; receiver auth in `auth` only; `rid_identity` and `pressure_altitude` in `rid`. Import paths the spec names still exist. **Resolved:** the spec table matches this split since `uspace-lab@aa5187e` (lab PR #3). | None. |
 | 2 | `00 §6.3` names `terrain` readers for "Copernicus GLO-30 / SRTM tiles". The vector pins the predecessor's PGM tile format (Offset -500, Scale 0.2, 1x1 degree cells), not GeoTIFF. | Core reads the PGM tiles; GeoTIFF conversion stays a lab tool (as in utm `tools/terrain_fetch.py`). | Confirm, or fund a stdlib GeoTIFF reader as a later WP. |
 | 3 | `geodesy` is to hold "H3 helpers". The maintained Go binding (`uber/h3-go/v4`) is cgo; the partition key (`05 §3`) never crosses an external interface. | H3 is not in core at `v0.x`. Each system computes `cell5`/`cell3` in its ingest with the binding it chooses, behind an interface the system owns. Revisit for `v1` if two systems end up with two implementations (T12 risk). | Decide: accept, or accept cgo in core. |
-| 4 | `alert_lifecycle.json#disarming-clears-as-stale` records the old behaviour that C-14 says the new system should improve (`landed`). `04 §3.3` lists `flight_ended` as a clear reason. | `alerting` passes the vector as written (clears `stale`) and exposes `Monitor.Drop(id)` with a reason the caller chooses (`flight_ended`), which is not what the vector drives. A changed vector would be a lab decision. | Decide whether the vector changes (then it is a documented behaviour change at `v0.x`). |
-| 5 | `identification_status.json` names the authenticated-session reason `session_binding` only through the `bound` kind, and `04 §3.2` lists `registry_unavailable` with no vector. | `identify.Unavailable` implemented from the spec text and unit-tested; a vector is proposed to the lab. | Lab to add the case. |
+| 4 | `alert_lifecycle.json#disarming-clears-as-stale` records the old behaviour that C-14 says the new system should improve (`landed`). `04 §3.3` lists `flight_ended` as a clear reason. | **Resolved:** the owner decided `landed` (C-14). The lab vector is now `disarming-clears-as-landed` (`uspace-lab@aa5187e`), and `alerting` passes it as written, with no override. `Monitor.Drop` still takes a reason the caller chooses (`flight_ended`). | None. |
+| 5 | `identification_status.json` names the authenticated-session reason `session_binding` only through the `bound` kind, and `04 §3.2` lists `registry_unavailable` with no vector. | `identify.Unavailable` implemented from the spec text and unit-tested; a vector is proposed to the lab. The vector now uses the spec's codes (`matched`, `session_binding`) since `uspace-lab@aa5187e`, so the test maps nothing. | Lab to add the `registry_unavailable` case. |
 | 6 | ED-269 refusals: the vectors list every problem the old reader found but bind only `must_include`. | `ed269` must produce `must_include`; the full list is compared and logged as a diff, not failed (§6). A stricter or looser reader is visible in CI logs. | Decide whether the full list becomes binding at `v1`. |
-| 7 | `jwt_verify` vector "to add" (`00 §6.3`) and an ED-318 round-trip vector (`07` G-M2) do not exist yet. Vectors are generated in the lab from utm, which has neither. | WP-11 and WP-12 write the vector files in this repo under `vectors/testdata/` in the same shape, with `generated` saying "hand-written in uspace-core, not from utm" and `utm_commit` left as the pinned commit; they are proposed upstream to `uspace-lab/knowledge/vectors/` so the sync script keeps working (until merged, `check-vectors.sh` must ignore files listed in `VERSION` under `local_files`). | Owner merges them into the lab. |
+| 7 | `jwt_verify` vector "to add" (`00 §6.3`) and an ED-318 round-trip vector (`07` G-M2) did not exist. Vectors are generated in the lab from utm, which has neither. | WP-11 and WP-12 write the vector files in this repo under `vectors/testdata/` in the same shape, with `generated` saying "hand-written in uspace-core, not from utm" and `utm_commit` left as the pinned commit; they are proposed upstream to `uspace-lab/knowledge/vectors/` so the sync script keeps working (until merged, `check-vectors.sh` must ignore files listed in `VERSION` under `local_files`). `jwt_verify.json` is in the lab since `uspace-lab@aa5187e` and has left `local_files`. | Owner merges the ED-318 vector into the lab. |
 | 8 | `rid_identity` expected `rx_ts` values assume the tracker's `now_s` is offset from `2026-09-29T12:00:00Z`; the file says ids may differ but "one serial is always one id". | The test maps `now_s` onto that epoch; `rid.AircraftID` keeps the utm uuid5 namespace so ids match exactly (stronger than required). | None. |
-| 9 | Registration number format (Q5) and whether the secret part is on air. | `regnum` keeps the pattern configurable and strips any three-character tail (G-04 pitfall documented). | GCAA (open question Q5). |
+| 9 | Registration number format (Q5) and whether the secret part is on air. | `regnum` keeps the pattern configurable. It strips the secret part (a hyphen and three ASCII letters or digits) only when what precedes it is a registration number under the pattern, so `GEO-OP-ABC` stays whole, and folds ASCII only (G-04, G-12). The vectors pin this per case with the pattern (`uspace-lab@aa5187e`). | GCAA (open question Q5). |
 | 10 | `source_control.json` has no version/epoch cases; B-09 specifies them. | `sources.Follower.Apply` implemented from B-09 with unit tests; a vector proposed. | Lab to add cases. |
 | 11 | `05 §1` gives no per-call budgets; §8.6 derives them. | Targets are design budgets, reported not gated; the lab's load tests (L-M2) are the proof. | None. |
 | 12 | The spec says systems' CI "runs the vectors against the packages in every image" (`05 §7`). | Documented in §6: `go test -run Vectors github.com/rootxkit/uspace-core/...` plus `RunOwned` for adapters. WP-13 verifies it from a scratch module. | None. |
