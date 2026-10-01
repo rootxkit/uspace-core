@@ -29,6 +29,9 @@ const (
 	// CounterEvicted counts addresses dropped because the table was full
 	// (E-10).
 	CounterEvicted = "evicted"
+	// CounterHeldReplaced counts held Locations replaced by a newer one
+	// before they were published: never shown (E-09).
+	CounterHeldReplaced = "held_replaced"
 )
 
 // Settings are the Tracker's thresholds (I-01, I-02, E-10).
@@ -204,7 +207,7 @@ func positive(v float64) bool {
 func (t *Tracker) Settings() Settings { return t.s }
 
 // Counters returns the tracker's counters: identity_changes, silences,
-// unidentified, address_conflicts and evicted.
+// unidentified, address_conflicts, evicted and held_replaced.
 func (t *Tracker) Counters() *core.Counters { return &t.counters }
 
 // Transmitters returns the number of addresses held.
@@ -232,11 +235,11 @@ func (t *Tracker) Take(f Frame) *Observation {
 	for _, m := range f.Messages {
 		switch v := m.(type) {
 		case odid.Location:
-			st.setLocation(&v, f.RxTS)
+			t.hold(st, &v, f.RxTS)
 		case *odid.Location:
 			if v != nil {
 				loc := *v
-				st.setLocation(&loc, f.RxTS)
+				t.hold(st, &loc, f.RxTS)
 			}
 		case odid.System:
 			st.system = &v
@@ -268,7 +271,12 @@ func (t *Tracker) Take(f Frame) *Observation {
 	return st.observation(basic, lender)
 }
 
-func (st *state) setLocation(loc *odid.Location, rx time.Time) {
+// hold makes loc the Location st waits to publish. A held one not yet
+// published is replaced, and counted: it is never shown.
+func (t *Tracker) hold(st *state, loc *odid.Location, rx time.Time) {
+	if st.location != nil && !st.published {
+		t.counters.Inc(CounterHeldReplaced)
+	}
 	st.location = loc
 	st.locationRx = rx
 	st.published = false

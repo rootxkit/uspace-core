@@ -398,3 +398,30 @@ func TestExplicitSettingsAreKept(t *testing.T) {
 			o, tr.Counters().Get(CounterSilences))
 	}
 }
+
+// E-09: a held Location replaced before it was published is counted.
+func TestHeldLocationReplacedIsCounted(t *testing.T) {
+	tr := NewTracker(DefaultSettings())
+	for _, now := range []float64{0, 1, 2} {
+		if o := tr.Take(frame(now, loc(41.7))); o != nil {
+			t.Fatalf("published while held: %+v", o)
+		}
+	}
+	if got := tr.Counters().Get(CounterHeldReplaced); got != 2 {
+		t.Errorf("held_replaced %d, want 2", got)
+	}
+}
+
+// The absence pair: published Locations replaced by newer ones are not
+// counted.
+func TestPublishedLocationReplacedIsNotCounted(t *testing.T) {
+	tr := NewTracker(DefaultSettings())
+	for _, now := range []float64{0, 1, 2} {
+		if o := tr.Take(frame(now, serial("SN-1"), loc(41.7))); o == nil {
+			t.Fatalf("not published at %v", now)
+		}
+	}
+	if got := tr.Counters().Get(CounterHeldReplaced); got != 0 {
+		t.Errorf("held_replaced %d, want 0", got)
+	}
+}
