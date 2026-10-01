@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rootxkit/uspace-core/core"
 )
@@ -221,11 +222,12 @@ func (v *ReceiverVerifier) verify(datagram []byte, now time.Time) (Report, error
 	report := datagram[:i]
 	sig := bytes.TrimSpace(datagram[i+len(SignatureMarker):])
 
-	if !json.Valid(report) {
-		return Report{}, refuse(CounterRejectedMalformed, "the signed report is not JSON")
-	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(report, &fields); err != nil || fields == nil {
+		var typeErr *json.UnmarshalTypeError
+		if err != nil && !errors.As(err, &typeErr) {
+			return Report{}, refuse(CounterRejectedMalformed, "the signed report is not JSON")
+		}
 		return Report{}, refuse(CounterRejectedMalformed, "the signed report is not a JSON object")
 	}
 
@@ -347,8 +349,13 @@ func (m *nonceMemory) popOldest() {
 }
 
 func jsonString(raw json.RawMessage) (string, bool) {
-	if len(raw) == 0 || raw[0] != '"' {
+	if len(raw) < 2 || raw[0] != '"' {
 		return "", false
+	}
+	// raw comes from a successful parse: without an escape its content
+	// is the string itself.
+	if inner := raw[1 : len(raw)-1]; bytes.IndexByte(inner, '\\') < 0 && utf8.Valid(inner) {
+		return string(inner), true
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
