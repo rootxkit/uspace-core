@@ -129,3 +129,51 @@ func TestConflictIsSerialConflict(t *testing.T) {
 		t.Errorf("%+v", id)
 	}
 }
+
+func TestIsOurs(t *testing.T) {
+	owner := "o1"
+	s := identify.NewSnapshot(nil, []identify.UASFacts{
+		{DroneID: "d-fleet", Serial: "SN-FLEET", RegistrationStatus: identify.StatusActive, InRegistry: true},
+		{DroneID: "d-owned", Serial: "SN-OWNED", RegistrationStatus: identify.StatusActive, OperatorID: &owner, InRegistry: true},
+		{DroneID: "d-orphan", Serial: "SN-ORPHAN", InRegistry: false},
+		{DroneID: "d-x1", Serial: "ab-1", InRegistry: true},
+		{DroneID: "d-x2", Serial: "AB-1", InRegistry: true},
+	})
+	cases := map[string]bool{
+		"SN-FLEET":     true,  // exact
+		"sn-fleet":     true,  // folded: still ours
+		"\tSn-Fleet\n": true,  // normalised and folded
+		"ſn-fleet":     false, // a non-ASCII look-alike is not
+		"SN-OWNED":     false, // another operator's aircraft
+		"SN-ORPHAN":    false, // not in the registry
+		"Ab-1":         false, // ambiguous
+		"SN-NOBODY":    false,
+	}
+	for sn, want := range cases {
+		if got := identify.IsOurs(s.UASBySerial(sn)); got != want {
+			t.Errorf("IsOurs(%q) = %v, want %v", sn, got, want)
+		}
+	}
+}
+
+// TestFoldedBroadcastOfOurSerialIsJudged: "sn-fleet" heard 500 m from where
+// our live "SN-FLEET" is must be a conflict, not a stranger that bypasses
+// the guard; with the telemetry quiet it speaks for our aircraft.
+func TestFoldedBroadcastOfOurSerialIsJudged(t *testing.T) {
+	s := identify.NewSnapshot(nil, []identify.UASFacts{
+		{DroneID: "d-fleet", Serial: "SN-FLEET", RegistrationStatus: identify.StatusActive, InRegistry: true},
+	})
+	in := fleet(far, identify.AuthRow{HeardAtS: 0, Pos: pos(home)})
+	in.SerialIsOurs = identify.IsOurs(s.UASBySerial("sn-fleet"))
+	if r := identify.JudgeFleet(in); r.Verdict != identify.VerdictConflict {
+		t.Fatalf("folded broadcast of our serial: %q, want conflict", r.Verdict)
+	}
+	in.Rows = nil
+	if r := identify.JudgeFleet(in); r.Verdict != identify.VerdictAsOurs {
+		t.Fatalf("quiet telemetry: %q, want as_ours", r.Verdict)
+	}
+	in.SerialIsOurs = identify.IsOurs(s.UASBySerial("SN-STRANGER"))
+	if r := identify.JudgeFleet(in); r.Verdict != identify.VerdictStranger {
+		t.Fatalf("a stranger: %q", r.Verdict)
+	}
+}

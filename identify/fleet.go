@@ -25,10 +25,22 @@ type AuthRow struct {
 	Source string
 }
 
+// IsOurs reports whether a serial lookup names one of our own fleet
+// aircraft: a unique match, exact or case-folded (G-05), of a registry
+// aircraft with no UAS operator. It is the only correct way to set
+// FleetInput.SerialIsOurs: a test on the exact spelling alone would let
+// "sn-fleet" through as a stranger while our "SN-FLEET" is flying.
+func IsOurs(uas UASFacts, m Match) bool {
+	return (m == MatchExact || m == MatchFolded) && uas.OperatorID == nil && uas.InRegistry
+}
+
 // FleetInput is a broadcast of a serial judged against our fleet.
 type FleetInput struct {
 	// SerialIsOurs is true when the broadcast serial names one of our
-	// aircraft.
+	// aircraft. Callers must set it with IsOurs on the result of
+	// Lookup.UASBySerial for the broadcast serial, so that a case-folded
+	// spelling of our serial is judged as ours and cannot bypass the
+	// guard.
 	SerialIsOurs bool
 	// Rows is that aircraft's telemetry as delivered, in order.
 	Rows []AuthRow

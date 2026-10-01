@@ -88,7 +88,10 @@
 // aircraft when that telemetry is quiet. Only live authenticated rows
 // vouch: backlog rows, rows captured more than the live window before
 // receipt, and every broadcast row are ignored (I-09). The distance is the
-// haversine (D-11), never the ellipsoid.
+// haversine (D-11), never the ellipsoid. Whether a serial is ours is
+// decided by IsOurs on the same lookup ResolveBroadcast uses, never by
+// comparing spellings, so a case-folded broadcast of our serial is judged
+// by the guard.
 //
 // Vectors: vectors/testdata/identification_status.json (37) and
 // fleet_match.json (10). Owned by WP-7.
