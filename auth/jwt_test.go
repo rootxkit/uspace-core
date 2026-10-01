@@ -770,7 +770,7 @@ func TestJWKSOutageDoesNotStallRequests(t *testing.T) {
 		Issuers:          map[string]IssuerConfig{testIss: {JWKSURL: s.URL + "/jwks"}},
 		Audience:         testAud,
 		Now:              clk.now,
-		JWKSFetchTimeout: 100 * time.Millisecond,
+		JWKSFetchTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -781,13 +781,17 @@ func TestJWKSOutageDoesNotStallRequests(t *testing.T) {
 	s.gate = gate
 	s.mu.Unlock()
 	clk.add(DefaultJWKSCacheTTL + time.Hour)
+	tok := tokenAt(testKey(), testKID, clk.now()) // signed outside the timed loop
 	start := time.Now()
 	for range 20 {
-		if _, err := v.Verify(context.Background(), tokenAt(testKey(), testKID, clk.now())); err != nil {
+		if _, err := v.Verify(context.Background(), tok); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if d := time.Since(start); d > 50*time.Millisecond {
+	// A request that waited on the hung fetch would take the whole fetch
+	// timeout (1 s); 20 RSA verifications take milliseconds, even under
+	// -race on a slow runner.
+	if d := time.Since(start); d > 500*time.Millisecond {
 		t.Errorf("20 requests took %s during the outage", d)
 	}
 	v.background.Wait()
