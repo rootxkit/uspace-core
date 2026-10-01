@@ -1,6 +1,9 @@
 package identify
 
 import (
+	"math"
+	"strconv"
+
 	"github.com/rootxkit/uspace-core/core"
 	"github.com/rootxkit/uspace-core/geodesy"
 )
@@ -85,6 +88,24 @@ type FleetResult struct {
 	// backlog rows and rows captured more than LiveForS before receipt.
 	// Broadcast rows are not counted; they are not telemetry.
 	IgnoredHistoryRows int
+	// Problem names the threshold that made the judgement impossible
+	// (field live_for_s or spoof_distance_m); nil otherwise. A judgement
+	// with a Problem is always VerdictWithhold.
+	Problem *core.FieldError
+}
+
+// Field names of FleetResult.Problem.
+const (
+	FieldLiveForS       = "live_for_s"
+	FieldSpoofDistanceM = "spoof_distance_m"
+)
+
+// threshold checks one threshold: finite and above zero.
+func threshold(field string, v float64) *core.FieldError {
+	if v > 0 && !math.IsInf(v, 1) {
+		return nil
+	}
+	return &core.FieldError{Field: field, Reason: "must be a finite number above zero, got " + strconv.FormatFloat(v, 'g', -1, 64)}
 }
 
 // JudgeFleet is the spoofing guard (I-08, I-09, S-10). A row is live when
@@ -95,11 +116,22 @@ type FleetResult struct {
 // position is compared with the broadcast: within SpoofDistanceM is
 // VerdictWithhold, beyond it VerdictConflict. Live rows without any
 // position, or a position or broadcast that is not a valid coordinate,
-// withhold: a conflict is never judged without a distance. A NaN
+// withhold: a conflict is never judged without a distance. A LiveForS or
+// SpoofDistanceM that is not a finite number above zero withholds with a
+// Problem naming it, before any row is read: a misconfigured guard never
+// yields as_ours. A NaN
 // HeardAtS makes a row not live; a NaN BehindS makes it history.
 func JudgeFleet(in FleetInput) FleetResult {
 	if !in.SerialIsOurs {
 		return FleetResult{Verdict: VerdictStranger}
+	}
+	// An unusable threshold never lets the broadcast speak for our
+	// aircraft: with no live window every row would be history and the
+	// verdict as_ours; with no spoof distance nothing could conflict.
+	for _, p := range []*core.FieldError{threshold(FieldLiveForS, in.LiveForS), threshold(FieldSpoofDistanceM, in.SpoofDistanceM)} {
+		if p != nil {
+			return FleetResult{Verdict: VerdictWithhold, Problem: p}
+		}
 	}
 	var res FleetResult
 	live := false

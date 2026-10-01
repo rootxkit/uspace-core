@@ -177,3 +177,40 @@ func TestFoldedBroadcastOfOurSerialIsJudged(t *testing.T) {
 		t.Fatalf("a stranger: %q", r.Verdict)
 	}
 }
+
+// TestJudgeFleetRefusesUnusableThresholds: a live window or spoof distance
+// that is not finite and above zero withholds with a problem, never
+// as_ours; valid thresholds on the same input still judge.
+func TestJudgeFleetRefusesUnusableThresholds(t *testing.T) {
+	quiet := fleet(far) // with valid thresholds: as_ours
+	if r := identify.JudgeFleet(quiet); r.Verdict != identify.VerdictAsOurs || r.Problem != nil {
+		t.Fatalf("valid thresholds, quiet: %+v", r)
+	}
+	liveFar := fleet(far, identify.AuthRow{HeardAtS: 0, Pos: pos(home)}) // valid: conflict
+	if r := identify.JudgeFleet(liveFar); r.Verdict != identify.VerdictConflict || r.Problem != nil {
+		t.Fatalf("valid thresholds, live and far: %+v", r)
+	}
+	bad := []float64{0, -1, math.NaN(), math.Inf(1), math.Inf(-1)}
+	for _, base := range []identify.FleetInput{quiet, liveFar} {
+		for _, v := range bad {
+			for _, field := range []string{identify.FieldLiveForS, identify.FieldSpoofDistanceM} {
+				in := base
+				if field == identify.FieldLiveForS {
+					in.LiveForS = v
+				} else {
+					in.SpoofDistanceM = v
+				}
+				r := identify.JudgeFleet(in)
+				if r.Verdict != identify.VerdictWithhold || r.Problem == nil || r.Problem.Field != field || r.ApartM != nil {
+					t.Errorf("%s = %v: %+v", field, v, r)
+				}
+			}
+		}
+	}
+	// A stranger needs no thresholds.
+	stranger := quiet
+	stranger.SerialIsOurs, stranger.LiveForS = false, math.NaN()
+	if r := identify.JudgeFleet(stranger); r.Verdict != identify.VerdictStranger || r.Problem != nil {
+		t.Errorf("stranger: %+v", r)
+	}
+}
