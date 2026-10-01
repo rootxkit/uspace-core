@@ -318,7 +318,7 @@ func encodeSpeedH(p *float64) (raw, mult uint8, err error) {
 	}
 	high := math.Max(0, math.Round((*p-speedHighBaseMS)/speedStepHighMS))
 	if high >= speedHRawUnknown {
-		return 0, 0, core.Fieldf("speed_horizontal_ms", "%v m/s is at or above %d m/s, the unknown speed", *p, SpecialSpeedH)
+		return 0, 0, core.Fieldf("speed_horizontal_ms", "%v m/s rounds past 254.25 m/s, the fastest the wire carries (from 254.625 m/s it would read as the unknown %d m/s)", *p, SpecialSpeedH)
 	}
 	return uint8(high), 1, nil
 }
