@@ -72,7 +72,7 @@ type Monitor struct {
 	cfg      Config
 	grid     *cpa.Grid
 	zoneIx   *zones.Index
-	zoneKey  map[*zones.Zone]string
+	zoneKey  map[*zones.Zone]zoneKey
 	follower *sources.Follower
 	aircraft map[string]*aircraft
 	lru      *list.List
@@ -103,7 +103,7 @@ func NewMonitor(c Config) *Monitor {
 	m.grid = cpa.NewGrid(m.cfg.GridCellM)
 	m.cfg.Zones = slices.Clone(c.Zones)
 	m.zoneIx = zones.NewIndex(m.cfg.Zones)
-	m.zoneKey = zoneKeys(m.cfg.Zones)
+	m.zoneKey = zoneKeys(m.cfg.Zones, &m.counters)
 	return m
 }
 

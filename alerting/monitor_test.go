@@ -433,9 +433,9 @@ func TestIdentificationOnlyInIncidentZones(t *testing.T) {
 		restriction string
 		want        []string
 	}{
-		{"PROHIBITED", []string{"zone:Z:A", "identification:Z:A"}},
-		{"REQ_AUTHORISATION", []string{"zone:Z:A", "identification:Z:A"}},
-		{"CONDITIONAL", []string{"zone:Z:A"}},
+		{"PROHIBITED", []string{"zone:GEO:Z:A", "identification:GEO:Z:A"}},
+		{"REQ_AUTHORISATION", []string{"zone:GEO:Z:A", "identification:GEO:Z:A"}},
+		{"CONDITIONAL", []string{"zone:GEO:Z:A"}},
 		{"NO_RESTRICTION", nil},
 	} {
 		t.Run(c.restriction, func(t *testing.T) {
@@ -449,7 +449,7 @@ func TestIdentificationOnlyInIncidentZones(t *testing.T) {
 	m := zoneMonitor(t, polygonZone(t, "Z", "PROHIBITED", ""))
 	a := at("A", 0, 0, 0)
 	a.Identification = ident(core.IdentRegistered, core.ReasonMatched, false)
-	wantEvents(t, "registered", m.Observe(a, 0), []string{"zone:Z:A"}, nil)
+	wantEvents(t, "registered", m.Observe(a, 0), []string{"zone:GEO:Z:A"}, nil)
 }
 
 func TestIdentificationHeldWithoutIdentification(t *testing.T) {
@@ -469,7 +469,7 @@ func TestIdentificationHeldWithoutIdentification(t *testing.T) {
 		_, c := kinds(m.Observe(a, s))
 		cleared = append(cleared, c...)
 	}
-	if !slices.Equal(cleared, []string{"identification:Z:A=resolved"}) {
+	if !slices.Equal(cleared, []string{"identification:GEO:Z:A=resolved"}) {
 		t.Fatalf("cleared %v", cleared)
 	}
 }
@@ -481,7 +481,7 @@ func TestZoneNotEvaluatedHolds(t *testing.T) {
 	m := zoneMonitor(t, cond)
 	a := at("A", 0, 0, 0)
 	a.Env = zones.Env{Ground: zones.GroundKnown, GroundM: 500}
-	wantEvents(t, "known ground", m.Observe(a, 0), []string{"zone:C:A"}, nil)
+	wantEvents(t, "known ground", m.Observe(a, 0), []string{"zone:GEO:C:A"}, nil)
 	for s := 1.0; s <= 10; s++ {
 		a := at("A", 0, 0, s) // ground unknown now
 		wantEvents(t, "unknown ground", m.Observe(a, s), nil, nil)
@@ -498,7 +498,7 @@ func TestZoneNotEvaluatedHolds(t *testing.T) {
 		_, c := kinds(m.Observe(a, s))
 		cleared = append(cleared, c...)
 	}
-	if !slices.Equal(cleared, []string{"zone:C:A=resolved"}) {
+	if !slices.Equal(cleared, []string{"zone:GEO:C:A=resolved"}) {
 		t.Fatalf("cleared %v", cleared)
 	}
 }
@@ -533,9 +533,26 @@ func TestZoneContainmentErrorHolds(t *testing.T) {
 	}
 }
 
-func TestDuplicateZoneIdentifiersGetTwoKeys(t *testing.T) {
-	m := zoneMonitor(t, polygonZone(t, "Z", "PROHIBITED", ""), polygonZone(t, "Z", "REQ_AUTHORISATION", ""))
-	wantEvents(t, "both", m.Observe(at("A", 0, 0, 0), 0), []string{"zone:Z:A", "zone:Z#1:A"}, nil)
+func TestZoneKeyIsCountryAndIdentifier(t *testing.T) {
+	// One identifier in two countries: two zones, two keys, no fallback.
+	other := polygonZone(t, "Z", "REQ_AUTHORISATION", "")
+	other.Country = "ARM"
+	m := zoneMonitor(t, polygonZone(t, "Z", "PROHIBITED", ""), other)
+	wantEvents(t, "two countries", m.Observe(at("A", 0, 0, 0), 0), []string{"zone:GEO:Z:A", "zone:ARM:Z:A"}, nil)
+	if n := m.Counters().Get(CounterZoneKeyDuplicate); n != 0 {
+		t.Fatalf("zone_key_duplicate = %d", n)
+	}
+	// A true duplicate within one country: the last-resort fallback,
+	// counted. A genuine identifier that looks like the fallback stays
+	// distinct from it.
+	m = zoneMonitor(t,
+		polygonZone(t, "Z", "PROHIBITED", ""),
+		polygonZone(t, "Z#2", "PROHIBITED", ""),
+		polygonZone(t, "Z", "REQ_AUTHORISATION", ""))
+	wantEvents(t, "duplicate", m.Observe(at("A", 0, 0, 0), 0), []string{"zone:GEO:Z:A", "zone:GEO:Z#2:A", "zone:GEO:Z#2#2:A"}, nil)
+	if n := m.Counters().Get(CounterZoneKeyDuplicate); n != 1 {
+		t.Fatalf("zone_key_duplicate = %d, want 1", n)
+	}
 }
 
 func TestUSpaceZoneRaisesInfo(t *testing.T) {
@@ -758,7 +775,7 @@ func TestPlacedTimeOutOfRangeAppliesEveryZone(t *testing.T) {
 	m := zoneMonitor(t, z)
 	tr := at("A", 0, 0, 2e11)
 	ev := m.Observe(tr, 2e11)
-	wantEvents(t, "unknown time", ev, []string{"zone:Z:A"}, nil)
+	wantEvents(t, "unknown time", ev, []string{"zone:GEO:Z:A"}, nil)
 }
 
 func TestGridCellRaisedToRadius(t *testing.T) {
@@ -846,8 +863,8 @@ func TestActiveRanksBySeverity(t *testing.T) {
 	}
 	want := []string{
 		"critical conflict:A:B",
-		"warning zone:C:A", "warning zone:C:B",
-		"info zone:U:A", "info zone:U:B",
+		"warning zone:GEO:C:A", "warning zone:GEO:C:B",
+		"info zone:GEO:U:A", "info zone:GEO:U:B",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("order %v", got)

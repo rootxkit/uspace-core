@@ -113,7 +113,8 @@ Each entry names the work package and the vectors it affects.
   `landed`, `flight_ended` (`Drop`) and `evicted` (bounded aircraft and
   per-source ordering); a resolved conflict carries the clearing
   judgement's separation in `Cleared.ClearingDetail` beside the last
-  in-conflict detail (C-14). Nothing unjudged, missing or non-finite clears an
+  in-conflict detail (C-14). Zone alerts are keyed by country and
+  identifier, with a counted fallback for a true duplicate. Nothing unjudged, missing or non-finite clears an
   alert. `Active` ranks by severity and `LoSStartS`. Passes
   `alert_lifecycle.json` 28/28 with one counted override:
   `disarming-clears-as-stale` clears as `landed` (owner decision, plan

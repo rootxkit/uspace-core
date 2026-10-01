@@ -25,21 +25,32 @@ func placedTime(s float64) time.Time {
 	return time.Unix(int64(sec), int64(math.Round(frac*1e9))).UTC()
 }
 
-// zoneKeys names each zone in alert keys by its identifier, with "#" and
-// its position appended when an earlier zone has the same identifier, so
-// two zones never share a key.
-func zoneKeys(zs []*zones.Zone) map[*zones.Zone]string {
-	keys := make(map[*zones.Zone]string, len(zs))
-	seen := make(map[string]bool, len(zs))
+// zoneKey is how alert keys name a zone: its country and its identifier,
+// which ED-269 makes unique within a country.
+type zoneKey struct {
+	country, identifier string
+}
+
+// zoneKeys names each zone in alert keys by country and identifier. A
+// second zone with the same country and identifier (a true duplicate)
+// gets "#" and its position in the list appended to its identifier, as
+// often as needed to be unique, and each such fallback is counted as
+// zone_key_duplicate: two zones never share a key.
+func zoneKeys(zs []*zones.Zone, counters *core.Counters) map[*zones.Zone]zoneKey {
+	keys := make(map[*zones.Zone]zoneKey, len(zs))
+	used := make(map[zoneKey]bool, len(zs))
 	for i, z := range zs {
 		if z == nil {
 			continue
 		}
-		k := z.Identifier
-		if seen[k] {
-			k += "#" + strconv.Itoa(i)
+		k := zoneKey{country: z.Country, identifier: z.Identifier}
+		if used[k] {
+			counters.Inc(CounterZoneKeyDuplicate)
+			for used[k] {
+				k.identifier += "#" + strconv.Itoa(i)
+			}
 		}
-		seen[z.Identifier] = true
+		used[k] = true
 		keys[z] = k
 	}
 	return keys
@@ -55,10 +66,10 @@ func isPlaceKind(kind string) bool {
 // height limit (T-09, Z-09, Z-10, R-09, G-03):
 //
 //   - a zone that contains the position, applies at the placed time and
-//     raises (zones.JudgeVertical) refreshes zone:<zone>:<id>; inside a
+//     raises (zones.JudgeVertical) refreshes zone:<country>:<identifier>:<id>; inside a
 //     PROHIBITED or REQ_AUTHORISATION zone an unidentified or
 //     unknown_operator aircraft also refreshes
-//     identification:<zone>:<id>;
+//     identification:<country>:<identifier>:<id>;
 //   - a zone that cannot be judged (a containment error, NotEvaluated) or
 //     an identification that is absent holds its alerts: neither
 //     refreshed nor shown false (C-09);
@@ -76,8 +87,8 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 		if err == nil && (!in || !z.AppliesAt(at)) {
 			continue
 		}
-		key := keyOf(KindZone, zk, ac.id)
-		idKey := keyOf(KindIdentification, zk, ac.id)
+		key := keyOf(KindZone, zk.country, zk.identifier, ac.id)
+		idKey := keyOf(KindIdentification, zk.country, zk.identifier, ac.id)
 		if err != nil {
 			m.counters.Inc(CounterZoneNotEvaluated)
 			kept = append(kept, key, idKey)

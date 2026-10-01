@@ -92,6 +92,9 @@ const (
 	// CounterDropWithoutReason counts Drop calls refused for an empty
 	// reason: a clear always has one.
 	CounterDropWithoutReason = "drop_without_reason"
+	// CounterZoneKeyDuplicate counts zones given a fallback key because an
+	// earlier zone has the same country and identifier.
+	CounterZoneKeyDuplicate = "zone_key_duplicate"
 	// CounterConfigInvalid counts configuration values NewMonitor replaced
 	// with their default (a NaN, infinite or negative time, an unknown
 	// severity) or found unusable (a cpa.Policy Evaluate refuses).
@@ -202,7 +205,8 @@ type Track struct {
 // (CapturedAtS of the samples that judged it).
 type Alert struct {
 	// Key identifies the condition: conflict:<a>:<b> (ids sorted),
-	// zone:<zone>:<aircraft>, identification:<zone>:<aircraft>,
+	// zone:<country>:<identifier>:<aircraft>,
+	// identification:<country>:<identifier>:<aircraft>,
 	// height:<aircraft>, identification_mismatch:<aircraft>. A ':' or '%'
 	// in an id is escaped as %3A or %25, so keys never collide.
 	Key  string
