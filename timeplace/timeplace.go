@@ -44,6 +44,11 @@ const clockAheadWrap = 30 * time.Minute
 const maxPolicyDuration = 24 * time.Hour
 
 // BroadcastPolicy holds the tolerances of PlaceBroadcast (T-07, T-08).
+//
+// The zero value is not a usable policy: with no tolerance and no latency
+// bound, every broadcast older than its declared accuracy is too_old and
+// every one ahead of our clock is clock_ahead, so nearly everything is
+// placed at receipt. Start from DefaultBroadcastPolicy.
 type BroadcastPolicy struct {
 	// ToleranceS is how far ahead of our clock a broadcast time may be
 	// and still be believed. Default 1 s.
@@ -127,7 +132,11 @@ func PlaceBroadcast(timestampTenths uint16, tsAccuracyCode uint8, receivedAt tim
 		return atReceipt(receivedAt, receivedAt, FallbackInvalid)
 	}
 	acc := accuracy(tsAccuracyCode)
-	limit := receivedAt.UTC().Add(seconds(pol.ToleranceS) + acc)
+	// How far ahead of our clock a broadcast may be. Kept below the
+	// clock-ahead wrap, or a large tolerance would believe a clock half an
+	// hour or more ahead and T-08 could never fire.
+	ahead := min(seconds(pol.ToleranceS)+acc, clockAheadWrap-time.Microsecond)
+	limit := receivedAt.UTC().Add(ahead)
 	// time.Truncate counts from the zero time, which is on a UTC hour.
 	moment := limit.Truncate(time.Hour).Add(time.Duration(timestampTenths) * 100 * time.Millisecond)
 	if moment.After(limit) {

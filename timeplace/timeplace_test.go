@@ -346,3 +346,32 @@ func TestAccuracyCodeBeyondTheField(t *testing.T) {
 		}
 	}
 }
+
+// A tolerance of an hour cannot defeat T-08: the window ahead of our
+// clock stays below the half-hour wrap, so a clock 31 min ahead is not
+// believed. The presence pair: 29 min ahead is inside the tolerance
+// asked for, and believed.
+func TestToleranceBelowClockAheadWrap(t *testing.T) {
+	pol := BroadcastPolicy{ToleranceS: 3600, MaxLatencyS: 5}
+	if p := PlaceBroadcast(tenthsAt(rx.Add(31*time.Minute)), 0, rx, pol); p.Fallback == FallbackNone {
+		t.Errorf("31 min ahead with a 1 h tolerance: %+v, want not believed", p)
+	}
+	at := rx.Add(29 * time.Minute)
+	if p := PlaceBroadcast(tenthsAt(at), 0, rx, pol); p.Fallback != FallbackNone || !p.CapturedAt.Equal(at) {
+		t.Errorf("29 min ahead with a 1 h tolerance: %+v, want believed", p)
+	}
+}
+
+// BroadcastPolicy{} places nearly everything at receipt.
+func TestZeroBroadcastPolicy(t *testing.T) {
+	var pol BroadcastPolicy
+	if p := PlaceBroadcast(tenthsAt(rx.Add(-time.Second)), 0, rx, pol); p.Fallback != FallbackTooOld {
+		t.Errorf("1 s old: %+v, want too_old", p)
+	}
+	if p := PlaceBroadcast(tenthsAt(rx.Add(time.Second)), 0, rx, pol); p.Fallback != FallbackClockAhead {
+		t.Errorf("1 s ahead: %+v, want clock_ahead", p)
+	}
+	if p := PlaceBroadcast(tenthsAt(rx), 0, rx, pol); p.Fallback != FallbackNone {
+		t.Errorf("at receipt: %+v, want believed", p)
+	}
+}

@@ -10,7 +10,9 @@
 // A Location carries only tenths of a second after the full UTC hour.
 // PlaceBroadcast reconstructs the hour from the receive time: the moment
 // is the latest instant at that offset into some UTC hour that is not
-// after received_at + tolerance + declared accuracy. Then:
+// after received_at + tolerance + declared accuracy (that window is kept
+// below half an hour, so no tolerance can defeat the clock_ahead rule; an
+// accuracy code above the 4-bit field's 15 is unknown). Then:
 //
 //   - 0xFFFF is FallbackUnknown and 36000 tenths or more is
 //     FallbackInvalid; TS is the receive time;
