@@ -100,16 +100,20 @@ var DefaultPolicy = Policy{
 	NeighbourMaxAgeS: 10,
 }
 
-// valid reports whether every field Evaluate uses is finite and not
-// negative. A NaN minimum would make every comparison false, which reads
-// as "no conflict"; such a policy is refused instead.
+// valid reports whether the policy can be judged with. Every field
+// Evaluate uses must be finite. The two minima must be positive: a zero
+// minimum makes "strictly less" impossible, so every pair would read as
+// clear. TCPAMaxS and NeighbourMaxAgeS may be zero: a zero window means
+// "inside the minima now only", a zero age means "same instant only".
+// A NaN minimum would make every comparison false and read as "no
+// conflict"; every such policy is refused instead.
 func (p Policy) valid() bool {
 	for _, v := range [...]float64{p.TCPAMaxS, p.DHorizontalMinM, p.DVerticalMinM, p.NeighbourMaxAgeS} {
 		if !core.IsFinite(v) || v < 0 {
 			return false
 		}
 	}
-	return true
+	return p.DHorizontalMinM > 0 && p.DVerticalMinM > 0
 }
 
 // Reason says why a pair was not judged. The values are stable snake_case
@@ -130,7 +134,7 @@ const (
 	// and are not checked.
 	ReasonInvalidInput Reason = "invalid_input"
 	// ReasonInvalidPolicy: a policy value Evaluate uses is NaN, infinite
-	// or negative.
+	// or negative, or a separation minimum is zero.
 	ReasonInvalidPolicy Reason = "invalid_policy"
 	// ReasonOutOfRange: the inputs were finite, but advancing the older
 	// sample or the CPA arithmetic left the valid domain (a position

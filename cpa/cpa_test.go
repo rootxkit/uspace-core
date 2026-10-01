@@ -400,6 +400,9 @@ func TestInvalidPolicyIsNotJudged(t *testing.T) {
 		{"v-min-inf", func(p *Policy) { p.DVerticalMinM = math.Inf(1) }},
 		{"max-age-negative", func(p *Policy) { p.NeighbourMaxAgeS = -1 }},
 		{"max-age-nan", func(p *Policy) { p.NeighbourMaxAgeS = math.NaN() }},
+		{"h-min-zero", func(p *Policy) { p.DHorizontalMinM = 0 }},
+		{"v-min-zero", func(p *Policy) { p.DVerticalMinM = 0 }},
+		{"h-min-negative", func(p *Policy) { p.DHorizontalMinM = -60 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pol := DefaultPolicy
@@ -411,6 +414,31 @@ func TestInvalidPolicyIsNotJudged(t *testing.T) {
 	pol := DefaultPolicy
 	pol.NeighbourRadiusM = math.NaN()
 	mustJudge(t, Evaluate(a, b, pol))
+}
+
+// TestZeroWindowMeansNowOnly: TCPAMaxS 0 is a valid policy that judges
+// "inside the minima now" only. A head-on pair 1 km apart is clear under
+// it and a pair inside the minima now is still a conflict; the smallest
+// positive minima are valid too.
+func TestZeroWindowMeansNowOnly(t *testing.T) {
+	pol := DefaultPolicy
+	pol.TCPAMaxS = 0
+	headOn := Evaluate(at(0, 0, 550).moving(10, 0, 0), at(1000, 0, 550).moving(-10, 0, 0), pol)
+	mustJudge(t, headOn)
+	if headOn.Conflict {
+		t.Fatalf("head-on in 50 s with a zero window: %+v, want clear", headOn)
+	}
+	if !Evaluate(at(0, 0, 550).moving(10, 0, 0), at(1000, 0, 550).moving(-10, 0, 0), DefaultPolicy).Conflict {
+		t.Fatal("the same pair under the 60 s window is not a conflict")
+	}
+	now := Evaluate(at(0, 0, 550), at(30, 0, 550), pol)
+	mustJudge(t, now)
+	if !now.Conflict {
+		t.Fatalf("inside the minima now with a zero window: %+v, want conflict", now)
+	}
+	tiny := DefaultPolicy
+	tiny.DHorizontalMinM, tiny.DVerticalMinM = math.SmallestNonzeroFloat64, math.SmallestNonzeroFloat64
+	mustJudge(t, Evaluate(at(0, 0, 550), at(30, 0, 550), tiny))
 }
 
 func TestOutOfRangeArithmeticIsNotJudged(t *testing.T) {
