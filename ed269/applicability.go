@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // DailyPeriod is one entry of a period's `schedule`: the days it applies
@@ -123,6 +124,10 @@ func ParseApplicability(raw json.RawMessage) ([]Period, *Problems) {
 	ps := &collector{max: lim.MaxProblems}
 	if len(raw) > lim.MaxBytes {
 		ps.add("applicability", fmt.Sprintf("is %d bytes; at most %d", len(raw), lim.MaxBytes))
+		return nil, ps.result()
+	}
+	if !utf8.Valid(raw) {
+		ps.add("applicability", "not UTF-8: "+firstInvalid(raw))
 		return nil, ps.result()
 	}
 	v := decodeTree(raw, lim.MaxDepth, "applicability", ps)

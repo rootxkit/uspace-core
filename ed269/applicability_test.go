@@ -29,6 +29,9 @@ func TestParseApplicabilityRefusals(t *testing.T) {
 	if _, probs := ParseApplicability(raw(`[`)); !hasProblem(probs, "applicability", "not JSON") {
 		t.Errorf("not JSON: %v", probs)
 	}
+	if _, probs := ParseApplicability([]byte("[{\"permanent\":\"YES\xff\"}]")); !hasProblem(probs, "applicability", "not UTF-8: invalid byte 0xff") {
+		t.Errorf("not UTF-8: %v", probs)
+	}
 	if _, probs := ParseApplicability(raw(`[]`)); !hasProblem(probs, "applicability", "at least one period") {
 		t.Errorf("empty: %v", probs)
 	}
