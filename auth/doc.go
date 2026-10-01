@@ -21,12 +21,21 @@
 // valid and grants nothing: endpoints call RequireScope.
 //
 // JWKS of URL-configured issuers are fetched at NewVerifier (a failure
-// stops start-up), cached for JWKSCacheTTL (default 24 h) and fetched
-// again when the cache expires or an unknown kid arrives, at most once per
-// MinRefreshInterval (default one minute) per issuer. A failed fetch is
-// counted and keeps the cached set, past its TTL too, so tokens stay
-// verifiable during an issuer outage (06 section 2 T5). A JWKS URL must be
-// HTTPS (plain HTTP to localhost only); responses are bounded by
+// stops start-up) and cached for JWKSCacheTTL (default 24 h). A request
+// whose kid is cached is always served from the cache: from
+// JWKSCacheTTL - JWKSRefreshAhead (default the last tenth of the TTL) on,
+// and past the TTL during an issuer outage, it starts a fetch in the
+// background and does not wait for it. A request with an unknown kid
+// starts a fetch (or joins the running one) and waits for it or for its
+// own context. Fetches are single-flight and rate-limited to one per
+// MinRefreshInterval (default one minute) per issuer, and each is bounded
+// by JWKSFetchTimeout (default 2 s). A fetch runs under
+// context.WithoutCancel: a caller that cancels is released but cannot
+// fail the fetch, and a caller whose context is already done starts none,
+// so no unauthenticated request can spend the rate limit and hold a
+// rotated key out. A failed fetch is counted and keeps the cached set, so
+// tokens stay verifiable during an outage (06 section 2 T5). A JWKS URL
+// must be HTTPS (plain HTTP to localhost only); responses are bounded by
 // MaxJWKSBytes and tokens by MaxTokenBytes.
 //
 // Every refusal is a *TokenError whose text names the claim (alg, kid,

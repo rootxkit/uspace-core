@@ -29,17 +29,19 @@ type issuerKeys struct {
 	keys      map[string]keyEntry
 	fetchedAt time.Time
 
-	// refreshMu serialises fetches and guards lastAttempt.
+	// refreshMu guards lastAttempt and inflight: at most one fetch runs
+	// per issuer, and every request that needs it waits on inflight.
 	refreshMu   sync.Mutex
 	lastAttempt time.Time
+	inflight    chan struct{}
 }
 
-func (ik *issuerKeys) lookup(kid string, now time.Time, ttl time.Duration) (e keyEntry, ok, stale bool) {
+// lookup returns the entry for kid and the age of the cached set.
+func (ik *issuerKeys) lookup(kid string, now time.Time) (e keyEntry, ok bool, age time.Duration) {
 	ik.mu.RLock()
 	defer ik.mu.RUnlock()
 	e, ok = ik.keys[kid]
-	stale = ik.url != "" && now.Sub(ik.fetchedAt) >= ttl
-	return e, ok, stale
+	return e, ok, now.Sub(ik.fetchedAt)
 }
 
 // indexKeys indexes set by kid. A key without kid is unreachable and
@@ -96,14 +98,33 @@ func entryFor(k jwk.Key) keyEntry {
 }
 
 // key returns the usable key kid of issuer ik. For a URL-configured
-// issuer an unknown kid or an expired cache triggers a fetch, rate-limited
-// to one per MinRefreshInterval per issuer.
+// issuer:
+//
+//   - an unknown kid starts a fetch (or joins the one running) and waits
+//     for it, or for the caller's context, whichever ends first;
+//   - a known kid is served from the cache at once; when the cached set
+//     is within JWKSRefreshAhead of its TTL, or past it, a fetch starts
+//     in the background. During an issuer outage the request never waits
+//     on the issuer, and the cached keys keep serving (T5).
+//
+// Fetches are single-flight per issuer and rate-limited to one per
+// MinRefreshInterval.
 func (v *Verifier) key(ctx context.Context, ik *issuerKeys, kid string) (keyEntry, error) {
 	now := v.cfg.Now()
-	e, ok, stale := ik.lookup(kid, now, v.cfg.JWKSCacheTTL)
-	if ik.url != "" && (!ok || stale) {
-		v.maybeRefresh(ctx, ik, now)
-		e, ok, _ = ik.lookup(kid, now, v.cfg.JWKSCacheTTL)
+	e, ok, age := ik.lookup(kid, now)
+	if ik.url != "" {
+		switch {
+		case !ok:
+			if done := v.startRefresh(ctx, ik, now, true); done != nil {
+				select {
+				case <-done:
+				case <-ctx.Done():
+				}
+				e, ok, _ = ik.lookup(kid, now)
+			}
+		case age >= v.cfg.JWKSCacheTTL-v.cfg.JWKSRefreshAhead:
+			v.startRefresh(ctx, ik, now, false)
+		}
 	}
 	if !ok {
 		return keyEntry{}, refuseToken(CounterRejectedKID, "kid", "%s is not in the issuer's JWKS", quoteShort(kid))
@@ -114,35 +135,52 @@ func (v *Verifier) key(ctx context.Context, ik *issuerKeys, kid string) (keyEntr
 	return e, nil
 }
 
-// maybeRefresh fetches ik's JWKS unless a fetch was attempted less than
-// MinRefreshInterval ago. A failure is counted and the cached set kept;
-// it is not an error of the token being verified.
+// startRefresh starts a background fetch of ik's JWKS and returns a
+// channel closed when it ends. It joins a fetch already running, and
+// returns nil when the rate limit forbids a new one (counted when
+// countLimited, that is when the request needed the fetch).
 //
 // The caller's context cannot fail the fetch: a request whose context is
-// already done starts no fetch and leaves the rate limit untouched, and a
+// already done starts nothing and leaves the rate limit untouched, and a
 // started fetch runs under context.WithoutCancel with JWKSFetchTimeout.
 // Otherwise an unauthenticated request with an unknown kid and a
 // cancelled context would stamp the rate limit with a failed fetch and
 // keep a rotated key out for MinRefreshInterval, again and again.
-func (v *Verifier) maybeRefresh(ctx context.Context, ik *issuerKeys, now time.Time) {
+func (v *Verifier) startRefresh(ctx context.Context, ik *issuerKeys, now time.Time, countLimited bool) <-chan struct{} {
 	if ctx.Err() != nil {
-		return
+		return nil
 	}
 	ik.refreshMu.Lock()
 	defer ik.refreshMu.Unlock()
-	if now.Sub(ik.lastAttempt) < v.cfg.MinRefreshInterval {
-		v.counters.Inc(CounterJWKSRefreshLimited)
-		return
+	if ik.inflight != nil {
+		return ik.inflight
 	}
-	// A failure is counted in refresh; the cached set stays in use.
-	_ = v.refresh(ctx, ik, now)
+	if now.Sub(ik.lastAttempt) < v.cfg.MinRefreshInterval {
+		if countLimited {
+			v.counters.Inc(CounterJWKSRefreshLimited)
+		}
+		return nil
+	}
+	ik.lastAttempt = now
+	done := make(chan struct{})
+	ik.inflight = done
+	fctx := context.WithoutCancel(ctx)
+	v.background.Add(1)
+	go func() {
+		defer v.background.Done()
+		// A failure is counted in refresh; the cached set stays in use.
+		_ = v.refresh(fctx, ik, now)
+		ik.refreshMu.Lock()
+		ik.inflight = nil
+		ik.refreshMu.Unlock()
+		close(done)
+	}()
+	return done
 }
 
-// refresh fetches and installs ik's JWKS. The caller holds refreshMu or
-// owns ik exclusively.
+// refresh fetches and installs ik's JWKS within JWKSFetchTimeout.
 func (v *Verifier) refresh(ctx context.Context, ik *issuerKeys, now time.Time) error {
-	ik.lastAttempt = now
-	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), v.cfg.JWKSFetchTimeout)
+	fctx, cancel := context.WithTimeout(ctx, v.cfg.JWKSFetchTimeout)
 	defer cancel()
 	keys, err := v.fetch(fctx, ik.url)
 	if err != nil {

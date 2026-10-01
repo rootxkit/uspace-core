@@ -607,8 +607,9 @@ func TestJWKSCancelledCallerCannotHoldDownRotation(t *testing.T) {
 	}
 }
 
-// A caller that cancels while the fetch is in flight cannot fail it: the
-// fetch completes and installs the rotated key for the next request.
+// A caller that cancels while the fetch is in flight is released at once
+// but cannot fail the fetch: it completes and installs the rotated key
+// for the next request.
 func TestJWKSFetchSurvivesCallerCancellation(t *testing.T) {
 	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
 	clk := newClock(testNow)
@@ -630,11 +631,13 @@ func TestJWKSFetchSurvivesCallerCancellation(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
-	time.Sleep(20 * time.Millisecond) // a fetch on the caller's context would fail here
-	close(gate)
+	// The caller is released at once, while the issuer still holds the
+	// response; the fetch goes on without it.
 	if err := <-done; err == nil {
 		t.Fatal("unknown kid accepted")
 	}
+	close(gate)
+	v.background.Wait()
 	if v.Counters().Get(CounterJWKSRefresh) != 2 || v.Counters().Get(CounterJWKSRefreshFailed) != 0 {
 		t.Fatalf("the fetch did not survive the caller: %v", v.Counters().Snapshot())
 	}
@@ -644,7 +647,8 @@ func TestJWKSFetchSurvivesCallerCancellation(t *testing.T) {
 }
 
 // E-02 and T5: a failed fetch keeps the cached set, past its TTL too,
-// and is counted; the next successful fetch replaces it.
+// and is counted; the next successful fetch replaces it. The request that
+// finds the cache stale is served from it and the fetch runs behind it.
 func TestJWKSRefreshFailureKeepsCachedSet(t *testing.T) {
 	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
 	clk := newClock(testNow)
@@ -667,13 +671,21 @@ func TestJWKSRefreshFailureKeepsCachedSet(t *testing.T) {
 		if _, err := v.Verify(ctx, tokenAt(testKey(), testKID, clk.now())); err != nil {
 			t.Fatalf("status %d: the cached key was dropped: %v", broken.status, err)
 		}
+		v.background.Wait()
 		if v.Counters().Get(CounterJWKSRefreshFailed) != before+1 {
 			t.Fatalf("status %d: failure not counted", broken.status)
+		}
+		if _, err := v.Verify(ctx, tokenAt(testKey(), testKID, clk.now())); err != nil {
+			t.Fatalf("status %d: the cached key was dropped after the failure: %v", broken.status, err)
 		}
 	}
 	// The issuer comes back with only the other key: it replaces the set.
 	s.setKeys(t, publicSet(t, testKID, otherKey()))
 	clk.add(DefaultJWKSCacheTTL)
+	if _, err := v.Verify(ctx, tokenAt(testKey(), testKID, clk.now())); err != nil {
+		t.Fatalf("the stale set did not serve while the fetch ran: %v", err)
+	}
+	v.background.Wait()
 	if _, err := v.Verify(ctx, tokenAt(otherKey(), testKID, clk.now())); err != nil {
 		t.Fatal(err)
 	}
@@ -684,24 +696,91 @@ func TestJWKSRefreshFailureKeepsCachedSet(t *testing.T) {
 	}
 }
 
-// Within the TTL the cache is used without a fetch.
-func TestJWKSCacheTTL(t *testing.T) {
+// Before the refresh-ahead point the cache is used without a fetch; from
+// it, a fetch runs in the background while requests are served.
+func TestJWKSRefreshAhead(t *testing.T) {
 	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
 	clk := newClock(testNow)
 	v := urlVerifier(t, s, clk)
-	clk.add(DefaultJWKSCacheTTL - time.Second)
+	ahead := DefaultJWKSCacheTTL / 10
+	clk.add(DefaultJWKSCacheTTL - ahead - time.Second)
 	if _, err := v.Verify(context.Background(), tokenAt(testKey(), testKID, clk.now())); err != nil {
 		t.Fatal(err)
 	}
+	v.background.Wait()
 	if s.hits.Load() != 1 {
-		t.Fatalf("fetched %d times within the TTL", s.hits.Load())
+		t.Fatalf("fetched %d times before the refresh-ahead point", s.hits.Load())
 	}
 	clk.add(time.Second)
 	if _, err := v.Verify(context.Background(), tokenAt(testKey(), testKID, clk.now())); err != nil {
 		t.Fatal(err)
 	}
+	v.background.Wait()
+	if s.hits.Load() != 2 || v.Counters().Get(CounterJWKSRefresh) != 2 {
+		t.Fatalf("not refreshed ahead of the TTL (%d)", s.hits.Load())
+	}
+	// The refreshed set is fresh again: no fetch for another while.
+	clk.add(time.Minute)
+	if _, err := v.Verify(context.Background(), tokenAt(testKey(), testKID, clk.now())); err != nil {
+		t.Fatal(err)
+	}
+	v.background.Wait()
 	if s.hits.Load() != 2 {
-		t.Fatalf("not fetched at the TTL (%d)", s.hits.Load())
+		t.Fatalf("fetched again right after a refresh (%d)", s.hits.Load())
+	}
+}
+
+// An issuer that hangs never stalls a request whose key is cached; the
+// fetch ends at JWKSFetchTimeout and is counted as failed. Many requests
+// share one fetch (single-flight).
+func TestJWKSOutageDoesNotStallRequests(t *testing.T) {
+	s := newJWKSServer(t, publicSet(t, testKID, testKey()))
+	clk := newClock(testNow)
+	v, err := NewVerifier(context.Background(), Config{
+		Issuers:          map[string]IssuerConfig{testIss: {JWKSURL: s.URL + "/jwks"}},
+		Audience:         testAud,
+		Now:              clk.now,
+		JWKSFetchTimeout: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := make(chan struct{})
+	defer close(gate)
+	s.mu.Lock()
+	s.gate = gate
+	s.mu.Unlock()
+	clk.add(DefaultJWKSCacheTTL + time.Hour)
+	start := time.Now()
+	for range 20 {
+		if _, err := v.Verify(context.Background(), tokenAt(testKey(), testKID, clk.now())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("20 requests took %s during the outage", d)
+	}
+	v.background.Wait()
+	if got := v.Counters().Get(CounterJWKSRefreshFailed); got != 1 {
+		t.Errorf("jwks_refresh_failed %d, want one shared fetch", got)
+	}
+	if got := s.hits.Load(); got != 2 {
+		t.Errorf("%d fetches, want 2 (start-up and one shared refresh)", got)
+	}
+}
+
+func TestNewVerifierRefreshAheadBound(t *testing.T) {
+	set := publicSet(t, testKID, testKey())
+	cfg := Config{Issuers: map[string]IssuerConfig{testIss: {Keys: set}}, Audience: testAud,
+		JWKSCacheTTL: time.Hour, JWKSRefreshAhead: time.Hour}
+	_, err := NewVerifier(context.Background(), cfg)
+	var fe *core.FieldError
+	if !errors.As(err, &fe) || fe.Field != "jwks_refresh_ahead" {
+		t.Fatalf("got %v, want a FieldError on jwks_refresh_ahead", err)
+	}
+	cfg.JWKSRefreshAhead = time.Hour - time.Second
+	if _, err := NewVerifier(context.Background(), cfg); err != nil {
+		t.Fatal(err)
 	}
 }
 

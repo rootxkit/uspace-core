@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
@@ -70,12 +71,14 @@ type Config struct {
 	Audience string
 	// MaxSkew is the clock skew allowed on exp, nbf and iat.
 	MaxSkew time.Duration
-	// JWKSCacheTTL is how long a fetched JWKS is used before it is
-	// fetched again. A failed fetch keeps the cached set (06 section 2
-	// T5: tokens stay verifiable during an issuer outage).
+	// JWKSCacheTTL is how long a fetched JWKS is fresh. From
+	// JWKSCacheTTL - JWKSRefreshAhead on, a known kid is still served from
+	// the cache while a fetch runs in the background; a failed fetch keeps
+	// the cached set, past the TTL too (06 section 2 T5: tokens stay
+	// verifiable during an issuer outage, and no request waits on it).
 	JWKSCacheTTL time.Duration
 	// MinRefreshInterval rate-limits JWKS fetches per issuer, for an
-	// unknown kid and for an expired cache alike.
+	// unknown kid and for a cache due for refresh alike.
 	MinRefreshInterval time.Duration
 	// MaxTokenBytes bounds the compact token length.
 	MaxTokenBytes int
@@ -85,6 +88,10 @@ type Config struct {
 	// the context of the request that triggered it, so a caller that
 	// cancels cannot make it fail.
 	JWKSFetchTimeout time.Duration
+	// JWKSRefreshAhead starts a background fetch this long before the
+	// cached set reaches JWKSCacheTTL (default a tenth of the TTL; less
+	// than the TTL). Requests keep being served from the cache meanwhile.
+	JWKSRefreshAhead time.Duration
 	// HTTPClient fetches JWKS; nil uses a client with DefaultHTTPTimeout
 	// that refuses a redirect to a non-HTTPS URL.
 	HTTPClient *http.Client
@@ -144,6 +151,8 @@ type Verifier struct {
 	cfg      Config
 	issuers  map[string]*issuerKeys
 	counters core.Counters
+	// background counts the JWKS fetches running in the background.
+	background sync.WaitGroup
 }
 
 // NewVerifier validates c, applies the defaults and fetches the JWKS of
@@ -159,7 +168,7 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 		return nil, core.Fieldf("audience", "empty")
 	}
 	if c.MaxSkew < 0 || c.JWKSCacheTTL < 0 || c.MinRefreshInterval < 0 || c.MaxTokenBytes < 0 || c.MaxJWKSBytes < 0 ||
-		c.JWKSFetchTimeout < 0 {
+		c.JWKSFetchTimeout < 0 || c.JWKSRefreshAhead < 0 {
 		return nil, core.Fieldf("config", "a duration or size is negative")
 	}
 	if c.MaxSkew == 0 {
@@ -176,6 +185,12 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	}
 	if c.MaxJWKSBytes == 0 {
 		c.MaxJWKSBytes = DefaultMaxJWKSBytes
+	}
+	if c.JWKSRefreshAhead == 0 {
+		c.JWKSRefreshAhead = c.JWKSCacheTTL / 10
+	}
+	if c.JWKSRefreshAhead >= c.JWKSCacheTTL {
+		return nil, core.Fieldf("jwks_refresh_ahead", "%s is not less than the cache TTL %s", c.JWKSRefreshAhead, c.JWKSCacheTTL)
 	}
 	if c.JWKSFetchTimeout == 0 {
 		c.JWKSFetchTimeout = DefaultJWKSFetchTimeout
@@ -203,8 +218,9 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 			if err := checkJWKSURL(ic.JWKSURL); err != nil {
 				return nil, core.Fieldf(field, "%v", err)
 			}
-			ik := &issuerKeys{url: ic.JWKSURL}
-			if err := v.refresh(ctx, ik, c.Now()); err != nil {
+			now := c.Now()
+			ik := &issuerKeys{url: ic.JWKSURL, lastAttempt: now}
+			if err := v.refresh(ctx, ik, now); err != nil {
 				return nil, core.Fieldf(field, "%v", err)
 			}
 			v.issuers[iss] = ik
