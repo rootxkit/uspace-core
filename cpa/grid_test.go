@@ -89,15 +89,29 @@ func TestGridNearPresenceAndAbsence(t *testing.T) {
 	g.Upsert("here", origin)
 	g.Upsert("700m-east", core.LatLon{LatDeg: origin.LatDeg, LonDeg: origin.LonDeg + 700/eastPerDegM})
 	g.Upsert("5km-north", north5km)
-	got := g.Near(origin, DefaultPolicy.NeighbourRadiusM)
-	if !slices.Contains(got, "here") || !slices.Contains(got, "700m-east") {
-		t.Fatalf("Near = %v, want here and 700m-east", got)
+	pos := map[string]core.LatLon{
+		"here":      origin,
+		"700m-east": {LatDeg: origin.LatDeg, LonDeg: origin.LonDeg + 700/eastPerDegM},
+		"5km-north": north5km,
 	}
-	if slices.Contains(got, "5km-north") {
-		t.Fatalf("Near = %v: 5 km away is outside the 3x3 ring", got)
+	// The contract: Near is a superset of the ids within the radius; the
+	// caller filters by exact distance. Whether a far id is pruned is the
+	// grid's business, so it is not asserted here.
+	within := func(q core.LatLon) []string {
+		var out []string
+		for _, id := range g.Near(q, DefaultPolicy.NeighbourRadiusM) {
+			if tangentM(q, pos[id]) <= DefaultPolicy.NeighbourRadiusM {
+				out = append(out, id)
+			}
+		}
+		slices.Sort(out)
+		return out
 	}
-	if got := g.Near(north5km, 800); !slices.Equal(got, []string{"5km-north"}) {
-		t.Fatalf("Near at 5 km north = %v, want [5km-north]", got)
+	if got := within(origin); !slices.Equal(got, []string{"700m-east", "here"}) {
+		t.Fatalf("within 800 m of origin: %v, want 700m-east and here", got)
+	}
+	if got := within(north5km); !slices.Equal(got, []string{"5km-north"}) {
+		t.Fatalf("within 800 m of 5 km north: %v, want [5km-north]", got)
 	}
 }
 

@@ -229,8 +229,17 @@ func (sp span) colRange(n int) (lo, hi int, all bool) {
 // superset of those within the radius by the tangent-plane distance
 // (geodesy.LocalOffsetAboutMidLatM), widened by 1 % for other exact
 // metrics. The caller computes the exact distance and excludes p's own
-// id. The order is unspecified. An invalid p, or a radius that is NaN,
-// negative or infinite, returns nil and is counted.
+// id. It may also return ids farther away: how many depends on the cell
+// size, not on the contract.
+//
+// The order is unspecified and may change between calls (a lookup that
+// would visit more cells than are occupied iterates a map). A caller
+// that caps the number of neighbours it judges must first filter by
+// exact distance and sort (by distance, then id), or the cap drops a
+// random neighbour rather than the farthest.
+//
+// An invalid p, or a radius that is NaN, negative or infinite, returns
+// nil and is counted.
 func (g *Grid) Near(p core.LatLon, radiusM float64) []string {
 	return g.AppendNear(nil, p, radiusM)
 }
