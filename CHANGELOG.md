@@ -101,6 +101,27 @@ Each entry names the work package and the vectors it affects.
   judged. Neighbour `Grid` with per-band longitude columns, safe across
   the antimeridian and at the poles, checked against brute force.
   `cpa.json` 27/27 in both orders. [WP-9]
+- `alerting`: the monitor's alert state machine. Admission counts and
+  ignores backlog, late (on the ingest-to-monitor leg only), out-of-order
+  (per source clock), disabled-source and invalid samples; conflicts are
+  judged by `cpa` against the grid's neighbours and every active partner,
+  zones and the height limit by `zones`, `identification` beside an
+  incident zone's alert and `identification_mismatch` on every live
+  sample. Raise once, refresh silently, a severity change raised again;
+  clears are `resolved` (hysteresis, only on a judgement), `stale`,
+  `source_disabled` (through a `sources.Follower`, by version and epoch),
+  `landed` and `flight_ended` (`Drop`); the aircraft cap evicts only
+  aircraft without an active alert and otherwise refuses new ids
+  (`rejected_capacity`, `CapacityExceeded`), and no one source adds new
+  ids past `MaxSourceShare` of it in alert holders (`rejected_source_share`), with refusals
+  reported in `Events.Refused` at a limited rate; a resolved conflict carries the clearing
+  judgement's separation in `Cleared.ClearingDetail` beside the last
+  in-conflict detail (C-14). Zone alerts are keyed by country and
+  identifier, with a counted fallback for a true duplicate. Nothing unjudged, missing or non-finite clears an
+  alert. `Active` ranks by severity and `LoSStartS`. Passes
+  `alert_lifecycle.json` 28/28 with one counted override:
+  `disarming-clears-as-stale` clears as `landed` (owner decision, plan
+  §11 gap 4). [WP-10]
 
 ## [0.1.0] - unreleased (G-M1)
 
