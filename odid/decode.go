@@ -2,6 +2,7 @@ package odid
 
 import (
 	"bytes"
+	"encoding/json"
 	"strconv"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -17,6 +18,30 @@ type Unknown struct {
 
 // Type implements Message: the type nibble of Raw.
 func (u Unknown) Type() MessageType { return typeNibble(u.Raw[offHeader]) }
+
+// unknownJSON is the JSON form of Unknown: Raw as base64, like
+// Authentication.Raw, rather than encoding/json's array of 25 numbers.
+type unknownJSON struct {
+	Raw []byte `json:"raw"`
+}
+
+// MarshalJSON writes Raw as base64.
+func (u Unknown) MarshalJSON() ([]byte, error) {
+	return json.Marshal(unknownJSON{Raw: u.Raw[:]})
+}
+
+// UnmarshalJSON reads Raw from base64 and refuses any length but 25.
+func (u *Unknown) UnmarshalJSON(data []byte) error {
+	var j unknownJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	if len(j.Raw) != MessageSize {
+		return core.Fieldf("raw", "%d bytes, a message is %d", len(j.Raw), MessageSize)
+	}
+	u.Raw = [MessageSize]byte(j.Raw)
+	return nil
+}
 
 // TypeOf returns the type nibble of a frame's first byte. An empty frame
 // is refused; the length of the rest is not judged (Decode does that).

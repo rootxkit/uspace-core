@@ -2,7 +2,9 @@ package odid
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -550,5 +552,29 @@ func TestEncodePackDecodes(t *testing.T) {
 		if a, b := mustEncode(t, in[i]), mustEncode(t, out[i]); a != b {
 			t.Errorf("message %d changed through the pack", i)
 		}
+	}
+}
+
+// Unknown.Raw travels as base64, like Authentication.Raw, and only a
+// 25-byte value is read back.
+func TestUnknownJSON(t *testing.T) {
+	var u Unknown
+	u.Raw[0], u.Raw[24] = 0x92, 0xFF
+	b, err := json.Marshal(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"raw":"` + base64.StdEncoding.EncodeToString(u.Raw[:]) + `"}`
+	if string(b) != want {
+		t.Fatalf("marshalled %s, want %s", b, want)
+	}
+	var back Unknown
+	if err := json.Unmarshal(b, &back); err != nil || back != u {
+		t.Fatalf("unmarshal: %v, %#v", err, back)
+	}
+	short := `{"raw":"` + base64.StdEncoding.EncodeToString(u.Raw[:24]) + `"}`
+	wantFieldError(t, json.Unmarshal([]byte(short), &back), "raw", "24 bytes, a message is 25")
+	if err := json.Unmarshal([]byte(`{"raw":12}`), &back); err == nil {
+		t.Error("a number as raw was accepted")
 	}
 }
