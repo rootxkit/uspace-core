@@ -62,3 +62,22 @@ func TestCINeverRunsGoGenerate(t *testing.T) {
 		t.Error(".github/workflows/ci.yml runs go generate")
 	}
 }
+
+// go generate fetches the URL SOURCE pins and checks it against
+// spec_sha256 first.
+func TestGenerateFetchesThePinnedSpec(t *testing.T) {
+	gen, err := os.ReadFile("generate.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := sourceKey(t, "spec_url")
+	if !bytes.Contains(gen, []byte(" "+url+"\n")) {
+		t.Errorf("generate.go does not generate from %s", url)
+	}
+	if !bytes.Contains(gen, []byte("-check-spec SOURCE")) {
+		t.Error("generate.go does not check the spec hash")
+	}
+	if len(sourceKey(t, "spec_sha256")) != 64 {
+		t.Error("spec_sha256 is not a SHA-256")
+	}
+}

@@ -9,6 +9,9 @@ uas_standards_commit = 6e182f43ec960b3bccf131c9006ff9979dd8a56e
 spec_repo = https://github.com/interuss/astm-utm-protocol
 spec_commit = 1d3d8fbe75414e23d7e19ce35955770bea5e413f
 spec_path = utm.yaml
+# The exact file go generate fetches and its SHA-256, checked first.
+spec_url = https://raw.githubusercontent.com/interuss/astm-utm-protocol/1d3d8fbe75414e23d7e19ce35955770bea5e413f/utm.yaml
+spec_sha256 = 63482b2a665ecd836b269028a13b19adfde7a5c32b01301c168d87ca3313dd15
 spec_title = UTM API (USS->DSS and USS->USS) 1.0.0
 constants = src/uas_standards/astm/f3548/v21/constants.py
 generator = github.com/oapi-codegen/oapi-codegen/v2 v2.8.0, types only (oapi-codegen.yaml)

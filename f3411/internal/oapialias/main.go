@@ -24,6 +24,11 @@
 //
 //	go run ../f3411/internal/oapialias -file types.gen.go -source SOURCE
 //
+// With -check-spec SOURCE it instead fetches the OpenAPI file named by
+// `spec_url` in SOURCE and fails unless its SHA-256 is `spec_sha256`, so
+// that go generate never builds from a file that changed upstream under
+// the same URL. It is the first go:generate step.
+//
 // With -source it also records the rewritten file's SHA-256 (of its LF
 // form) as `generated_sha256` in the SOURCE file, which the package tests
 // compare offline: a generated file edited by hand, or regenerated without
@@ -32,6 +37,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -42,16 +48,27 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
 	file := flag.String("file", "", "generated Go file to rewrite in place")
 	source := flag.String("source", "", "SOURCE file in which to record the generated file's SHA-256")
+	checkSpec := flag.String("check-spec", "", "SOURCE file whose spec_url must hash to its spec_sha256")
 	flag.Parse()
+	if *checkSpec != "" {
+		if err := checkSpecHash(*checkSpec, http.DefaultClient); err != nil {
+			fmt.Fprintln(os.Stderr, "oapialias:", err)
+			os.Exit(1) //nolint:forbidigo // a command reports failure by its exit status
+		}
+		return
+	}
 	if *file == "" {
 		fmt.Fprintln(os.Stderr, "oapialias: -file is required")
 		os.Exit(2) //nolint:forbidigo // a command reports failure by its exit status
@@ -81,6 +98,60 @@ func recordHash(file, source string) error {
 		return err
 	}
 	return setKey(source, "generated_sha256", GeneratedHash(src))
+}
+
+// sourceKey reads `key = value` from a SOURCE file.
+func sourceKey(source, key string) (string, error) {
+	raw, err := os.ReadFile(source) //nolint:gosec // G304: the path is this command's own flag
+	if err != nil {
+		return "", err
+	}
+	for _, l := range strings.Split(string(raw), "\n") {
+		if k, v, ok := strings.Cut(l, "="); ok && strings.TrimSpace(k) == key {
+			return strings.TrimSpace(v), nil
+		}
+	}
+	return "", fmt.Errorf("%s has no %s", source, key)
+}
+
+// maxSpecBytes bounds the OpenAPI file fetched (both are under 200 kB).
+const maxSpecBytes = 16 << 20
+
+// checkSpecHash fetches spec_url and compares its SHA-256 with
+// spec_sha256.
+func checkSpecHash(source string, client *http.Client) error {
+	url, err := sourceKey(source, "spec_url")
+	if err != nil {
+		return err
+	}
+	want, err := sourceKey(source, "spec_sha256")
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetching %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("fetching %s: %s", url, resp.Status)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSpecBytes))
+	if err != nil {
+		return fmt.Errorf("fetching %s: %w", url, err)
+	}
+	sum := sha256.Sum256(body)
+	if got := hex.EncodeToString(sum[:]); got != want {
+		return fmt.Errorf("%s hashes %s, %s records %s: the pinned OpenAPI file changed", url, got, source, want)
+	}
+	fmt.Fprintf(os.Stderr, "oapialias: %s matches spec_sha256\n", url)
+	return nil
 }
 
 // setKey sets `key = value` in a SOURCE file.

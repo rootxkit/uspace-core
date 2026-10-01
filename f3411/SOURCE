@@ -9,6 +9,9 @@ uas_standards_commit = 6e182f43ec960b3bccf131c9006ff9979dd8a56e
 spec_repo = https://github.com/uastech/standards
 spec_commit = dd4016b09fc8cb98f30c2a17b5a088fb2995ab54
 spec_path = remoteid/updated.yaml
+# The exact file go generate fetches and its SHA-256, checked first.
+spec_url = https://raw.githubusercontent.com/uastech/standards/dd4016b09fc8cb98f30c2a17b5a088fb2995ab54/remoteid/updated.yaml
+spec_sha256 = 7198204023cb1eef9d429db36780d293d17cce871256564ea78794946c4dd8af
 spec_title = Standard Remote ID API Interfaces 2.1.0
 # canonical.yaml at the same commit differs in two places: updated.yaml
 # types OperatingArea.volumes as Volume4D where canonical.yaml has

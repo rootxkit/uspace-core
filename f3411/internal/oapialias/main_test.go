@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,5 +157,47 @@ func TestRecordHash(t *testing.T) {
 	}
 	if err := setKey(filepath.Join(dir, "NONE"), "k", "v"); err == nil {
 		t.Error("a missing SOURCE was written")
+	}
+}
+
+// -check-spec passes only when the fetched file has the recorded hash.
+func TestCheckSpecHash(t *testing.T) {
+	body := []byte("openapi: 3.0.2\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/missing" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	write := func(url, sum string) string {
+		p := filepath.Join(dir, "SOURCE")
+		if err := os.WriteFile(p, []byte("spec_url = "+url+"\nspec_sha256 = "+sum+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	right := GeneratedHash(body) // body has no CR: the plain SHA-256
+	if err := checkSpecHash(write(srv.URL+"/spec.yaml", right), srv.Client()); err != nil {
+		t.Errorf("the pinned file: %v", err)
+	}
+	if err := checkSpecHash(write(srv.URL+"/spec.yaml", strings.Repeat("0", 64)), srv.Client()); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Errorf("a changed file: %v", err)
+	}
+	if err := checkSpecHash(write(srv.URL+"/missing", right), srv.Client()); err == nil {
+		t.Error("a 404 passed")
+	}
+	if err := checkSpecHash(write("http://127.0.0.1:1/x", right), srv.Client()); err == nil {
+		t.Error("an unreachable host passed")
+	}
+	if err := checkSpecHash(filepath.Join(dir, "NONE"), srv.Client()); err == nil {
+		t.Error("a missing SOURCE passed")
+	}
+	p := filepath.Join(dir, "SOURCE")
+	_ = os.WriteFile(p, []byte("spec_url = x\n"), 0o600)
+	if err := checkSpecHash(p, srv.Client()); err == nil {
+		t.Error("a SOURCE without spec_sha256 passed")
 	}
 }
