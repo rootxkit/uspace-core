@@ -27,15 +27,27 @@
 //     textShortType (schema); uas_standards declares a textLongType of
 //     1,000 for them.
 //
-// The vertical limits of a zone, which the specification calls
-// unverified (09 section 3), are the geometry's `layer` object: upper,
-// upperReference, lower, lowerReference (AGL, AMSL or WGS84) and uom (m
-// or ft, metres when absent). Both sources agree on these names; the
-// EUROCAE text itself has not been seen, so they remain *unverified*
-// against it. A circle is a GeoJSON Point with an `extent` of subType
-// Circle; its radius is read as metres, which neither source states
-// (unverified too). Several layers are a GeometryCollection of
-// geometries, each with its layer, as in the schema's two-layer example.
+// # UNVERIFIED: the layer names and the circle radius unit
+//
+// The EUROCAE ED-318 text is not available to this project (spec 09
+// section 3). Two things this package reads are therefore UNVERIFIED
+// against the standard itself, and stay so until a licensed copy is
+// checked (owner decision on PR #16):
+//
+//   - UNVERIFIED: the names of a zone's vertical limits. They are the
+//     geometry's `layer` object with upper, upperReference, lower,
+//     lowerReference (AGL, AMSL or WGS84) and uom (m or ft), as the schema
+//     (Schema_LayeredGeoJSON.json) and uas_standards (VerticalLayer) both
+//     show them.
+//   - UNVERIFIED: the unit of a circle's radius. A circle is a GeoJSON
+//     Point with an `extent` of subType Circle and a `radius`; neither the
+//     schema (Schema_GeoJSONGeometries.json, where radius is a bare
+//     number) nor uas_standards (ExtentCircle) states its unit, and the
+//     layer's uom is described for upper and lower only. This package
+//     reads the radius as metres.
+//
+// Several layers are a GeometryCollection of geometries, each with its
+// layer, as in the schema's two-layer example.
 //
 // # Reading
 //
