@@ -34,6 +34,13 @@ Each entry names the work package and the vectors it affects.
   with `public-part-GEO-OP-ABC` a known deviation: the EU secret part is
   stripped only after a valid public number, so `GEO-OP-ABC` no longer
   compares as `GEO-OP` (LESSONS G-04). [WP-4]
+- `internal/pgm` (bounded binary PGM P5 parser), `geoid` (GeographicLib
+  grids, `UndulationM`, `AMSLFromHAE`/`HAEFromAMSL`) and `terrain`
+  (`CellName`, DEM tiles, `ParseIndex`, a bounded LRU `Store` that counts
+  unknown, nodata and unreadable-tile answers and retries a failed tile
+  once per `RetryAfter`). Vectors: `terrain_geoid.json`, 18 synthetic
+  cases pass, 30 GeographicLib cases skip without `USPACE_GEOID_DIR`.
+  [WP-2]
 
 ## [0.1.0] - unreleased (G-M1)
 
