@@ -56,8 +56,9 @@ const (
 	// (T-03).
 	CounterRejectedOutOfOrder = "rejected_out_of_order"
 	// CounterRejectedPlacedAhead counts samples placed ahead of their
-	// receipt (CapturedAtS - RxAtS), or received ahead of the wall time
-	// (RxAtS - wallS), by more than AheadToleranceS: a clock ahead, never
+	// receipt (CapturedAtS - RxAtS) or of the wall time (CapturedAtS -
+	// wallS), or received ahead of the wall time (RxAtS - wallS), by more
+	// than AheadToleranceS: a clock ahead, never
 	// admitted, so it can neither pin the track in the future nor resolve
 	// an alert ahead of time (the clock-ahead rule of timeplace).
 	CounterRejectedPlacedAhead = "rejected_placed_ahead"
@@ -147,9 +148,11 @@ type Config struct {
 	// LiveMaxAgeS bounds wall - RxAtS, the ingest-to-monitor leg (T-05).
 	LiveMaxAgeS float64
 	// AheadToleranceS bounds how far a sample may be placed ahead of its
-	// receipt (CapturedAtS - RxAtS) and received ahead of the wall time
-	// (RxAtS - wallS): beyond it the clock is ahead and the sample is
-	// refused (rejected_placed_ahead), as timeplace's clock-ahead rule.
+	// receipt or of the wall time, and received ahead of the wall time:
+	// beyond it the clock is ahead and the sample is refused
+	// (rejected_placed_ahead), as timeplace's clock-ahead rule. Within it,
+	// the alert times still use min(placement, wall), so a placement
+	// ahead buys no hysteresis. ClearAfterS must exceed twice it.
 	AheadToleranceS float64
 	// Zones are the zones judged; ZonePolicy the zone thresholds (the
 	// pressure margin, the CONDITIONAL severity, the height limit; a nil
@@ -361,6 +364,15 @@ func sanitise(c Config, counters *core.Counters) Config {
 	fix(&c.LiveMaxAgeS, d.LiveMaxAgeS)
 	fix(&c.AheadToleranceS, d.AheadToleranceS)
 	fix(&c.RefusalEventIntervalS, d.RefusalEventIntervalS)
+	// The hysteresis must outlast what a clock ahead within the tolerance
+	// could shift (receipt and placement ahead, each by the tolerance).
+	if !(c.ClearAfterS > 2*c.AheadToleranceS) {
+		counters.Inc(CounterConfigInvalid)
+		c.ClearAfterS = d.ClearAfterS
+		if !(c.ClearAfterS > 2*c.AheadToleranceS) {
+			c.AheadToleranceS = d.AheadToleranceS
+		}
+	}
 	if !(c.MaxSourceShare > 0 && c.MaxSourceShare <= 1) {
 		c.MaxSourceShare = d.MaxSourceShare
 		counters.Inc(CounterConfigInvalid)

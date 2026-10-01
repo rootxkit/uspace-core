@@ -1205,12 +1205,14 @@ func TestPlacedAheadIsRefused(t *testing.T) {
 		}
 	})
 	t.Run("within the tolerance", func(t *testing.T) {
-		// Twin: 1 s ahead (the default tolerance) is admitted.
+		// Twin: 1 s ahead (the default tolerance) is admitted; its alert
+		// time is capped at the wall time.
 		m := headOn(t, DefaultConfig())
 		ok := at("A", 10, 10, 2)
-		ok.RxAtS = 1
+		ok.RxAtS = 1.5
 		m.Observe(ok, 1)
-		if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 0 || m.Active()[0].LastTrueS != 2 {
+		if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 0 || m.Active()[0].LastTrueS != 1 ||
+			m.aircraft["A"].state.CapturedAtS != 2 {
 			t.Fatalf("rejected_placed_ahead = %d, active %+v", got, m.Active())
 		}
 	})
@@ -1323,5 +1325,58 @@ func TestOutOfOrderOlderPlacementCountsBoth(t *testing.T) {
 	m.Observe(later, 3)
 	if o, h := m.Counters().Get(CounterRejectedOutOfOrder), m.Counters().Get(CounterRejectedOlderPlacement); o != 1 || h != 1 {
 		t.Fatalf("after a later placement: %d, %d", o, h)
+	}
+}
+
+func TestPlacementWithinToleranceBuysNoHysteresis(t *testing.T) {
+	// Review probe: a clear sample placed ahead of the wall within the
+	// tolerance must not resolve before ClearAfterS of wall time.
+	m := headOn(t, DefaultConfig())
+	tol := m.Config().AheadToleranceS
+	ahead := at("A", 5000, 10, 1.25+tol)
+	ahead.RxAtS = 1.25 + tol/2
+	ahead.SourceTS = ptr(1.25 + tol)
+	wantEvents(t, "ahead, clear", m.Observe(ahead, 1.25), nil, nil)
+	if a := m.Active(); len(a) != 1 || a[0].LastFalseS > 1.25 {
+		t.Fatalf("active %+v", a)
+	}
+	// Twin: once ClearAfterS of wall time has passed, a clear sample
+	// resolves it.
+	wantEvents(t, "3.5", m.Observe(at("A", 5000, 10, 3.5), 3.5), nil, []string{"conflict:A:B=resolved"})
+}
+
+func TestNoAdmittedPlacementBeyondTheTolerance(t *testing.T) {
+	// Placed AheadToleranceS ahead of a receipt that is itself
+	// AheadToleranceS ahead of the wall: 2 x tolerance ahead of the wall,
+	// refused.
+	m := NewMonitor(DefaultConfig())
+	tr := at("A", 0, 0, 2)
+	tr.RxAtS = 1
+	m.Observe(tr, 0)
+	if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 1 || m.Tracked() != 0 {
+		t.Fatalf("rejected_placed_ahead = %d, tracked %d", got, m.Tracked())
+	}
+}
+
+func TestClearAfterMustExceedTwiceTheTolerance(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ClearAfterS = 2 // == 2 x the 1 s tolerance
+	m := NewMonitor(cfg)
+	if got := m.Config().ClearAfterS; got != DefaultConfig().ClearAfterS || m.Counters().Get(CounterConfigInvalid) != 1 {
+		t.Fatalf("ClearAfterS %v, config_invalid %d", got, m.Counters().Get(CounterConfigInvalid))
+	}
+	// A tolerance so large the default hysteresis is too short falls back
+	// to its own default too.
+	cfg = DefaultConfig()
+	cfg.AheadToleranceS = 5
+	m = NewMonitor(cfg)
+	if c := m.Config(); c.ClearAfterS != 3 || c.AheadToleranceS != 1 {
+		t.Fatalf("config %+v", c)
+	}
+	// Twin: just above twice the tolerance is kept.
+	cfg = DefaultConfig()
+	cfg.ClearAfterS = 2.5
+	if got := NewMonitor(cfg).Config().ClearAfterS; got != 2.5 {
+		t.Fatalf("ClearAfterS %v", got)
 	}
 }

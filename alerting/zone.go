@@ -78,7 +78,9 @@ func isPlaceKind(kind string) bool {
 func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 	var kept []string
 	ac2 := zones.Aircraft{AltAMSLM: tr.AltAMSLM, AltSource: tr.AltSource}
-	at := placedTime(atS)
+	// Applicability at the placement itself (T-09); atS, the placement
+	// capped at the wall time, times the alerts.
+	at := placedTime(tr.CapturedAtS)
 	cands := m.zoneIx.AppendCandidates(m.zoneBuf[:0], tr.Pos)
 	m.zoneBuf = cands
 	for _, z := range cands {
@@ -200,8 +202,8 @@ func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Even
 	if ident == nil {
 		return
 	}
-	atS := tr.CapturedAtS
-	seenS := math.Min(atS, wallS)
+	atS := math.Min(tr.CapturedAtS, wallS)
+	seenS := atS
 	if ac.hasIdentity {
 		seenS = math.Max(ac.identitySeenS, seenS)
 	}

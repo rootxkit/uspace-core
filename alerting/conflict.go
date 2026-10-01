@@ -53,13 +53,15 @@ func (m *Monitor) notMismatch(key string) bool {
 // judgeFlying holds a flying sample with a valid position as the
 // aircraft's track and judges it.
 func (m *Monitor) judgeFlying(ac *aircraft, tr *Track, wallS float64, ev *Events) {
-	atS := tr.CapturedAtS
+	// Alert times are placements capped at the wall time: a placement
+	// ahead within the tolerance buys no hysteresis.
+	atS := math.Min(tr.CapturedAtS, wallS)
 	ac.state = stateOf(tr)
 	ac.transmitter, ac.unidentified = "", isFalse(tr.Identified)
 	if tr.Transmitter != nil {
 		ac.transmitter = *tr.Transmitter
 	}
-	seenS := math.Min(atS, wallS)
+	seenS := atS
 	if ac.hasTrack {
 		seenS = math.Max(ac.seenS, seenS)
 	}

@@ -38,7 +38,8 @@ func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) 
 	// never admitted. Admitted, it would pin the track in the future (every
 	// real sample after it older than held) and its placement would count
 	// as hysteresis time it never earned.
-	if tr.CapturedAtS-tr.RxAtS > m.cfg.AheadToleranceS || tr.RxAtS-wallS > m.cfg.AheadToleranceS {
+	tol := m.cfg.AheadToleranceS
+	if tr.CapturedAtS-tr.RxAtS > tol || tr.RxAtS-wallS > tol || tr.CapturedAtS-wallS > tol {
 		m.counters.Inc(CounterRejectedPlacedAhead)
 		return nil, false
 	}

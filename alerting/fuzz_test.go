@@ -135,7 +135,7 @@ func FuzzMonitor(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		m := fuzzMonitor()
 		r := &fuzzReader{b: data}
-		wallS := 0.0
+		wallS, maxWallS := 0.0, 0.0
 		var sw sources.State
 		sw.Epoch = "fuzz"
 		for len(r.b) > 0 {
@@ -143,6 +143,9 @@ func FuzzMonitor(f *testing.F) {
 			wallS += r.num(0, 6)
 			if r.byte() == 251 {
 				wallS = math.NaN()
+			}
+			if core.IsFinite(wallS) {
+				maxWallS = math.Max(maxWallS, wallS)
 			}
 			before := activeKeys(m)
 			var ev Events
@@ -172,7 +175,7 @@ func FuzzMonitor(f *testing.F) {
 					allowed[reason] = true
 				}
 			}
-			checkInvariants(t, m, op, tr, wallS, before, ev, allowed)
+			checkInvariants(t, m, op, tr, wallS, maxWallS, before, ev, allowed)
 			if math.IsNaN(wallS) {
 				wallS = 0
 			}
@@ -180,10 +183,20 @@ func FuzzMonitor(f *testing.F) {
 	})
 }
 
-func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64, before map[string]Alert, ev Events, allowed map[ClearReason]bool) {
+func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS, maxWallS float64, before map[string]Alert, ev Events, allowed map[ClearReason]bool) {
 	t.Helper()
 	if m.Tracked() > fuzzMaxAircraft {
 		t.Fatalf("%d aircraft held", m.Tracked())
+	}
+	for _, ac := range m.aircraft {
+		if ac.placedS > maxWallS+m.cfg.AheadToleranceS {
+			t.Fatalf("%s placed at %v, beyond wall %v + tolerance", ac.id, ac.placedS, maxWallS)
+		}
+	}
+	for k, a := range activeKeys(m) {
+		if a.LastTrueS > maxWallS || (a.ShownFalse && a.LastFalseS > maxWallS) {
+			t.Fatalf("%s timed beyond the wall %v: %+v", k, maxWallS, a)
+		}
 	}
 	evictable := false
 	perSource := map[sourceKey]int{}
@@ -252,11 +265,10 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64,
 			if !c.ShownFalse || !(c.LastFalseS-c.LastTrueS > m.cfg.ClearAfterS) {
 				t.Fatalf("resolved without evidence: %+v", c.Alert)
 			}
-			// The false evidence was placed no later than an admitted sample
-			// can be: received at most AheadToleranceS ahead of the wall and
-			// placed at most AheadToleranceS ahead of its receipt. A sample
-			// from a clock ahead cannot buy the hysteresis.
-			if c.LastFalseS > wallS+2*m.cfg.AheadToleranceS {
+			// Alert times are placements capped at the wall time: a sample
+			// from a clock ahead, even within the tolerance, cannot buy the
+			// hysteresis.
+			if c.LastFalseS > wallS {
 				t.Fatalf("resolved by a placement ahead of the wall (%v): %+v", wallS, c.Alert)
 			}
 			if op <= 1 && !tr.Pos.Valid() && c.Kind != KindIdentificationMismatch && slices.Contains(c.Aircraft, tr.ID) {
