@@ -57,7 +57,10 @@ Each entry names the work package and the vectors it affects.
   `SerialConflict`, `Unavailable` (no vector yet) and the spoofing guard
   `JudgeFleet`. `identification_status.json` 37/37 and `fleet_match.json`
   10/10, with the predecessor's reasons `fleet` and `relay_binding` read
-  as the spec's `matched` and `session_binding` (04 §3.2). [WP-7]
+  as the spec's `matched` and `session_binding` (04 §3.2). An
+  unrecognised registration status counts as suspended. `regnum` now
+  matches the head before the EU secret part ignoring its case, so
+  `geoabcd1234efgh-x9z` compares as `GEOABCD1234EFGH`. [WP-7]
 
 ## [0.1.0] - unreleased (G-M1)
 
