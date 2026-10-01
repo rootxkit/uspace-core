@@ -18,10 +18,12 @@ var (
 
 func pick[T any](s []T, i uint8) T { return s[int(i)%len(s)] }
 
-// oracleOutside reports whether some limit that needs a height is judged
-// with a known, finite height and excludes the aircraft beyond the
-// margin: the only reason a zone with a restriction may be clear.
-func oracleOutside(z *Zone, alt float64, widened bool, env Env, pol Policy) bool {
+// oracleLimits evaluates every limit that needs a height, independently
+// of JudgeVertical: outside is true when some limit is judged with a
+// known, finite height and excludes the aircraft beyond the margin;
+// allInside is true when every such limit is judged and includes it as
+// indicated (beyond <= 0). needed counts those limits.
+func oracleLimits(z *Zone, alt float64, widened bool, env Env, pol Policy) (outside, allInside bool, needed int) {
 	margin := 0.0
 	if widened {
 		margin = pol.PressureUncertaintyM
@@ -29,6 +31,7 @@ func oracleOutside(z *Zone, alt float64, widened bool, env Env, pol Policy) bool
 			margin = math.Inf(1)
 		}
 	}
+	allInside = true
 	for _, b := range []struct {
 		l     *Limit
 		lower bool
@@ -36,21 +39,25 @@ func oracleOutside(z *Zone, alt float64, widened bool, env Env, pol Policy) bool
 		if !needsHeight(b.l, b.lower) {
 			continue
 		}
+		needed++
 		var h float64
+		known := true
 		switch b.l.Ref {
 		case core.RefAMSL:
 			h = alt
 		case core.RefAGL:
-			if env.Ground != GroundKnown || !core.IsFinite(env.GroundM) {
-				continue
-			}
+			known = env.Ground == GroundKnown && core.IsFinite(env.GroundM)
 			h = alt - env.GroundM
 		case core.RefWGS84:
-			if env.UndulationM == nil || !core.IsFinite(*env.UndulationM) {
-				continue
+			known = env.UndulationM != nil && core.IsFinite(*env.UndulationM)
+			if known {
+				h = alt + *env.UndulationM
 			}
-			h = alt + *env.UndulationM
 		default:
+			known = false
+		}
+		if !known {
+			allInside = false
 			continue
 		}
 		beyond := h - b.l.ValueM
@@ -58,16 +65,31 @@ func oracleOutside(z *Zone, alt float64, widened bool, env Env, pol Policy) bool
 			beyond = b.l.ValueM - h
 		}
 		if beyond > margin {
-			return true
+			outside = true
+		}
+		if beyond > 0 {
+			allInside = false
 		}
 	}
-	return false
+	return outside, allInside, needed
 }
 
-// FuzzJudgeVertical: no panic on any float, and the fail-safe
-// invariants: exactly one outcome; a raise names the zone and carries a
-// core severity; a limit not judged is a warning; anything unknown is
-// never "clear"; a clear result has a judged limit that excludes.
+// validLimits reports whether every limit is finite with a known reference.
+func validLimits(z *Zone) bool {
+	for _, l := range []*Limit{z.Lower, z.Upper} {
+		if l != nil && (!core.IsFinite(l.ValueM) || !l.Ref.Valid()) {
+			return false
+		}
+	}
+	return true
+}
+
+// FuzzJudgeVertical: no panic on any float, and the invariants in both
+// directions against an independent oracle: exactly one outcome; a raise
+// names the zone and carries a core severity; a limit not judged is a
+// warning; inside every limit raises exactly the zone's severity (so a
+// downgrade is caught); a judged excluding limit is clear; anything
+// unknown is never clear.
 func FuzzJudgeVertical(f *testing.F) {
 	f.Add(uint8(0), 500.0, uint8(0), 700.0, uint8(0), 600.0, uint8(0), uint8(2), 500.0, 15.0, true, 250.0)
 	f.Add(uint8(0), 0.0, uint8(1), 120.0, uint8(1), 550.0, uint8(1), uint8(0), 0.0, 0.0, false, 250.0)
@@ -117,27 +139,53 @@ func FuzzJudgeVertical(f *testing.F) {
 				}
 			}
 		}
-		if _, raises := Severity(z.Type, pol); !raises {
+		sev, raises := Severity(z.Type, pol)
+		if !raises {
 			if r.Raise != nil || r.NotEvaluated {
 				t.Fatalf("a zone that raises nothing gave %+v", r)
 			}
 			return
 		}
+		alt, widened, altOK := altitude(ac)
+		valid := validLimits(z)
+		outside, allInside, needed := oracleLimits(z, alt, widened, env, pol)
+
+		// Presence: every needed height known and inside as indicated (or
+		// no limit needs one) raises exactly the zone's severity; flagged
+		// only for a widened altitude that was judged against a limit.
+		if valid && (needed == 0 || (altOK && allInside)) {
+			if r.Raise == nil || r.Raise.Severity != sev {
+				t.Fatalf("inside every limit: got %+v (raise %+v), want %s", r, r.Raise, sev)
+			}
+			d := r.Raise.Detail
+			if r.LimitNotJudged || d.LimitNotJudged != nil || d.NotJudged != nil {
+				t.Fatalf("inside every limit, flagged not judged: %+v", d)
+			}
+			if widened && needed > 0 {
+				if d.VerticalKnown == nil || *d.VerticalKnown || d.WithinBand == nil || !*d.WithinBand {
+					t.Fatalf("widened, inside as indicated: %+v", d)
+				}
+			} else if d.VerticalKnown != nil || d.WithinBand != nil {
+				t.Fatalf("exact altitude, flagged: %+v", d)
+			}
+		}
+		// Absence: a judged limit that excludes beyond the margin decides.
+		if valid && altOK && outside && (r.Raise != nil || r.NotEvaluated) {
+			t.Fatalf("a judged limit excludes, got %+v (raise %+v)", r, r.Raise)
+		}
+
 		if r.Raise != nil || r.NotEvaluated {
 			return
 		}
 		// Clear: everything it rested on was known and finite, and a
 		// judged limit excludes the aircraft.
-		alt, widened, ok := altitude(ac)
-		if !ok {
+		if !altOK {
 			t.Fatalf("clear without a usable altitude (%v, %q)", altM, ac.AltSource)
 		}
-		for _, l := range []*Limit{z.Lower, z.Upper} {
-			if l != nil && (!core.IsFinite(l.ValueM) || !l.Ref.Valid()) {
-				t.Fatalf("clear with an invalid limit %+v", *l)
-			}
+		if !valid {
+			t.Fatalf("clear with an invalid limit %+v %+v", z.Lower, z.Upper)
 		}
-		if !oracleOutside(z, alt, widened, env, pol) {
+		if !outside {
 			t.Fatalf("clear but no judged limit excludes: zone %+v %+v alt %v env %+v margin %v",
 				z.Lower, z.Upper, alt, env, marginM)
 		}
