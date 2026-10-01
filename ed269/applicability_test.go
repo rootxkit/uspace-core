@@ -174,3 +174,14 @@ func TestDescribe(t *testing.T) {
 		t.Errorf("show(nil) = %q", got)
 	}
 }
+
+// The zero Period never applies; its permanent twin always does.
+func TestZeroPeriodNeverApplies(t *testing.T) {
+	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	if Applies([]Period{{}}, at) || (Period{Schedule: []DailyPeriod{}}).Contains(at) {
+		t.Error("a period with nothing that says when it applies applies")
+	}
+	if !Applies([]Period{{Permanent: true}}, at) {
+		t.Error("a permanent period does not apply")
+	}
+}

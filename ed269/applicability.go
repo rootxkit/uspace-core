@@ -28,6 +28,13 @@ type DailyPeriod struct {
 // Period is one `applicability` entry. A permanent period applies at all
 // times. Otherwise Start and End (both included) bound it and Schedule,
 // when given, narrows it to daily windows.
+//
+// The zero value never applies: a period that is not permanent and has
+// no Start, no End and no Schedule says nothing about when it applies.
+// Parse refuses one ("permanent NO needs a startDateTime, an endDateTime
+// or a schedule"), and Contains guards against one built in code rather
+// than reading it as "always". Set Permanent for a period that always
+// applies.
 type Period struct {
 	Permanent bool
 	Start     *time.Time
@@ -74,6 +81,9 @@ func (d DailyPeriod) Contains(at time.Time) bool {
 func (p Period) Contains(at time.Time) bool {
 	if p.Permanent {
 		return true
+	}
+	if p.Start == nil && p.End == nil && len(p.Schedule) == 0 {
+		return false
 	}
 	if p.Start != nil && at.Before(*p.Start) {
 		return false
