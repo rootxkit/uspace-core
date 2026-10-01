@@ -33,6 +33,13 @@ const DefaultNonceMemory = 100_000
 // refused as malformed.
 const MaxNonceBytes = 256
 
+// DefaultMaxDatagramBytes is the default bound on a receiver datagram
+// (WithMaxDatagramBytes). The report is parsed as JSON before its HMAC can
+// be checked (the receiver id selects the key), so the size is bounded
+// first: an unauthenticated sender cannot make the ingest parse more. A
+// signed report with an ODID message pack is well under 1 KiB.
+const DefaultMaxDatagramBytes = 4096
+
 // Receiver counter names (E-09).
 const (
 	CounterAccepted                = "accepted"
@@ -80,6 +87,7 @@ type ReceiverOption func(*receiverOptions)
 
 type receiverOptions struct {
 	nonceMemory int
+	maxDatagram int
 	now         func() time.Time
 }
 
@@ -90,6 +98,13 @@ type receiverOptions struct {
 // datagram rate times twice the window.
 func WithNonceMemory(maxNonces int) ReceiverOption {
 	return func(o *receiverOptions) { o.nonceMemory = maxNonces }
+}
+
+// WithMaxDatagramBytes bounds the datagram size (default
+// DefaultMaxDatagramBytes). A longer datagram is refused as malformed
+// before it is parsed.
+func WithMaxDatagramBytes(maxBytes int) ReceiverOption {
+	return func(o *receiverOptions) { o.maxDatagram = maxBytes }
 }
 
 // WithNow sets the clock Verify uses when it is called with a zero time
@@ -133,7 +148,7 @@ type ReceiverVerifier struct {
 // MinReceiverKeyBytes, a non-positive maxSkew or nonce bound (B-14: a
 // configuration error stops start-up). The keys are copied.
 func NewReceiverVerifier(keys map[string][]byte, maxSkew time.Duration, opts ...ReceiverOption) (*ReceiverVerifier, error) {
-	o := receiverOptions{nonceMemory: DefaultNonceMemory, now: time.Now}
+	o := receiverOptions{nonceMemory: DefaultNonceMemory, maxDatagram: DefaultMaxDatagramBytes, now: time.Now}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -145,6 +160,9 @@ func NewReceiverVerifier(keys map[string][]byte, maxSkew time.Duration, opts ...
 	}
 	if o.nonceMemory < 1 {
 		return nil, core.Fieldf("nonce_memory", "must be at least 1, got %d", o.nonceMemory)
+	}
+	if o.maxDatagram < 1 {
+		return nil, core.Fieldf("max_datagram_bytes", "must be at least 1, got %d", o.maxDatagram)
 	}
 	if o.now == nil {
 		return nil, core.Fieldf("now", "the clock is nil")
@@ -215,6 +233,9 @@ func refuse(counter, format string, args ...any) error {
 }
 
 func (v *ReceiverVerifier) verify(datagram []byte, now time.Time) (Report, error) {
+	if len(datagram) > v.opts.maxDatagram {
+		return Report{}, refuse(CounterRejectedMalformed, "datagram longer than %d bytes", v.opts.maxDatagram)
+	}
 	i := bytes.LastIndex(datagram, []byte(SignatureMarker))
 	if i < 0 {
 		return Report{}, refuse(CounterRejectedUnsigned, "not signed")
@@ -243,7 +264,8 @@ func (v *ReceiverVerifier) verify(datagram []byte, now time.Time) (Report, error
 	want := hmac.New(sha256.New, key)
 	want.Write(report)
 	got := make([]byte, sha256.Size)
-	if len(sig) != hex.EncodedLen(sha256.Size) {
+	// Exactly 64 lower-case hex characters, as receivers send them.
+	if len(sig) != hex.EncodedLen(sha256.Size) || !isLowerHex(sig) {
 		return Report{}, refuse(CounterRejectedBadSignature, "bad signature from %s", id)
 	}
 	if _, err := hex.Decode(got, sig); err != nil {
@@ -346,6 +368,15 @@ func (m *nonceMemory) popOldest() {
 		m.order = m.order[:n]
 		m.head = 0
 	}
+}
+
+func isLowerHex(b []byte) bool {
+	for _, c := range b {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func jsonString(raw json.RawMessage) (string, bool) {

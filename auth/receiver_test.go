@@ -124,13 +124,42 @@ func TestReceiverReportFields(t *testing.T) {
 	}
 }
 
-func TestReceiverTrailingWhitespaceAndUpperHex(t *testing.T) {
-	v := newRX(t)
+// A trailing line end after the MAC is tolerated; the MAC itself is
+// lower-case hex only, as the vector writes it.
+func TestReceiverMACCaseAndTrailingLineEnd(t *testing.T) {
 	rep := rxReport("rx-1", 1_790_000_000_000, `"n-1"`)
-	d := Datagram(rep, strings.ToUpper(SignReport(rxKey, rep))+"\r\n")
-	if _, err := v.Verify(d, rxNow); err != nil {
-		t.Fatalf("refused: %v", err)
+	sig := SignReport(rxKey, rep)
+	if _, err := newRX(t).Verify(Datagram(rep, sig+"\r\n"), rxNow); err != nil {
+		t.Fatalf("lower-case MAC with a line end refused: %v", err)
 	}
+	_, err := newRX(t).Verify(Datagram(rep, strings.ToUpper(sig)), rxNow)
+	wantRefused(t, err, CounterRejectedBadSignature, "bad signature from rx-1")
+}
+
+// E-10: the datagram bound, at it (accepted) and one byte past it.
+func TestReceiverDatagramBound(t *testing.T) {
+	pad := func(n int) []byte {
+		base := rxReport("rx-1", 1_790_000_000_000, `"n-1"`)
+		sigLen := len(SignatureMarker) + 64
+		rep := append([]byte(nil), base[:len(base)-1]...)
+		for len(rep)+1+sigLen < n {
+			rep = append(rep, ' ')
+		}
+		return rxSigned(rxKey, append(rep, '}'))
+	}
+	const bound = 512
+	at := pad(bound)
+	if len(at) != bound {
+		t.Fatalf("built %d bytes", len(at))
+	}
+	if _, err := newRX(t, WithMaxDatagramBytes(bound)).Verify(at, rxNow); err != nil {
+		t.Fatalf("a datagram at the bound was refused: %v", err)
+	}
+	v := newRX(t, WithMaxDatagramBytes(bound))
+	_, err := v.Verify(pad(bound+1), rxNow)
+	wantRefused(t, err, CounterRejectedMalformed, "datagram longer than 512 bytes")
+	_, err = newRX(t).Verify(pad(DefaultMaxDatagramBytes+1), rxNow)
+	wantRefused(t, err, CounterRejectedMalformed, "datagram longer than 4096 bytes")
 }
 
 func TestReceiverZeroNowUsesClock(t *testing.T) {
@@ -158,6 +187,7 @@ func TestNewReceiverVerifierRefusesBadConfig(t *testing.T) {
 		{"zero skew", map[string][]byte{"rx-1": rxKey}, 0, nil, "max_skew"},
 		{"zero nonce memory", map[string][]byte{"rx-1": rxKey}, time.Second, []ReceiverOption{WithNonceMemory(0)}, "nonce_memory"},
 		{"nil clock", map[string][]byte{"rx-1": rxKey}, time.Second, []ReceiverOption{WithNow(nil)}, "now"},
+		{"zero datagram bound", map[string][]byte{"rx-1": rxKey}, time.Second, []ReceiverOption{WithMaxDatagramBytes(0)}, "max_datagram_bytes"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
