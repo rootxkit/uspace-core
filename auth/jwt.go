@@ -93,7 +93,10 @@ type Config struct {
 	// than the TTL). Requests keep being served from the cache meanwhile.
 	JWKSRefreshAhead time.Duration
 	// HTTPClient fetches JWKS; nil uses a client with DefaultHTTPTimeout
-	// that refuses a redirect to a non-HTTPS URL.
+	// that refuses a redirect to a non-HTTPS URL. A client supplied here
+	// is used as is: its own CheckRedirect (Go's default follows any
+	// redirect, plain HTTP included) replaces that check, so a caller
+	// that supplies one must refuse non-HTTPS redirects itself.
 	HTTPClient *http.Client
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time

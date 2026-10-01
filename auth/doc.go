@@ -59,6 +59,15 @@
 // nonces_evicted). An ingest without receiver keys cannot authenticate
 // anyone and must bind to loopback only.
 //
+// The report is parsed before the HMAC is checked, because its
+// receiver_id selects the key; a datagram longer than
+// WithMaxDatagramBytes (default 4096) is therefore refused before it is
+// parsed, and the UDP reader should not hand over more than that either.
+// An unknown receiver is refused before any HMAC is computed, so the
+// response time tells a sender whether a receiver id is configured. That
+// timing oracle is accepted: receiver ids are not secrets, and knowing
+// one does not help forge its HMAC.
+//
 // Vectors: vectors/testdata/rid_receiver_auth.json (14 cases) and
 // vectors/testdata/jwt_verify.json (written here at G-M3, proposed to
 // the lab). Owned by WP-11.
