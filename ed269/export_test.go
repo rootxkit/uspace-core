@@ -49,7 +49,15 @@ func byValue(v any) any {
 // vectors.
 func TestAcceptedVariants(t *testing.T) {
 	cases := map[string]map[string]any{
-		"type CUSTOMIZED":                   {"type": "CUSTOMIZED"},
+		"type CUSTOMIZED": {"type": "CUSTOMIZED"},
+		"upper limit above 0 from the surface": {"geometry": []any{map[string]any{
+			"uomDimensions": "M", "lowerVerticalReference": "AGL", "upperLimit": 0.5,
+			"upperVerticalReference": "AGL", "horizontalProjection": map[string]any{"type": "Circle", "center": []any{44.8, 41.7}, "radius": 100},
+		}}},
+		"lower limit 0": {"geometry": []any{map[string]any{
+			"uomDimensions": "M", "lowerLimit": raw("-0"), "lowerVerticalReference": "AGL",
+			"upperVerticalReference": "AGL", "horizontalProjection": map[string]any{"type": "Circle", "center": []any{44.8, 41.7}, "radius": 100},
+		}}},
 		"reason absent":                     {"reason": nil},
 		"reason empty":                      {"reason": []any{}},
 		"conditions as a string":            {"restrictionConditions": "Notify first"},

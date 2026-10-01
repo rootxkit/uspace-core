@@ -414,6 +414,10 @@ func (p *parser) volume(v *value, where string) (Volume, bool) {
 		p.ps.add(join(where, "upperLimit"), "is not above lowerLimit")
 		return Volume{}, false
 	}
+	if lower == nil && upper != nil && *upper == 0 {
+		p.ps.add(join(where, "upperLimit"), "is 0 with no lowerLimit; a volume from the surface to 0 is empty")
+		return Volume{}, false
+	}
 	return Volume{
 		Uom:        Uom(uom),
 		LowerLimit: lower,
@@ -425,7 +429,7 @@ func (p *parser) volume(v *value, where string) (Volume, bool) {
 }
 
 // limit reads an optional vertical limit: a JSON number, never a string
-// (LESSONS Z-01: "0" is refused, not converted).
+// (LESSONS Z-01: "0" is refused, not converted), and never negative.
 func (p *parser) limit(v *value, where string) *float64 {
 	if !present(v) {
 		return nil
@@ -437,6 +441,10 @@ func (p *parser) limit(v *value, where string) *float64 {
 	f, ok := v.float()
 	if !ok {
 		p.ps.add(where, "must be a number within the range of a double")
+		return nil
+	}
+	if f < 0 {
+		p.ps.add(where, "must not be negative")
 		return nil
 	}
 	return &f
