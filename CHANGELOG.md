@@ -21,6 +21,13 @@ Each entry names the work package and the vectors it affects.
   local tangent plane with antimeridian wrapping, circle and polygon
   containment with holes, bounding boxes and ring validation; passes
   `geodesy.json` (17 cases). [WP-1]
+- `serial` (CTA-2063-A and the class rule), `regnum` (configurable
+  registration format, public part and compare key) and `sources`
+  (source switches, follower by version and epoch).
+  `serials_and_registration.json` 33/33 and `source_control.json` 8/8,
+  with `public-part-GEO-OP-ABC` a known deviation: the EU secret part is
+  stripped only after a valid public number, so `GEO-OP-ABC` no longer
+  compares as `GEO-OP` (LESSONS G-04). [WP-4]
 - `internal/pgm` (bounded binary PGM P5 parser), `geoid` (GeographicLib
   grids, `UndulationM`, `AMSLFromHAE`/`HAEFromAMSL`) and `terrain`
   (`CellName`, DEM tiles, `ParseIndex`, a bounded LRU `Store` that counts
