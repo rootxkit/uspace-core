@@ -21,6 +21,12 @@ Each entry names the work package and the vectors it affects.
   local tangent plane with antimeridian wrapping, circle and polygon
   containment with holes, bounding boxes and ring validation; passes
   `geodesy.json` (17 cases). [WP-1]
+- `odid` codec: `Decode`, `DecodeMessage`, `Encode`, `EncodePack`,
+  `TypeOf` and the wire sentinels, from the opendroneid-core-c layout;
+  passes `odid_decode.json` (187/187, every accepted frame re-encoded byte
+  for byte); `FuzzDecode`, `FuzzEncodeLocation` and the three codec
+  benchmarks. Adds `odid.Unknown` for undefined types kept with
+  `KeepSkipped`. [WP-3]
 - `serial` (CTA-2063-A and the class rule), `regnum` (configurable
   registration format, public part and compare key) and `sources`
   (source switches, follower by version and epoch).
