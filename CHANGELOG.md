@@ -35,6 +35,12 @@ Each entry names the work package and the vectors it affects.
   once per `RetryAfter`). Vectors: `terrain_geoid.json`, 18 synthetic
   cases pass, 30 GeographicLib cases skip without `USPACE_GEOID_DIR`.
   [WP-2]
+- `identify`: registry `Snapshot` with exact-then-unambiguous-fold serial
+  lookup, `ResolveBroadcast`, `ResolveRemoteID`, `ResolveBound`,
+  `SerialConflict`, `Unavailable` (no vector yet) and the spoofing guard
+  `JudgeFleet`. `identification_status.json` 37/37 and `fleet_match.json`
+  10/10, with the predecessor's reasons `fleet` and `relay_binding` read
+  as the spec's `matched` and `session_binding` (04 §3.2). [WP-7]
 
 ## [0.1.0] - unreleased (G-M1)
 
