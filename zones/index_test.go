@@ -110,13 +110,16 @@ func TestIndexSkipsZonesWithoutABox(t *testing.T) {
 // E-10: a zone past MaxCellsPerZone goes to the large list, and is still
 // found; one just under it goes into the grid.
 func TestIndexLargeZoneBound(t *testing.T) {
-	// 100 x 100 cells exactly is the bound; 0.1 deg cells.
-	under := polyZone("under", ll(5.05+0.0, 5.05), 4.94) // 99 x 99 cells
-	over := polyZone("over", ll(-30, -60), 6)            // 121 x 121 cells
+	lim := DefaultIndexLimits()
+	if lim.MaxCellsPerZone != 1_000 || lim.MaxEntries != 250_000 {
+		t.Fatalf("DefaultIndexLimits %+v", lim)
+	}
+	under := polyZone("under", ll(5.15, 5.15), 1.54) // 31 x 31 = 961 cells
+	over := polyZone("over", ll(-30, -60), 1.65)     // 34 x 34 cells
 	globe := &Zone{Identifier: "globe", BBox: geodesy.BBox{MinLat: -90, MinLon: -180, MaxLat: 90, MaxLon: 180}}
 	ix := NewIndex([]*Zone{under, over, globe})
-	if !slices.Equal(ix.large, []int32{1, 2}) {
-		t.Fatalf("large list %v, want [1 2]", ix.large)
+	if !slices.Equal(ix.large, []int32{1, 2}) || ix.Spilled() != 2 || ix.Entries() != 961 {
+		t.Fatalf("large %v spilled %d entries %d, want [1 2], 2, 961", ix.large, ix.Spilled(), ix.Entries())
 	}
 	if got := ids(ix.Candidates(ll(-30, -60))); !slices.Equal(got, []string{"over", "globe"}) {
 		t.Errorf("over: got %v", got)
@@ -126,6 +129,29 @@ func TestIndexLargeZoneBound(t *testing.T) {
 	}
 	if got := ids(ix.Candidates(ll(-89, 170))); !slices.Equal(got, []string{"globe"}) {
 		t.Errorf("globe: got %v", got)
+	}
+}
+
+// E-10: past the total MaxEntries every further zone spills to the list,
+// and every zone is still found.
+func TestIndexTotalEntriesBound(t *testing.T) {
+	var zs []*Zone
+	for i := range 5 {
+		// 0.45 deg boxes away from cell edges: 5 x 5 = 25 cells each.
+		zs = append(zs, polyZone(string(rune('a'+i)), ll(10.25, 10.25+float64(i)), 0.2))
+	}
+	ix := NewIndexLimits(zs, IndexLimits{MaxEntries: 60})
+	if ix.Entries() != 50 || ix.Spilled() != 3 || !slices.Equal(ix.large, []int32{2, 3, 4}) {
+		t.Fatalf("entries %d spilled %d large %v, want 50, 3, [2 3 4]", ix.Entries(), ix.Spilled(), ix.large)
+	}
+	for i, z := range zs {
+		if got := ix.Candidates(ll(10.25, 10.25+float64(i))); !slices.Equal(got, []*Zone{z}) {
+			t.Errorf("zone %s: got %v", z.Identifier, ids(got))
+		}
+	}
+	// The presence pair: with the default ceiling nothing spills.
+	if d := NewIndexLimits(zs, IndexLimits{}); d.Spilled() != 0 || d.Entries() != 125 {
+		t.Fatalf("defaults: spilled %d entries %d", d.Spilled(), d.Entries())
 	}
 }
 

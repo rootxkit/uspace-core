@@ -12,8 +12,8 @@
 // step is the caller's call, so that a step it cannot take is visible:
 //
 //  1. Index.Candidates: the zones whose bounding box contains the
-//     position (a sparse 0.1 degree grid; zones over MaxCellsPerZone
-//     cells are checked by box on every lookup). Every containing zone is
+//     position (a sparse 0.1 degree grid; zones past IndexLimits, per
+//     zone or in total, are checked by box on every lookup). Every containing zone is
 //     a candidate. An invalid position has none (C-09).
 //  2. Zone.ContainsHorizontally: the box (Z-06), then ray casting on the
 //     polygon or the geodesic distance from the circle's centre (D-09).

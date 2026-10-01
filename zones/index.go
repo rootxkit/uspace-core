@@ -14,16 +14,30 @@ const (
 	lonCells    = 360 * cellsPerDeg
 )
 
-// MaxCellsPerZone bounds the grid cells one zone is registered in. A zone
-// whose bounding box covers more (about 100 x 100 km at the equator) is
-// kept on a short list that every lookup checks by its bounding box
-// instead, so a country-sized or whole-globe zone costs one comparison
-// per lookup rather than millions of map entries (E-10).
-const MaxCellsPerZone = 10_000
+// IndexLimits bounds the memory of an Index (E-10). A zone that would
+// exceed either bound is not put in the grid but on a list that every
+// lookup checks by bounding box: it is still always found, it only costs
+// one box comparison per lookup instead of a cell lookup.
+type IndexLimits struct {
+	// MaxCellsPerZone is the most 0.1 degree cells one zone is registered
+	// in. 1,000 cells is a box of about 3 x 3 degrees, some 350 km a side
+	// at the equator; a country-sized or whole-globe zone goes to the list.
+	MaxCellsPerZone int
+	// MaxEntries is the most (cell, zone) entries in the whole grid. An
+	// entry costs about 50 bytes when each cell holds one zone (measured
+	// on go1.27: 250,000 entries in 207,000 cells took 12 MB of heap), so
+	// the default keeps the grid near 15 MB whatever the zone set.
+	MaxEntries int
+}
+
+// DefaultIndexLimits are the limits NewIndex uses.
+func DefaultIndexLimits() IndexLimits {
+	return IndexLimits{MaxCellsPerZone: 1_000, MaxEntries: 250_000}
+}
 
 // Index finds the zones whose bounding box contains a position: a sparse
 // grid of 0.1 degree cells over the bounding boxes, plus a list of the
-// zones too large for the grid. It is the prefilter before
+// zones too large for the grid (IndexLimits). It is the prefilter before
 // ContainsHorizontally (Z-06): every zone that contains a point is among
 // its candidates, so an index miss is never a missed zone. Boxes that
 // cross the antimeridian are registered on both sides.
@@ -31,15 +45,29 @@ const MaxCellsPerZone = 10_000
 // An Index is immutable once built and safe for concurrent use. Rebuild
 // it when the zone set changes.
 type Index struct {
-	zones []*Zone
-	cells map[int32][]int32
-	large []int32
+	zones   []*Zone
+	cells   map[int32][]int32
+	large   []int32
+	entries int
 }
 
-// NewIndex builds an index over zs. Nil zones and zones with an empty or
-// non-finite bounding box are skipped (such a zone contains nothing).
-// The slice is copied; the zones are not.
+// NewIndex builds an index over zs with DefaultIndexLimits.
 func NewIndex(zs []*Zone) *Index {
+	return NewIndexLimits(zs, DefaultIndexLimits())
+}
+
+// NewIndexLimits builds an index over zs within lim; a zero or negative
+// field takes its DefaultIndexLimits value. Nil zones and zones with an
+// empty or non-finite bounding box are skipped (such a zone contains
+// nothing). The slice is copied; the zones are not.
+func NewIndexLimits(zs []*Zone, lim IndexLimits) *Index {
+	d := DefaultIndexLimits()
+	if lim.MaxCellsPerZone <= 0 {
+		lim.MaxCellsPerZone = d.MaxCellsPerZone
+	}
+	if lim.MaxEntries <= 0 {
+		lim.MaxEntries = d.MaxEntries
+	}
 	ix := &Index{zones: make([]*Zone, 0, len(zs)), cells: make(map[int32][]int32)}
 	for _, z := range zs {
 		if z == nil {
@@ -58,10 +86,12 @@ func NewIndex(zs []*Zone) *Index {
 		for _, r := range lonRanges {
 			n += r[1] - r[0] + 1
 		}
-		if n*(lat1-lat0+1) > MaxCellsPerZone {
+		n *= lat1 - lat0 + 1
+		if n > lim.MaxCellsPerZone || ix.entries+n > lim.MaxEntries {
 			ix.large = append(ix.large, id)
 			continue
 		}
+		ix.entries += n
 		for la := lat0; la <= lat1; la++ {
 			for _, r := range lonRanges {
 				for lo := r[0]; lo <= r[1]; lo++ {
@@ -73,6 +103,14 @@ func NewIndex(zs []*Zone) *Index {
 	}
 	return ix
 }
+
+// Spilled is the number of zones kept on the list instead of the grid,
+// for a status line: many of them means the limits are too low for the
+// zone set and every lookup checks them all.
+func (i *Index) Spilled() int { return len(i.large) }
+
+// Entries is the number of (cell, zone) entries in the grid.
+func (i *Index) Entries() int { return i.entries }
 
 // Len is the number of zones indexed.
 func (i *Index) Len() int { return len(i.zones) }
