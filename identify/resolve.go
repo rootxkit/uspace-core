@@ -83,9 +83,9 @@ func ResolveBroadcast(reg Lookup, sn, operatorReg *string) core.Identification {
 		id.Mismatch = true
 		id.RegisteredOperatorReg = nonEmpty(regnum.PublicPart(owner.RegistrationNumber))
 	}
-	switch reason, ok := inactiveReason(uas, owner); {
+	switch status, reason, ok := notInGoodStanding(uas, owner); {
 	case ok:
-		id.Status, id.Reason = core.IdentSuspended, reason
+		id.Status, id.Reason = status, reason
 	case uas.OperatorID == nil:
 		// Our own fleet: registered on its serial alone (G-01).
 		id.Status, id.Reason = core.IdentRegistered, core.ReasonMatched
@@ -168,8 +168,8 @@ func ResolveBound(reg Lookup, droneID string) core.Identification {
 			id.OperatorReg = nonEmpty(regnum.PublicPart(o.RegistrationNumber))
 		}
 	}
-	if reason, inact := inactiveReason(uas, owner); inact {
-		id.Status, id.Reason = core.IdentSuspended, reason
+	if status, reason, bad := notInGoodStanding(uas, owner); bad {
+		id.Status, id.Reason = status, reason
 		return id
 	}
 	id.Status, id.Reason = core.IdentRegistered, core.ReasonSessionBinding
@@ -219,23 +219,33 @@ func noSerial(operatorReg *string) core.Identification {
 	}
 }
 
-// inactiveReason is the suspension reason, if any: the UAS's own status
-// first (revoked, then suspended), then its owner's.
-func inactiveReason(uas UASFacts, owner *OperatorFacts) (core.IdentReason, bool) {
-	switch suspended, revoked := inactive(uas.RegistrationStatus); {
-	case revoked:
-		return core.ReasonUASRevoked, true
-	case suspended:
-		return core.ReasonUASSuspended, true
+// notInGoodStanding is the status and reason when the UAS or its owner is
+// not in good standing: the UAS's own status first, then its owner's. A
+// revoked or suspended registration is suspended; an unrecognised one is
+// unknown_operator, so that it raises an identification incident where
+// an unknown aircraft would (G-03), with not_in_registry for the UAS and
+// owner_unknown for the owner.
+func notInGoodStanding(uas UASFacts, owner *OperatorFacts) (core.IdentStatus, core.IdentReason, bool) {
+	switch classify(uas.RegistrationStatus) {
+	case standingActive:
+	case standingRevoked:
+		return core.IdentSuspended, core.ReasonUASRevoked, true
+	case standingSuspended:
+		return core.IdentSuspended, core.ReasonUASSuspended, true
+	case standingUnrecognised:
+		return core.IdentUnknownOperator, core.ReasonNotInRegistry, true
 	}
 	if owner == nil {
-		return "", false
+		return "", "", false
 	}
-	switch suspended, revoked := inactive(owner.Status); {
-	case revoked:
-		return core.ReasonOperatorRevoked, true
-	case suspended:
-		return core.ReasonOperatorSuspended, true
+	switch classify(owner.Status) {
+	case standingActive:
+	case standingRevoked:
+		return core.IdentSuspended, core.ReasonOperatorRevoked, true
+	case standingSuspended:
+		return core.IdentSuspended, core.ReasonOperatorSuspended, true
+	case standingUnrecognised:
+		return core.IdentUnknownOperator, core.ReasonOwnerUnknown, true
 	}
-	return "", false
+	return "", "", false
 }

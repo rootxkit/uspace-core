@@ -144,14 +144,15 @@ func TestResolveBroadcastTable(t *testing.T) {
 			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorAbsent, ptr("SN-A"), nil, nil, false, ptr("d-active"), bc}, true},
 		{"operator-mismatch", ptr("SN-A"), ptr("GEOSUSP00000001"),
 			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorMismatch, ptr("SN-A"), ptr("GEOSUSP00000001"), ptr(regActive), true, ptr("d-active"), bc}, true},
-		// An unrecognised status fails safe: it is a suspension, never
-		// active. Its twin: "active" in any case and spacing registers.
-		{"unrecognised-uas-status-is-suspended", ptr("SN-PENDING"), ptr(regActive),
-			wantIdent{core.IdentSuspended, core.ReasonUASSuspended, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), bc}, false},
+		// An unrecognised status fails safe: never active, and in a status
+		// that raises an identification incident (G-03), unlike suspended.
+		// Its twin: "active" in any case and spacing registers.
+		{"unrecognised-uas-status-raises", ptr("SN-PENDING"), ptr(regActive),
+			wantIdent{core.IdentUnknownOperator, core.ReasonNotInRegistry, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), bc}, true},
 		{"active-status-case-and-space-registers", ptr("SN-ACTIVE-CASE"), ptr(regActive),
 			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-ACTIVE-CASE"), ptr(regActive), nil, false, ptr("d-active-case"), bc}, false},
-		{"unrecognised-operator-status-is-suspended", ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"),
-			wantIdent{core.IdentSuspended, core.ReasonOperatorSuspended, ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"), nil, false, ptr("d-op-other"), bc}, false},
+		{"unrecognised-operator-status-raises", ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"),
+			wantIdent{core.IdentUnknownOperator, core.ReasonOwnerUnknown, ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"), nil, false, ptr("d-op-other"), bc}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -254,8 +255,10 @@ func TestResolveBound(t *testing.T) {
 			wantIdent{core.IdentSuspended, core.ReasonOperatorSuspended, ptr("SN-OS"), ptr("GEOSUSP00000001"), nil, false, ptr("d-op-susp"), au}},
 		{"operator-revoked", reg, "d-op-rev",
 			wantIdent{core.IdentSuspended, core.ReasonOperatorRevoked, ptr("SN-OR"), ptr("GEOREVK00000001"), nil, false, ptr("d-op-rev"), au}},
-		{"unrecognised-status-is-suspended", reg, "d-other-status",
-			wantIdent{core.IdentSuspended, core.ReasonUASSuspended, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), au}},
+		{"unrecognised-status-raises", reg, "d-other-status",
+			wantIdent{core.IdentUnknownOperator, core.ReasonNotInRegistry, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), au}},
+		{"unrecognised-operator-status-raises", reg, "d-op-other",
+			wantIdent{core.IdentUnknownOperator, core.ReasonOwnerUnknown, ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"), nil, false, ptr("d-op-other"), au}},
 		{"empty-drone-id-names-nothing", reg, "  ",
 			wantIdent{core.IdentUnknownOperator, core.ReasonNotInRegistry, nil, nil, nil, false, nil, au}},
 		// The binding proves identity, not a valid registration.

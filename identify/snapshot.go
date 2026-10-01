@@ -9,9 +9,12 @@ import (
 
 // Registration statuses as the registry projection writes them. An empty
 // status reads as active, as the predecessor read a NULL column. Any other
-// value is not recognised and fails safe: it is handled as suspended
-// (uas_suspended or operator_suspended), never as active, because core
-// has no reason code for an unrecognised status.
+// value is not recognised and fails safe: never active, and never
+// suspended either, because suspended raises no identification incident
+// (G-03). An unrecognised UAS status is unknown_operator / not_in_registry
+// (the row exists, but nothing says it is a valid registration); an
+// unrecognised owner status is unknown_operator / owner_unknown (the
+// owner exists, but nothing says it is in good standing).
 const (
 	StatusActive    = "active"
 	StatusSuspended = "suspended"
@@ -203,16 +206,26 @@ func (s *Snapshot) Operator(operatorID string) (OperatorFacts, bool) {
 	return o, ok
 }
 
-// inactive classifies a registration status: revoked, suspended, or
-// neither. Case and surrounding space are ignored. Only active and the
-// empty status are neither; an unrecognised status is suspended (fail
-// safe).
-func inactive(status string) (suspended, revoked bool) {
+// standing is what a registration status says.
+type standing int
+
+const (
+	standingActive standing = iota
+	standingSuspended
+	standingRevoked
+	standingUnrecognised
+)
+
+// classify reads a registration status, ignoring case and surrounding
+// space. Only active and the empty status are active.
+func classify(status string) standing {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case StatusActive, "":
-		return false, false
+		return standingActive
+	case StatusSuspended:
+		return standingSuspended
 	case StatusRevoked:
-		return false, true
+		return standingRevoked
 	}
-	return true, false
+	return standingUnrecognised
 }

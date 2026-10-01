@@ -39,7 +39,9 @@
 //   - the UAS revoked or suspended, then its owner revoked or suspended:
 //     suspended with the matching reason; suspension outranks a mismatch,
 //     which is still flagged. A status other than active (or empty, read
-//     as active) fails safe and counts as suspended;
+//     as active), suspended or revoked fails safe as unknown_operator, so
+//     that it raises an identification incident (G-03): not_in_registry
+//     for the UAS, owner_unknown for its owner;
 //   - our own fleet (no UAS operator): registered / matched on the serial
 //     alone, the operator number not compared;
 //   - an owner the projection does not hold: unknown_operator /
