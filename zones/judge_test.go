@@ -312,15 +312,29 @@ func TestAltitudeSources(t *testing.T) {
 	}
 }
 
-// The old monitor raises a warning in the widened band even where the
-// zone itself raises info (a CONDITIONAL zone under an info policy);
-// this pins that behaviour until the owner decides otherwise.
-func TestConditionalInfoWidenedIsWarning(t *testing.T) {
+// Being possibly inside (the widened band) never raises more than being
+// definitely inside: an info zone stays info, and anything above warning
+// is capped at warning. The old monitor raised warning for the info
+// zone; no vector covers it (owner decision on PR #12).
+func TestWidenedBandIsCappedAtTheZoneSeverity(t *testing.T) {
 	pol := DefaultPolicy()
 	pol.ConditionalSeverity = core.SeverityInfo
-	z := zoneOf(core.ZoneConditional, nil, limit(700, core.RefAMSL))
-	raised(t, "inside", JudgeVertical(z, pressure(600), noTerrain, pol), core.SeverityInfo)
-	raised(t, "widened", JudgeVertical(z, pressure(800), noTerrain, pol), core.SeverityWarning)
+	info := zoneOf(core.ZoneConditional, nil, limit(700, core.RefAMSL))
+	raised(t, "info zone, inside", JudgeVertical(info, pressure(600), noTerrain, pol), core.SeverityInfo)
+	d := raised(t, "info zone, widened", JudgeVertical(info, pressure(800), noTerrain, pol), core.SeverityInfo).Detail
+	if d.WithinBand == nil || *d.WithinBand {
+		t.Errorf("info zone, widened: within_band %+v", d.WithinBand)
+	}
+	// The pair: a critical zone in the widened band is still a warning.
+	crit := zoneOf(core.ZoneProhibited, nil, limit(700, core.RefAMSL))
+	raised(t, "critical zone, inside", JudgeVertical(crit, pressure(600), noTerrain, pol), core.SeverityCritical)
+	raised(t, "critical zone, widened", JudgeVertical(crit, pressure(800), noTerrain, pol), core.SeverityWarning)
+	if got := atMostWarning(core.SeverityCritical); got != core.SeverityWarning {
+		t.Errorf("atMostWarning(critical) = %s", got)
+	}
+	if got := atMostWarning(core.SeverityWarning); got != core.SeverityWarning {
+		t.Errorf("atMostWarning(warning) = %s", got)
+	}
 }
 
 func TestInvalidZone(t *testing.T) {

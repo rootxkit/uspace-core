@@ -258,6 +258,16 @@ func heightIn(ref core.VerticalRef, altAMSLM float64, env Env) (float64, Reason)
 	return 0, ReasonInvalidZone
 }
 
+// atMostWarning caps a severity at warning: being possibly inside a zone
+// (the widened band, an unjudged limit) never raises more than being
+// definitely inside it, and never more than a warning.
+func atMostWarning(sev core.Severity) core.Severity {
+	if sev == core.SeverityInfo {
+		return sev
+	}
+	return core.SeverityWarning
+}
+
 // warnsUnjudged reports whether a zone type warns, rather than stays
 // silent, when only its AGL limit cannot be judged (Z-09).
 func warnsUnjudged(t core.ZoneType) bool {
@@ -288,7 +298,8 @@ func ptr[T any](v T) *T { return &v }
 // On a pressure altitude (R-09) every judged limit is widened by
 // pol.PressureUncertaintyM each way: inside the band as indicated keeps
 // the zone's severity with within_band true; inside only the widened
-// band is a warning with within_band false; outside it nothing. Both
+// band is a warning (or the zone's own severity when that is lower, an
+// info CONDITIONAL zone) with within_band false; outside it nothing. Both
 // say vertical_known false. A zone without a limit that needs a height
 // is judged as for any aircraft: no margin and no flag, and no altitude
 // is needed for it. With no usable altitude any other zone is
@@ -378,7 +389,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 		res.Raise.Detail.VerticalKnown = ptr(false)
 		res.Raise.Detail.WithinBand = ptr(withinBand)
 		if !withinBand {
-			res.Raise.Severity = core.SeverityWarning
+			res.Raise.Severity = atMostWarning(sev)
 		}
 	}
 	if len(notJudged) == 0 {
@@ -389,7 +400,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	}
 	res.LimitNotJudged = true
 	res.Reason = reason
-	res.Raise.Severity = core.SeverityWarning
+	res.Raise.Severity = atMostWarning(sev)
 	res.Raise.Detail.VerticalKnown = ptr(false)
 	res.Raise.Detail.LimitNotJudged = ptr(true)
 	res.Raise.Detail.NotJudged = notJudged

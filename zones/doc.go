@@ -33,7 +33,8 @@
 //     AGL warns with limit_not_judged (Z-09); any other unjudged limit
 //     leaves the zone not evaluated. A pressure altitude is widened by
 //     Policy.PressureUncertaintyM each way (R-09): inside as indicated
-//     keeps the severity, inside only the widened band warns, both flagged
+//     keeps the severity, inside only the widened band warns (capped at
+//     the zone's own severity: an info zone stays info), both flagged
 //     vertical_known false with within_band.
 //
 // JudgeHeightLimit is the height limit over the ground (D-04; the
