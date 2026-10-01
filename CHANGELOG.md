@@ -34,6 +34,15 @@ Each entry names the work package and the vectors it affects.
   with `public-part-GEO-OP-ABC` a known deviation: the EU secret part is
   stripped only after a valid public number, so `GEO-OP-ABC` no longer
   compares as `GEO-OP` (LESSONS G-04). [WP-4]
+- `auth`: Remote ID receiver authentication (HMAC-SHA256 over the exact
+  report bytes, +-30 s window, per-receiver bounded nonce memory) passing
+  the 14 `rid_receiver_auth.json` cases, and the RS256-only JWT verifier
+  with allow-listed issuers, kid-selected cached JWKS with a rate-limited
+  refresh, and the token issuer, on `lestrrat-go/jwx/v3`. [WP-11 G-M1]
+- `vectors/testdata/jwt_verify.json` (16 cases, local until the lab merges
+  it): the ecosystem JWT knowledge vector, written by
+  `auth/internal/genvectors` with a discarded key, and run by `auth`.
+  [WP-11 G-M3]
 - `internal/pgm` (bounded binary PGM P5 parser), `geoid` (GeographicLib
   grids, `UndulationM`, `AMSLFromHAE`/`HAEFromAMSL`) and `terrain`
   (`CellName`, DEM tiles, `ParseIndex`, a bounded LRU `Store` that counts
@@ -47,6 +56,11 @@ Each entry names the work package and the vectors it affects.
   AMSL altitude selection with the pressure fallback and hold, NED
   velocity and the airborne rule. Vectors `rid_time.json` (25),
   `rid_identity.json` (24), `pressure_altitude.json` (16). [WP-6]
+- `ed269`: strict ED-269 parse and export (both wrappers, UTF-8 BOM,
+  every problem with its JSON path, capped at 100; bounded bytes, depth
+  and ring vertices; shapes past 180 degrees of longitude refused) and
+  zone applicability; passes `ed269_parse.json` (52 cases) and
+  `zones_applicability.json` (32 cases). [WP-5]
 - `cpa`: closest point of approach in the mid-latitude tangent plane
   with the older sample advanced, `t_cpa` clamped to >= 0, the vertical
   gap at `t_cpa`, inside the minima now as a conflict and pressure

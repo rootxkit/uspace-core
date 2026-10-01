@@ -18,3 +18,14 @@ condition = "AND"
 paths = ['''^vectors/testdata/[^/]+\.json$''']
 regexTarget = "line"
 regexes = ['''"compare_key"\s*:''']
+
+# jwt_verify.json (WP-11) carries test JWTs signed by a key generated at
+# run time by auth/internal/genvectors and discarded, so they grant
+# nothing anywhere; only the public JWKS is kept (spec 06 section 4). The
+# exemption is scoped to the jwt rule and to that one file: a JWT anywhere
+# else is still reported.
+[[rules]]
+id = "jwt"
+[[rules.allowlists]]
+description = "discarded-key test tokens in the jwt_verify vector"
+paths = ['''^vectors/testdata/jwt_verify\.json$''']

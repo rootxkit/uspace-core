@@ -19,6 +19,7 @@ var Manifest = []Entry{
 	{"fleet_match.json", "identify", 10},
 	{"geodesy.json", "geodesy", 17},
 	{"identification_status.json", "identify", 37},
+	{"jwt_verify.json", "auth", 16},
 	{"odid_decode.json", "odid", 187},
 	{"pressure_altitude.json", "rid", 16},
 	{"rid_identity.json", "rid", 24},
@@ -31,6 +32,7 @@ var Manifest = []Entry{
 	{"zones_vertical.json", "zones", 38},
 }
 
-// TotalCases is the number of cases across every file at the pinned
-// commit (knowledge/README.md: 596).
-const TotalCases = 596
+// TotalCases is the number of cases across every file: 596 at the pinned
+// lab commit (knowledge/README.md) plus the 16 of the local
+// jwt_verify.json (WP-11).
+const TotalCases = 612
