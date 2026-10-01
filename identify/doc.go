@@ -53,7 +53,9 @@
 // ResolveRemoteID looks up only a serial (Basic ID type 1, I-05): another
 // identity type is unknown_operator / not_a_serial and never names a
 // registry aircraft. RegistryUASID is the matched aircraft's id, nil when
-// none matched. A nil Lookup is Unavailable (registry_unavailable).
+// none matched. A nil Lookup is Unavailable (registry_unavailable), for a
+// bound track too: a session binding proves who the aircraft is, not that
+// its registration is valid.
 //
 // # The projection a caller reads (G-08)
 //

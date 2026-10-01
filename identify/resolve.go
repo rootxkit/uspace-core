@@ -132,7 +132,13 @@ func ResolveRemoteID(reg Lookup, id RemoteIDIdentity) core.Identification {
 // unknown_operator / not_in_registry; a suspended or revoked UAS or owner
 // is suspended. Serial and operator number are the registry's. An empty
 // drone id names no aircraft and is unknown_operator / not_in_registry.
-// A nil reg is unknown_operator / registry_unavailable.
+//
+// A nil reg is unknown_operator / registry_unavailable, not registered:
+// the session binding proves which aircraft this is, not that its
+// registration is valid. A registry read that predates the registration
+// is a registry that was consulted and holds no row yet; a registry that
+// could not be consulted cannot say the UAS or its operator is not
+// suspended or revoked.
 func ResolveBound(reg Lookup, droneID string) core.Identification {
 	id := core.Identification{Basis: core.BasisAuthenticated}
 	droneID = strings.TrimSpace(droneID)

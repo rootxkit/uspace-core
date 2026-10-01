@@ -258,7 +258,8 @@ func TestResolveBound(t *testing.T) {
 			wantIdent{core.IdentSuspended, core.ReasonUASSuspended, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), au}},
 		{"empty-drone-id-names-nothing", reg, "  ",
 			wantIdent{core.IdentUnknownOperator, core.ReasonNotInRegistry, nil, nil, nil, false, nil, au}},
-		{"registry-unavailable", nil, "d-active",
+		// The binding proves identity, not a valid registration.
+		{"registry-unavailable-is-not-registered", nil, "d-active",
 			wantIdent{core.IdentUnknownOperator, core.ReasonRegistryUnavailable, nil, nil, nil, false, ptr("d-active"), au}},
 	}
 	for _, c := range cases {
