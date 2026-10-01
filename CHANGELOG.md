@@ -18,6 +18,13 @@ for a behaviour change the line sits under the heading of the next major
 
 ### Added
 
+- `core`: `BasisProvider` (`"provider"`), the identification basis of a
+  flight a USSP reports through the F3411 network or an F3548 peer
+  (Q-A8); nothing in `identify` sets it. [WP-16 C1]
+- `alerting`: `Config.SkipConflicts` (default false) and the counter
+  `conflict_checks_skipped`: a monitor whose owner discards conflict
+  alerts skips the neighbour grid and `cpa.Evaluate` and still judges
+  zones, the height limit and identification (Q-A9). [WP-16 C1]
 - auth: `KeyRing` holds a publisher's signing keys (one active, retired
   keys kept in its JWKS for a two-key overlap; at most `MaxRingKeys`,
   counted as `key_ring_full`), with `Issuer` sharing the ring's JWKS.
