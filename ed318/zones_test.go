@@ -59,7 +59,7 @@ func TestToZones(t *testing.T) {
 	if in, _ := r.ContainsHorizontally(core.LatLon{LatDeg: 41.71, LonDeg: 44.81}); in {
 		t.Error("a point in the hole is inside")
 	}
-	c1, c2 := byID(3, "TSC001"), byID(4, "TSC001")
+	c1, c2 := byID(3, "TSC001/L0"), byID(4, "TSC001/L1")
 	if c1.Upper.ValueM != 50 || c2.Lower.ValueM != 50 || c2.Upper.ValueM != 150 || c1.Type != core.ZoneConditional {
 		t.Errorf("TSC001 layers %+v / %+v", c1, c2)
 	}
@@ -227,4 +227,39 @@ func posInf() float64 { return math.Inf(1) }
 
 func geodesyBox(minLon, maxLon float64) geodesy.BBox {
 	return geodesy.BBox{MinLat: 0, MaxLat: 1, MinLon: minLon, MaxLon: maxLon}
+}
+
+// The two layers of a GeometryCollection zone are two zones with two
+// distinct identifiers, the same whatever the feature's place in the
+// collection; a single-geometry zone keeps its identifier (E-01).
+func TestToZonesLayerIdentifiers(t *testing.T) {
+	fc := baseCollection(t)
+	zs, err := ToZones(fc, NOAADaylight{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]int{}
+	for _, z := range zs {
+		ids[z.Country+"/"+z.Identifier]++
+	}
+	for id, n := range ids {
+		if n != 1 {
+			t.Errorf("%s is the key of %d zones", id, n)
+		}
+	}
+	if ids["GEO/TSC001/L0"] != 1 || ids["GEO/TSC001/L1"] != 1 || ids["GEO/TSR001"] != 1 {
+		t.Errorf("keys %v", ids)
+	}
+	// Reversed feature order: the same keys for the same layers.
+	fc.Features[0], fc.Features[3] = fc.Features[3], fc.Features[0]
+	again, err := ToZones(fc, NOAADaylight{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again[0].Identifier != "TSC001/L0" || again[1].Identifier != "TSC001/L1" || again[0].Upper.ValueM != 50 || again[1].Upper.ValueM != 150 {
+		t.Errorf("after reordering: %s %s", again[0].Identifier, again[1].Identifier)
+	}
+	if PartIdentifier("ABC", 2) != "ABC/L2" {
+		t.Error("PartIdentifier")
+	}
 }

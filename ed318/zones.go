@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -21,15 +22,21 @@ import (
 const MaxEventDays = 366
 
 // ToZones builds the judgement's view of every zone of fc, as
-// zones.FromED269 does for ED-269: one *zones.Zone per geometry part (a
-// GeometryCollection gives one zone per layer, all with the feature's
-// identifier), limits in metres (feet converted with core.FeetToMetres
+// zones.FromED269 does for ED-269: one *zones.Zone per geometry part,
+// limits in metres (feet converted with core.FeetToMetres
 // exactly) in their reference, the published polygon or circle (the
 // circle's radius in metres), and the applicability as ed269 periods. A
 // zone without limitedApplicability applies always (no periods).
 //
 // Type is the ED-318 type; Restriction is its ED-269 spelling, empty for
 // USPACE (which has none).
+//
+// A GeometryCollection gives one zone per layer, and each gets its own
+// Identifier, the feature's identifier followed by "/L" and the layer's
+// index in the collection's geometries: "TSC001/L0", "TSC001/L1". Alerts
+// are keyed by country and identifier, so two layers of one zone are two
+// keys, and a key does not depend on where the feature sits in the
+// collection. A zone with one geometry keeps the plain identifier.
 //
 // Daylight events are resolved through dl, at the centre of the part's
 // bounding box, for every day from startDateTime to endDateTime into
@@ -65,6 +72,9 @@ func ToZones(fc *FeatureCollection, dl Daylight) ([]*zones.Zone, error) {
 			if err != nil {
 				return nil, err
 			}
+			if f.Geometry.Type == GeometryCollection {
+				z.Identifier = PartIdentifier(f.Properties.Identifier, k)
+			}
 			periods, err := zonePeriods(f.Properties.LimitedApplicability, center(z.BBox), dl, path+".properties.limitedApplicability")
 			if err != nil {
 				return nil, err
@@ -74,6 +84,12 @@ func ToZones(fc *FeatureCollection, dl Daylight) ([]*zones.Zone, error) {
 		}
 	}
 	return out, nil
+}
+
+// PartIdentifier is the identifier ToZones gives layer k of a zone
+// published as a GeometryCollection: "<identifier>/L<k>".
+func PartIdentifier(identifier string, k int) string {
+	return identifier + "/L" + strconv.Itoa(k)
 }
 
 // partZone builds the zone of one geometry part, without periods.

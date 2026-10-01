@@ -145,7 +145,9 @@
 // table.
 //
 // ToZones gives one zones.Zone per geometry part with limits in metres
-// and ed269 periods; a schedule with events becomes one fixed window per
+// and ed269 periods; the layers of a GeometryCollection zone get distinct
+// identifiers, "<identifier>/L<index>" (PartIdentifier), so that alerts
+// keyed by country and identifier hold one key per layer; a schedule with events becomes one fixed window per
 // day between its dates (at most MaxEventDays), resolved at the centre of
 // the part's bounding box.
 //
