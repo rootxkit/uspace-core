@@ -38,6 +38,17 @@
 //   - Evaluate(a, b) and Evaluate(b, a) return identical results: the
 //     pair is put in a canonical order before any arithmetic.
 //
+// # Latitude limit
+//
+// The mid-latitude tangent plane bends near a pole and overstates
+// distances, which reads as clear. Evaluate refuses (ReasonOutOfRange) a
+// pair with either aircraft, before or after the advance, within 10 x
+// (NeighbourRadiusM + the pair's top horizontal speed x TCPAMaxS) of a
+// pole: 8 km for two hovering aircraft under DefaultPolicy (latitude
+// above about 89.93 degrees), 26 km at 30 m/s (about 89.77). Inside the
+// limit the projection is within 0.05 % of the geodesic. The Grid has no
+// such limit: it covers the poles exactly.
+//
 // # Fail-safe on bad numbers (C-09)
 //
 // A NaN or infinite coordinate, velocity, altitude or time that the

@@ -14,6 +14,18 @@ import (
 // what a GPS velocity resolves, not a separation threshold.
 const minRelSpeedMS = 1e-6
 
+// polarReachFactor scales the polar limit. Evaluate refuses a pair when
+// either aircraft, before or after the advance, is within
+// polarReachFactor x (NeighbourRadiusM + the pair's top horizontal speed
+// x TCPAMaxS) of a pole: the mid-latitude tangent plane bends there
+// (across a pole it reads 55.6 m as 88.4 m) and overstates distances,
+// the unsafe direction. On a sphere, two points within one reach of each
+// other and at least factor reaches from the pole are misjudged by at
+// most 3.9 % with factor 1, 0.45 % with 3 and 0.044 % with 10 (2.6 cm on
+// the 60 m minimum). With DefaultPolicy and 30 m/s that is 26 km, about
+// 89.77 degrees; no operation the system observes flies there.
+const polarReachFactor = 10
+
 // State is one aircraft's latest sample as the CPA judges it.
 type State struct {
 	// Pos is the WGS84 position.
@@ -81,8 +93,9 @@ type Policy struct {
 	DHorizontalMinM float64
 	// DVerticalMinM is the vertical minimum; strictly less is inside.
 	DVerticalMinM float64
-	// NeighbourRadiusM is the search radius for candidate pairs. Evaluate
-	// does not use it; the caller sizes its Grid and filters with it.
+	// NeighbourRadiusM is the search radius for candidate pairs: the
+	// caller sizes its Grid and filters with it. Evaluate uses it only for
+	// the polar limit (see polarReachFactor). Must be positive.
 	NeighbourRadiusM float64
 	// NeighbourMaxAgeS is the largest difference between the two samples'
 	// CapturedAtS at which the pair is still judged (C-04); exactly at
@@ -108,12 +121,12 @@ var DefaultPolicy = Policy{
 // A NaN minimum would make every comparison false and read as "no
 // conflict"; every such policy is refused instead.
 func (p Policy) valid() bool {
-	for _, v := range [...]float64{p.TCPAMaxS, p.DHorizontalMinM, p.DVerticalMinM, p.NeighbourMaxAgeS} {
+	for _, v := range [...]float64{p.TCPAMaxS, p.DHorizontalMinM, p.DVerticalMinM, p.NeighbourRadiusM, p.NeighbourMaxAgeS} {
 		if !core.IsFinite(v) || v < 0 {
 			return false
 		}
 	}
-	return p.DHorizontalMinM > 0 && p.DVerticalMinM > 0
+	return p.DHorizontalMinM > 0 && p.DVerticalMinM > 0 && p.NeighbourRadiusM > 0
 }
 
 // Reason says why a pair was not judged. The values are stable snake_case
@@ -136,9 +149,11 @@ const (
 	// ReasonInvalidPolicy: a policy value Evaluate uses is NaN, infinite
 	// or negative, or a separation minimum is zero.
 	ReasonInvalidPolicy Reason = "invalid_policy"
-	// ReasonOutOfRange: the inputs were finite, but advancing the older
-	// sample or the CPA arithmetic left the valid domain (a position
-	// carried past a pole, an overflow to infinity).
+	// ReasonOutOfRange: the inputs were finite, but outside the domain
+	// the tangent plane judges correctly, or the arithmetic left it: an
+	// aircraft within the polar limit (see polarReachFactor) before or
+	// after the advance, a position carried past a pole, an overflow to
+	// infinity.
 	ReasonOutOfRange Reason = "out_of_range"
 )
 
@@ -192,7 +207,8 @@ func metresPerDegree(latDeg float64) (northPerDegM, eastPerDegM float64) {
 // unchanged.
 //
 // The latitude is not clamped: a state carried past a pole is out of
-// range (Pos.Valid is false) and Evaluate refuses it. Non-finite inputs
+// range (Pos.Valid is false), and Evaluate refuses a state carried past
+// or towards a pole, within its polar limit (see polarReachFactor). Non-finite inputs
 // give non-finite outputs; Advance never panics.
 func Advance(s State, toS float64) State {
 	dtS := toS - s.CapturedAtS
@@ -206,6 +222,20 @@ func Advance(s State, toS float64) State {
 	out.AltAMSLM = s.AltAMSLM - s.VDMS*dtS
 	out.CapturedAtS = toS
 	return out
+}
+
+// polarReachDeg is the polar limit of a pair in degrees of latitude:
+// polarReachFactor x (NeighbourRadiusM + the faster horizontal speed x
+// TCPAMaxS), converted with the smallest metres per degree of latitude so
+// it is never understated. Infinite for an overflowing speed.
+func polarReachDeg(a, b State, pol Policy) float64 {
+	speedMS := math.Max(math.Hypot(a.VNMS, a.VEMS), math.Hypot(b.VNMS, b.VEMS))
+	return polarReachFactor * (pol.NeighbourRadiusM + speedMS*pol.TCPAMaxS) / minNorthPerDegM
+}
+
+// nearPole reports whether s is within reachDeg of a pole.
+func nearPole(s State, reachDeg float64) bool {
+	return !(math.Abs(s.Pos.LatDeg)+reachDeg < 90)
 }
 
 // before is a total order on valid states, used to put a pair in one
@@ -238,6 +268,11 @@ func before(a, b State) bool {
 //     d_v_min)) OR (t_cpa < t_max AND d_cpa_h < d_h_min AND (vertical
 //     unknown OR d_alt_at_cpa < d_v_min)).
 //
+// Polar limit: a pair with either aircraft within polarReachFactor x
+// (NeighbourRadiusM + top speed x TCPAMaxS) of a pole, before or after
+// the advance, is not judged (ReasonOutOfRange): the tangent plane
+// overstates distances there.
+//
 // Fail-safe on bad numbers: a NaN or infinite input the judgement uses
 // (the altitude and vertical velocity of a state whose vertical is
 // unknown are not used, so they cannot block a judgement), an out-of-range
@@ -255,6 +290,10 @@ func Evaluate(a, b State, pol Policy) Result {
 	if math.Abs(a.CapturedAtS-b.CapturedAtS) > pol.NeighbourMaxAgeS {
 		return Result{NotJudged: ReasonStaleNeighbour}
 	}
+	reachDeg := polarReachDeg(a, b, pol)
+	if nearPole(a, reachDeg) || nearPole(b, reachDeg) {
+		return Result{NotJudged: ReasonOutOfRange}
+	}
 	if before(b, a) {
 		a, b = b, a
 	}
@@ -264,7 +303,7 @@ func Evaluate(a, b State, pol Policy) Result {
 	case b.CapturedAtS < a.CapturedAtS:
 		b = Advance(b, a.CapturedAtS)
 	}
-	if !a.valid() || !b.valid() {
+	if !a.valid() || !b.valid() || nearPole(a, reachDeg) || nearPole(b, reachDeg) {
 		return Result{NotJudged: ReasonOutOfRange}
 	}
 

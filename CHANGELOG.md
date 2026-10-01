@@ -66,9 +66,11 @@ Each entry names the work package and the vectors it affects.
   gap at `t_cpa`, inside the minima now as a conflict and pressure
   tracks as unknown vertical; non-finite inputs, an invalid policy and
   overflow are not judged (with a reason), never judged clear; results
-  are identical in either order. Neighbour `Grid` with per-band
-  longitude columns, antimeridian and pole safe, checked against brute
-  force. `cpa.json` 27/27 in both orders. [WP-9]
+  are identical in either order; a pair within the polar limit (10 x
+  the neighbour radius plus the window's travel, from a pole) is not
+  judged. Neighbour `Grid` with per-band longitude columns, safe across
+  the antimeridian and at the poles, checked against brute force.
+  `cpa.json` 27/27 in both orders. [WP-9]
 
 ## [0.1.0] - unreleased (G-M1)
 

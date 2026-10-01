@@ -410,10 +410,12 @@ func TestInvalidPolicyIsNotJudged(t *testing.T) {
 			mustNotJudge(t, Evaluate(a, b, pol), ReasonInvalidPolicy)
 		})
 	}
-	// The radius is the caller's: Evaluate does not read it.
-	pol := DefaultPolicy
-	pol.NeighbourRadiusM = math.NaN()
-	mustJudge(t, Evaluate(a, b, pol))
+	// The radius sets the polar limit, so it must be valid too.
+	for _, r := range []float64{math.NaN(), 0, -1, math.Inf(1)} {
+		pol := DefaultPolicy
+		pol.NeighbourRadiusM = r
+		mustNotJudge(t, Evaluate(a, b, pol), ReasonInvalidPolicy)
+	}
 }
 
 // TestZeroWindowMeansNowOnly: TCPAMaxS 0 is a valid policy that judges
@@ -441,6 +443,45 @@ func TestZeroWindowMeansNowOnly(t *testing.T) {
 	mustJudge(t, Evaluate(at(0, 0, 550), at(30, 0, 550), tiny))
 }
 
+// TestPolarLimit: across the pole the tangent plane reads 55.6 m as
+// 88.4 m and would call the pair clear; such a pair is not judged. A
+// pair at high latitude inside the limit is judged, and its distance
+// agrees with the geodesic.
+func TestPolarLimit(t *testing.T) {
+	a := State{Pos: core.LatLon{LatDeg: 89.99975, LonDeg: 0}, VerticalKnown: true}
+	b := State{Pos: core.LatLon{LatDeg: 89.99975, LonDeg: 180}, VerticalKnown: true}
+	if d, err := geodesy.DistanceM(a.Pos, b.Pos); err != nil || d > 60 {
+		t.Fatalf("probe pair %v m apart (%v), want under the 60 m minimum", d, err)
+	}
+	mustNotJudge(t, Evaluate(a, b, DefaultPolicy), ReasonOutOfRange)
+	mustNotJudge(t, Evaluate(b, a, DefaultPolicy), ReasonOutOfRange)
+
+	// A pair carried towards the pole by the advance is refused too. With
+	// a zero window the limit is 10 x 800 m = 0.07235 degrees, so 89.9272
+	// is about 50 m inside it; the older sample flying north at 10 m/s is
+	// advanced 100 m, past it.
+	now := DefaultPolicy
+	now.TCPAMaxS = 0
+	older := State{Pos: core.LatLon{LatDeg: 89.9272, LonDeg: 0}, VerticalKnown: true}
+	newer := State{Pos: core.LatLon{LatDeg: 89.9272, LonDeg: 0.1}, VerticalKnown: true, CapturedAtS: 10}
+	mustJudge(t, Evaluate(older, newer, now))
+	older.VNMS = 10
+	mustNotJudge(t, Evaluate(older, newer, now), ReasonOutOfRange)
+	older.VNMS = -10 // away from the pole: judged
+	mustJudge(t, Evaluate(older, newer, now))
+
+	// Inside the limit: 89.9 degrees is 11 km from the pole, the limit
+	// for two hovering aircraft is 8 km.
+	c := State{Pos: core.LatLon{LatDeg: 89.9, LonDeg: 10}, AltAMSLM: 100, VerticalKnown: true}
+	d := State{Pos: core.LatLon{LatDeg: 89.9, LonDeg: 10.25}, AltAMSLM: 100, VerticalKnown: true}
+	r := Evaluate(c, d, DefaultPolicy)
+	mustJudge(t, r)
+	geodesicM, err := geodesy.DistanceM(c.Pos, d.Pos)
+	if err != nil || math.Abs(r.DHorizontalNowM/geodesicM-1) > 5e-4 || !r.Conflict {
+		t.Fatalf("%+v: %v m by the plane, %v m geodesic (%v), want within 0.05 %% and a conflict", r, r.DHorizontalNowM, geodesicM, err)
+	}
+}
+
 func TestOutOfRangeArithmeticIsNotJudged(t *testing.T) {
 	// Finite inputs whose advance carries a position past the pole.
 	polar := State{Pos: core.LatLon{LatDeg: 89.9999}, VNMS: 1000, VerticalKnown: true}
@@ -454,7 +495,7 @@ func TestOutOfRangeArithmeticIsNotJudged(t *testing.T) {
 	high := at(0, 0, math.MaxFloat64)
 	low := at(10, 0, -math.MaxFloat64)
 	mustNotJudge(t, Evaluate(high, low, DefaultPolicy), ReasonOutOfRange)
-	// The presence twin: the same polar pair at rest is judged.
-	polar.VNMS = 0
+	// The presence twin: a high-latitude pair inside the limit, advanced.
+	polar.Pos.LatDeg, other.Pos.LatDeg, polar.VNMS = 89.8, 89.8, 1
 	mustJudge(t, Evaluate(polar, other, DefaultPolicy))
 }
