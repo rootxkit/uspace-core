@@ -20,6 +20,10 @@ const (
 	// one Remote ID transmitter under two ids, one of them unidentified
 	// (I-02).
 	CounterPairsSameTransmitter = "pairs_same_transmitter"
+	// CounterConflictChecksSkipped counts flying samples whose conflict
+	// check was skipped because Config.SkipConflicts is set: neither held
+	// in the neighbour grid nor paired.
+	CounterConflictChecksSkipped = "conflict_checks_skipped"
 )
 
 // judge runs the checks on an admitted sample (C-05).
@@ -69,8 +73,12 @@ func (m *Monitor) judgeFlying(ac *aircraft, tr *Track, wallS float64, ev *Events
 	ac.seenS = seenS
 	m.reclass(ac, false)
 	m.noteSeen(ac.seenS)
-	m.grid.Upsert(ac.id, tr.Pos)
-	m.judgeConflicts(ac, atS, ev)
+	if m.cfg.SkipConflicts {
+		m.counters.Inc(CounterConflictChecksSkipped)
+	} else {
+		m.grid.Upsert(ac.id, tr.Pos)
+		m.judgeConflicts(ac, atS, ev)
+	}
 	m.judgeZones(ac, tr, atS, ev)
 }
 

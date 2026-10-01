@@ -369,7 +369,7 @@ func (g *Grid) Near(p core.LatLon, radiusM float64) []string   // candidates wit
 ### 3.12 `alerting` (WP-10)
 
 ```go
-type Config struct{ Policy cpa.Policy; ClearAfterS, StaleAfterS, LiveMaxAgeS float64 (3, 15, 10); PressureUncertaintyM float64 (250); Zones []*zones.Zone; ZonePolicy zones.Policy; MismatchSeverity, IdentificationSeverity core.Severity (warning, critical) }
+type Config struct{ Policy cpa.Policy; ClearAfterS, StaleAfterS, LiveMaxAgeS float64 (3, 15, 10); PressureUncertaintyM float64 (250); Zones []*zones.Zone; ZonePolicy zones.Policy; MismatchSeverity, IdentificationSeverity core.Severity (warning, critical); SkipConflicts bool (false; C1: no grid, no cpa.Evaluate, counted as conflict_checks_skipped) }
 type Track struct{ ID string; Pos core.LatLon; AltAMSLM *float64; AltSource core.AltSource; VNMS, VEMS, VDMS float64; Flying *bool; CapturedAtS, RxAtS float64; SourceTS *float64; Backlog bool; Source, Station string; Transmitter *string; Identified *bool; Identification *core.Identification; Env zones.Env }
 type Alert struct{ Key string; Kind string ("conflict"|"zone"|"identification"|"identification_mismatch"|"height"); Severity core.Severity; Aircraft []string; Detail map[string]any; RaisedAtS, LastTrueS, LastFalseS float64 }
 type ClearReason string  // "resolved", "stale", "source_disabled"
