@@ -191,3 +191,10 @@ func (r *KeyRing) Issuer(iss string) (*Issuer, error) {
 
 // Counters returns the ring's counters: key_ring_full.
 func (r *KeyRing) Counters() *core.Counters { return &r.counters }
+
+// signer returns the active key; retired keys never sign.
+func (r *KeyRing) signer() ringKey {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.active
+}

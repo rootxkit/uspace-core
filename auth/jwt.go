@@ -170,6 +170,17 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	if c.Audience == "" {
 		return nil, core.Fieldf("audience", "empty")
 	}
+	return newVerifier(ctx, c, "issuers", "issuer")
+}
+
+// newVerifier is NewVerifier without the audience: it applies the
+// defaults and loads the allow-listed key sets, naming the allow-list
+// field and its entries (noun) in its errors. The detached and compact
+// verifiers each hold one for its JWKS cache and its counters.
+func newVerifier(ctx context.Context, c Config, field, noun string) (*Verifier, error) {
+	if len(c.Issuers) == 0 {
+		return nil, core.Fieldf(field, "no %s is allowed", noun)
+	}
 	if c.MaxSkew < 0 || c.JWKSCacheTTL < 0 || c.MinRefreshInterval < 0 || c.MaxTokenBytes < 0 || c.MaxJWKSBytes < 0 ||
 		c.JWKSFetchTimeout < 0 || c.JWKSRefreshAhead < 0 {
 		return nil, core.Fieldf("config", "a duration or size is negative")
@@ -206,10 +217,10 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	}
 	v := &Verifier{cfg: c, issuers: make(map[string]*issuerKeys, len(c.Issuers))}
 	for iss, ic := range c.Issuers {
-		field := "issuers." + iss
 		if iss == "" {
-			return nil, core.Fieldf("issuers", "an issuer is empty")
+			return nil, core.Fieldf(field, "an %s is empty", noun)
 		}
+		field := field + "." + iss
 		switch {
 		case ic.JWKSURL != "" && ic.Keys != nil:
 			return nil, core.Fieldf(field, "both a JWKS URL and static keys")
