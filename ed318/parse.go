@@ -259,6 +259,9 @@ func (p *parser) zone(v *value, path string) (UASZone, bool) {
 	if okID && id != strings.TrimSpace(id) {
 		p.ps.add(join(path, "identifier"), "has leading or trailing spaces")
 	}
+	if okID && strings.Contains(id, "/") {
+		p.ps.add(join(path, "identifier"), quote(id)+" contains '/', which ToZones reserves for the layers of a zone (<identifier>/L<index>)")
+	}
 	z.Identifier = id
 	country, okC := p.requiredText(v, "country", path, countryLen)
 	if okC && !isCountry(country) {

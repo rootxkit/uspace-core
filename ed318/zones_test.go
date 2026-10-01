@@ -1,6 +1,7 @@
 package ed318
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -278,5 +279,30 @@ func TestToZonesCircleRadius(t *testing.T) {
 		if (err == nil) != c.ok {
 			t.Errorf("radius %v: %v", c.r, err)
 		}
+	}
+}
+
+// A feature identified "TSC001/L0" beside layer 0 of TSC001 makes one key
+// twice: refused, naming both; the base collection's keys are distinct
+// (E-01, TestToZonesLayerIdentifiers). Parse refuses the "/" outright.
+func TestToZonesKeyCollision(t *testing.T) {
+	fc := baseCollection(t)
+	fc.Features[0].Properties.Identifier = "TSC001/L0"
+	fc.Features[0].Properties.Country = "GEO"
+	_, err := ToZones(fc, NOAADaylight{})
+	var fe *core.FieldError
+	if !errors.As(err, &fe) || fe.Field != "features[3].geometry.geometries[0]" || !strings.Contains(fe.Reason, "features[0].geometry") || !strings.Contains(fe.Reason, `"GEO/TSC001/L0"`) {
+		t.Errorf("collision: %v", err)
+	}
+	fc = baseCollection(t)
+	fc.Features[4].Properties.Identifier = fc.Features[2].Properties.Identifier
+	if _, err := ToZones(fc, NOAADaylight{}); !errors.As(err, &fe) || fe.Field != "features[4].geometry" {
+		t.Errorf("a repeated identifier: %v", err)
+	}
+	d := baseDocument(t)
+	props(t, d, 0)["identifier"] = "TS/1"
+	raw, _ := json.Marshal(d)
+	if _, probs := Parse(raw, Limits{}); !hasProblem(probs, "features[0].properties.identifier", "contains '/'") {
+		t.Errorf("an identifier with '/': %v", probs)
 	}
 }

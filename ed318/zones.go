@@ -36,7 +36,11 @@ const MaxEventDays = 366
 // index in the collection's geometries: "TSC001/L0", "TSC001/L1". Alerts
 // are keyed by country and identifier, so two layers of one zone are two
 // keys, and a key does not depend on where the feature sits in the
-// collection. A zone with one geometry keeps the plain identifier.
+// collection. A zone with one geometry keeps the plain identifier. Two
+// zones with one key (a collection built in code with a feature
+// identified "C1/L0" beside layer 0 of "C1", or a repeated identifier)
+// are refused, naming both; Parse refuses a "/" in an identifier and a
+// repeated identifier, so a parsed collection never collides.
 //
 // Daylight events are resolved through dl, at the centre of the part's
 // bounding box, for every day from startDateTime to endDateTime into
@@ -58,6 +62,7 @@ func ToZones(fc *FeatureCollection, dl Daylight) ([]*zones.Zone, error) {
 		return nil, core.Fieldf("$", "no feature collection")
 	}
 	var out []*zones.Zone
+	keys := map[string]string{} // country/identifier -> the path that made it
 	for i := range fc.Features {
 		f := &fc.Features[i]
 		path := index("features", i)
@@ -75,6 +80,11 @@ func ToZones(fc *FeatureCollection, dl Daylight) ([]*zones.Zone, error) {
 			if f.Geometry.Type == GeometryCollection {
 				z.Identifier = PartIdentifier(f.Properties.Identifier, k)
 			}
+			key := z.Country + "/" + z.Identifier
+			if first, dup := keys[key]; dup {
+				return nil, core.Fieldf(gpath, "makes the zone key %q, which %s makes too; alerts are keyed by country and identifier, so the zones would be one", key, first)
+			}
+			keys[key] = gpath
 			periods, err := zonePeriods(f.Properties.LimitedApplicability, center(z.BBox), dl, path+".properties.limitedApplicability")
 			if err != nil {
 				return nil, err
