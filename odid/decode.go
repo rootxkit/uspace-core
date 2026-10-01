@@ -126,10 +126,13 @@ func decodePack(frame []byte, opts DecodeOptions) ([]Message, error) {
 	return out, nil
 }
 
-// checkPackKinds applies opendroneid-core-c checkPackContent: no pack and
-// no undefined type inside a pack, at most two Basic IDs, at most one
-// Location, Self-ID, System and Operator ID. Decode and EncodePack share
-// it, so the encoder never builds a pack the decoder refuses.
+// checkPackKinds applies opendroneid-core-c checkPackContent: no pack
+// inside a pack, at most two Basic IDs, at most one Location, Self-ID,
+// System and Operator ID. Unlike checkPackContent it lets an undefined
+// type (6-14) through, to be skipped like Self-ID, so that a pack from a
+// later F3411 revision still yields its known messages (owner decision,
+// PR #6). Decode and EncodePack share it, so the encoder never builds a
+// pack the decoder refuses.
 func checkPackKinds(kinds []MessageType) error {
 	var seen [TypeOperatorID + 1]int
 	for i, k := range kinds {
@@ -137,7 +140,7 @@ func checkPackKinds(kinds []MessageType) error {
 		case k == TypeMessagePack:
 			return &core.FieldError{Field: packField(i), Reason: "a pack inside a pack"}
 		case k > TypeOperatorID:
-			return core.Fieldf(packField(i), "message type %d is not allowed in a pack", k)
+			continue // undefined: skipped by the decoder, never counted
 		}
 		seen[k]++
 		switch k {

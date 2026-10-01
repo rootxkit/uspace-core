@@ -50,7 +50,7 @@ func Encode(m Message) ([MessageSize]byte, error) {
 
 // EncodePack encodes 1 to 9 messages as one message pack. It refuses what
 // Decode refuses (R-03): an empty or oversized pack, a pack inside a pack,
-// an undefined type, more than two Basic IDs and more than one Location,
+// more than two Basic IDs and more than one Location,
 // Self-ID, System or Operator ID. A message's refusal names it as
 // "pack[i].<field>".
 func EncodePack(ms []Message) ([]byte, error) {

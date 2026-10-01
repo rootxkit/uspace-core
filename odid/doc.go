@@ -32,7 +32,8 @@
 // 63 m/s, altitude -1000 m, timestamp 0xFFFF, position 0, 0) decode to nil
 // (R-01); latitude 0 alone is the equator. Height keeps its reference flag
 // (R-12). Self-ID, Authentication and undefined types decode to nothing
-// unless DecodeOptions.KeepSkipped (R-04). A malformed pack is refused
+// unless DecodeOptions.KeepSkipped (R-04), alone or inside a pack: an
+// undefined type does not spoil the pack around it. A malformed pack is refused
 // whole, before any message in it is decoded (R-03). Every refusal is a
 // *core.FieldError on "frame" or "pack[i]". Nothing indexes the input
 // before its length is checked; FuzzDecode holds that.

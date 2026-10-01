@@ -111,6 +111,7 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 		"1 trailing byte":         {append(pack(t, basic, loc), 0), 2},
 		"24 trailing bytes":       {append(pack(t, basic, loc), make([]byte, 24)...), 2},
 		"a trailing message":      {append(pack(t, loc), loc[:]...), 1},
+		"undefined types skipped": {pack(t, unknown, loc, unknown), 1},
 	}
 	for name, c := range accepted {
 		ms, err := Decode(c.frame, DecodeOptions{})
@@ -127,7 +128,6 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 		{"two bytes", "frame", "2 bytes, a pack header is 3", []byte{0xF2, 0x19}},
 		{"message size 26", "frame", "pack message size 26, expected 25", append([]byte{0xF2, 26, 1}, loc[:]...)},
 		{"shorter by one byte", "frame", "pack shorter than it says", pack(t, basic, loc)[:52]},
-		{"unknown type inside", "pack[1]", "message type 9 is not allowed in a pack", pack(t, loc, unknown)},
 		{"three Basic IDs", "pack[2]", "too many Basic ID messages in a pack", pack(t, basic, basic, basic)},
 		{"two Systems", "pack[1]", "more than one SYSTEM message in a pack", pack(t, sys, sys)},
 		{"two Self-IDs", "pack[1]", "more than one SELF_ID message in a pack", pack(t, self, self)},
@@ -140,6 +140,37 @@ func TestDecodePackRefusalsAndTwins(t *testing.T) {
 			t.Errorf("%s: a refusal returned %d messages", c.name, len(ms))
 		}
 		t.Run(c.name, func(t *testing.T) { wantFieldError(t, err, c.field, c.phrase) })
+	}
+}
+
+// An undefined type inside a pack is skipped, not refused, and comes back
+// as Unknown with KeepSkipped; the known messages around it decode.
+func TestPackUndefinedTypeSkipped(t *testing.T) {
+	loc := mustEncode(t, baseLocation())
+	var unknown [MessageSize]byte
+	unknown[0], unknown[5] = 0x92, 0xAB
+	frame := pack(t, loc, unknown)
+
+	ms, err := Decode(frame, DecodeOptions{})
+	if err != nil || len(ms) != 1 {
+		t.Fatalf("without KeepSkipped: %v, %d messages; want the Location alone", err, len(ms))
+	}
+	if _, ok := ms[0].(Location); !ok {
+		t.Errorf("got %T, want Location", ms[0])
+	}
+
+	ms, err = Decode(frame, DecodeOptions{KeepSkipped: true})
+	if err != nil || len(ms) != 2 {
+		t.Fatalf("with KeepSkipped: %v, %d messages; want Location and Unknown", err, len(ms))
+	}
+	u, ok := ms[1].(Unknown)
+	if !ok || u.Type() != 9 || u.Raw != unknown {
+		t.Fatalf("second message %#v, want Unknown type 9 with its bytes", ms[1])
+	}
+	// The encoder accepts it back into a pack, byte for byte.
+	enc, err := EncodePack(ms)
+	if err != nil || !bytes.Equal(enc, frame) {
+		t.Errorf("EncodePack: %v, got %x, want %x", err, enc, frame)
 	}
 }
 
@@ -483,7 +514,6 @@ func TestEncodePackRefusals(t *testing.T) {
 		{"empty", "pack", "pack of 0 messages", nil},
 		{"ten", "pack", "pack of 10 messages", append(nine[:9:9], Authentication{})},
 		{"nested", "pack[1]", "a pack inside a pack", []Message{loc, Unknown{Raw: [MessageSize]byte{0xF2}}}},
-		{"unknown type", "pack[0]", "message type 9 is not allowed in a pack", []Message{Unknown{Raw: [MessageSize]byte{0x92}}}},
 		{"three Basic IDs", "pack[2]", "too many Basic ID messages in a pack", []Message{basic, basic, basic}},
 		{"two Locations", "pack[1]", "more than one LOCATION message in a pack", []Message{loc, loc}},
 		{"nil message", "pack[1]", "nil", []Message{loc, nil}},
