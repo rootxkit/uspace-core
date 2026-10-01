@@ -12,12 +12,25 @@ import (
 	"github.com/rootxkit/uspace-core/ed269"
 )
 
-// ED269Key is the extendedProperties member in which FromED269 keeps the
-// ED-269 fields ED-318 has no place for, and from which ToED269 restores
-// them: `uSpaceClass`, the zone-level `title`, and `restrictionConditions`
-// when ED-269 published it as a list (ED-318's is one string; the list is
-// joined with newlines there and kept whole here).
+// ED269Key is the extendedProperties member that carries, in each
+// direction, what the other format has no member for (owner decision on
+// PR #16):
+//
+//   - in ED-318, written by FromED269 and read back by ToED269: the ED-269
+//     fields `uSpaceClass`, the zone-level `title`, and
+//     `restrictionConditions` when ED-269 published it as a list
+//     (ED-318's is one string; the list is joined with newlines there
+//     and kept whole here);
+//   - in ED-269, written by ToED269 and read back by FromED269: `texts`,
+//     the whole ED-318 text lists of the zone whose other languages
+//     ED-269's single string cannot hold, by member (`name`, `message`,
+//     `otherReasonInfo`, `zoneAuthority[k].name`, `.service`,
+//     `.contactName`), each as published ([{text, lang}]).
 const ED269Key = "ed269"
+
+// textsKey is the ED269Key member that carries ED-318 text lists in an
+// ED-269 document.
+const textsKey = "texts"
 
 var ed269KeyFields = []string{"uSpaceClass", "title", "restrictionConditions"}
 
@@ -33,11 +46,16 @@ var ed269KeyFields = []string{"uSpaceClass", "title", "restrictionConditions"}
 // description are kept. meta becomes the collection's metadata (nil when
 // it is the zero value).
 //
+// Text lists that ToED269 carried in extendedProperties.ed269.texts are
+// restored whole, every language back; the carried list must still hold
+// the ED-269 text, or the zone is refused (the text was edited since).
+//
 // What ED-318 cannot hold is refused with a *core.FieldError naming the
 // zone, never dropped or invented: a FOREIGN_TERRITORY reason (ED-318 has
 // none), a zone with no zoneAuthority (ED-318 requires one) or an
-// authority with no purpose (required in ED-318), and extendedProperties
-// that are not an object or already hold ED269Key. Date-times and clock
+// authority with no purpose (required in ED-318), extendedProperties that
+// are not an object, and an ED269Key member that holds anything but the
+// texts ToED269 writes. Date-times and clock
 // times are kept as published when they are RFC 3339 and rewritten in RFC
 // 3339 when ED-269 allowed a shorter form (08:00+04:00 becomes
 // 08:00:00+04:00). The UASZoneList wrapper's formatVersion and createdAt
@@ -78,15 +96,20 @@ func fromZone(z *ed269.GeoZone, lang, path string) (*Feature, error) {
 	if t == "" {
 		return nil, core.Fieldf(path+".restriction", "%q is not an ED-269 restriction", string(z.Restriction))
 	}
+	carried, rest, err := carriedTexts(z.ExtendedProperties, path)
+	if err != nil {
+		return nil, err
+	}
+	tx := &restorer{lang: lang, carried: carried, path: path}
 	u := UASZone{
 		Identifier:      z.Identifier,
 		Country:         z.Country,
-		Name:            oneText(z.Name, lang),
+		Name:            tx.texts("name", z.Name),
 		Type:            t,
 		Variant:         z.Type,
 		Region:          z.Region,
-		OtherReasonInfo: oneText(z.OtherReasonInfo, lang),
-		Message:         oneText(z.Message, lang),
+		OtherReasonInfo: tx.texts("otherReasonInfo", z.OtherReasonInfo),
+		Message:         tx.texts("message", z.Message),
 	}
 	if z.RegulationExemption != nil {
 		s := string(*z.RegulationExemption)
@@ -115,7 +138,7 @@ func fromZone(z *ed269.GeoZone, lang, path string) (*Feature, error) {
 	if z.Title != nil {
 		keep["title"] = *z.Title
 	}
-	ext, err := fromExtended(z.ExtendedProperties, keep, path)
+	ext, err := fromExtended(rest, keep, path)
 	if err != nil {
 		return nil, err
 	}
@@ -127,16 +150,20 @@ func fromZone(z *ed269.GeoZone, lang, path string) (*Feature, error) {
 		if a.Purpose == nil {
 			return nil, core.Fieldf(index(path+".zoneAuthority", k)+".purpose", "is missing; ED-318 requires it")
 		}
+		key := index("zoneAuthority", k)
 		u.ZoneAuthority = append(u.ZoneAuthority, Authority{
-			Name:           oneText(a.Name, lang),
-			Service:        oneText(a.Service, lang),
-			ContactName:    oneText(a.ContactName, lang),
+			Name:           tx.texts(key+".name", a.Name),
+			Service:        tx.texts(key+".service", a.Service),
+			ContactName:    tx.texts(key+".contactName", a.ContactName),
 			SiteURL:        a.SiteURL,
 			Email:          a.Email,
 			Phone:          a.Phone,
 			Purpose:        string(*a.Purpose),
 			IntervalBefore: a.IntervalBefore,
 		})
+	}
+	if err := tx.finish(); err != nil {
+		return nil, err
 	}
 	periods, err := fromApplicability(z, path)
 	if err != nil {
@@ -154,19 +181,113 @@ func fromZone(z *ed269.GeoZone, lang, path string) (*Feature, error) {
 	return &Feature{Type: "Feature", Geometry: g, Properties: u}, nil
 }
 
-// fromExtended carries ED-269's extendedProperties (an object) and the
-// kept ED-269 fields under ED269Key.
-func fromExtended(raw json.RawMessage, keep map[string]any, path string) (map[string]json.RawMessage, error) {
+// carriedTexts splits ED-269's extendedProperties (an object) into the
+// text lists ToED269 carried under ED269Key and the rest.
+func carriedTexts(raw json.RawMessage, path string) (map[string][]Text, map[string]json.RawMessage, error) {
+	if raw == nil {
+		return nil, nil, nil
+	}
 	var ext map[string]json.RawMessage
-	if raw != nil {
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		if err := dec.Decode(&ext); err != nil || ext == nil {
-			return nil, core.Fieldf(path+".extendedProperties", "is not a JSON object; ED-318 extendedProperties is one")
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if err := dec.Decode(&ext); err != nil || ext == nil {
+		return nil, nil, core.Fieldf(path+".extendedProperties", "is not a JSON object; ED-318 extendedProperties is one")
+	}
+	block, ok := ext[ED269Key]
+	if !ok {
+		return nil, ext, nil
+	}
+	where := path + ".extendedProperties." + ED269Key
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(block, &members); err != nil || members == nil {
+		return nil, nil, core.Fieldf(where, "must be an object holding only %s, which ToED269 writes", textsKey)
+	}
+	carried := map[string][]Text{}
+	for k, v := range members {
+		if k != textsKey {
+			return nil, nil, core.Fieldf(where+"."+k, "is not %s, the only member ToED269 writes here", textsKey)
 		}
-		if _, clash := ext[ED269Key]; clash {
-			return nil, core.Fieldf(path+".extendedProperties."+ED269Key, "is the member this mapping writes; rename it")
+		var lists map[string][]wireText
+		if err := json.Unmarshal(v, &lists); err != nil || lists == nil {
+			return nil, nil, core.Fieldf(where+"."+textsKey, "must map members to lists of {text, lang}")
+		}
+		for member, list := range lists {
+			ts := make([]Text, 0, len(list))
+			for _, w := range list {
+				if w.Lang == "" {
+					return nil, nil, core.Fieldf(where+"."+textsKey+"."+member, "has an entry without lang")
+				}
+				ts = append(ts, Text{Text: w.Text, Lang: w.Lang})
+			}
+			carried[member] = ts
 		}
 	}
+	rest := make(map[string]json.RawMessage, len(ext))
+	for k, v := range ext {
+		if k != ED269Key {
+			rest[k] = v
+		}
+	}
+	if len(rest) == 0 {
+		rest = nil
+	}
+	return carried, rest, nil
+}
+
+// wireText is one carried text as JSON.
+type wireText struct {
+	Text *string `json:"text,omitempty"`
+	Lang string  `json:"lang"`
+}
+
+// restorer gives each ED-269 text its ED-318 list: the carried list when
+// one was carried for that member, else one entry in lang.
+type restorer struct {
+	lang    string
+	carried map[string][]Text
+	used    map[string]bool
+	path    string
+	err     error
+}
+
+func (r *restorer) texts(member string, s *string) []Text {
+	list, ok := r.carried[member]
+	if !ok {
+		return oneText(s, r.lang)
+	}
+	if r.used == nil {
+		r.used = map[string]bool{}
+	}
+	r.used[member] = true
+	for _, t := range list {
+		if s != nil && t.Text != nil && *t.Text == *s {
+			return list
+		}
+	}
+	if r.err == nil {
+		r.err = core.Fieldf(r.path+".extendedProperties."+ED269Key+"."+textsKey+"."+member,
+			"no longer holds the ED-269 text of %s; the text was edited after ToED269 carried the languages", member)
+	}
+	return nil
+}
+
+// finish reports a stale carried list, or one for a member the zone does
+// not have.
+func (r *restorer) finish() error {
+	if r.err != nil {
+		return r.err
+	}
+	for member := range r.carried {
+		if !r.used[member] {
+			return core.Fieldf(r.path+".extendedProperties."+ED269Key+"."+textsKey+"."+member,
+				"is carried for a member this zone does not have")
+		}
+	}
+	return nil
+}
+
+// fromExtended carries the rest of ED-269's extendedProperties and the
+// kept ED-269 fields under ED269Key.
+func fromExtended(ext map[string]json.RawMessage, keep map[string]any, path string) (map[string]json.RawMessage, error) {
 	if len(keep) > 0 {
 		b, err := json.Marshal(keep)
 		if err != nil {
@@ -320,16 +441,23 @@ func fromVolume(v ed269.Volume, path string) (Geometry, error) {
 // and read back with ed269.Parse, so it is a valid ED-269 document or an
 // error.
 //
+// ED-269 holds one string where ED-318 holds a list of texts in several
+// languages. ToED269 writes the text in lang when there is one, else in
+// English (en or en-*), else the first text given; when a list has more
+// than one entry, the whole list is carried in the ED-269 zone's
+// extendedProperties.ed269.texts, so that FromED269 restores every
+// language (owner decision on PR #16). A list none of whose entries has
+// a text is refused.
+//
 // What ED-269 cannot express is refused with a *core.FieldError naming the
 // field, never dropped or approximated: a USPACE zone (ED-269 has no such
 // restriction), a DAR reason, a daylight event (ED-269 times are clock
-// times), a text in more than one language (ED-269 holds one), a
-// GeometryCollection of more than one layer (ED-269 holds one volume per
-// zone), a layer without both references. The collection's metadata, a
-// zone's dataSource and the extras ED-269 has no member for are not
-// carried; extendedProperties is, without ED269Key, whose fields return to
-// their ED-269 members.
-func ToED269(fc *FeatureCollection) (*ed269.Document, error) {
+// times), a GeometryCollection of more than one layer (ED-269 holds one
+// volume per zone), a layer without both references. The collection's
+// metadata, a zone's dataSource and the extras ED-269 has no member for
+// are not carried; extendedProperties is, with ED-318's ED269Key fields
+// returned to their ED-269 members.
+func ToED269(fc *FeatureCollection, lang string) (*ed269.Document, error) {
 	if fc == nil {
 		return nil, core.Fieldf("$", "no feature collection")
 	}
@@ -342,7 +470,7 @@ func ToED269(fc *FeatureCollection) (*ed269.Document, error) {
 	}
 	features := make([]any, 0, len(fc.Features))
 	for i := range fc.Features {
-		z, err := toZone(&fc.Features[i], index("features", i))
+		z, err := toZone(&fc.Features[i], index("features", i), lang)
 		if err != nil {
 			return nil, err
 		}
@@ -361,31 +489,64 @@ func ToED269(fc *FeatureCollection) (*ed269.Document, error) {
 	return out, nil
 }
 
-// single is the one text of a list, for an ED-269 string member.
-func single(ts []Text, where string) (*string, error) {
-	switch {
-	case ts == nil:
-		return nil, nil
-	case len(ts) != 1:
-		return nil, core.Fieldf(where, "has %d languages; ED-269 holds one text", len(ts))
-	case ts[0].Text == nil:
-		return nil, core.Fieldf(where+"[0].text", "is missing; ED-269 holds the text, not only its language")
+// pickText chooses the text ED-269 gets from a list: the one in lang,
+// else English (en or en-*), else the first, among entries with a text.
+func pickText(ts []Text, lang string) *string {
+	var en, first *string
+	for _, t := range ts {
+		if t.Text == nil {
+			continue
+		}
+		switch {
+		case lang != "" && strings.EqualFold(t.Lang, lang):
+			return t.Text
+		case en == nil && (strings.EqualFold(t.Lang, "en") || strings.HasPrefix(strings.ToLower(t.Lang), "en-")):
+			en = t.Text
+		case first == nil:
+			first = t.Text
+		}
 	}
-	return ts[0].Text, nil
+	if en != nil {
+		return en
+	}
+	return first
 }
 
-func setText(m map[string]any, k string, ts []Text, where string) error {
-	s, err := single(ts, where)
-	if err != nil {
-		return err
+// carrier writes ED-269 strings from ED-318 text lists and keeps the
+// lists that hold more than one entry.
+type carrier struct {
+	lang  string
+	lists map[string]any
+}
+
+// set writes member k of m from ts; member names the list in the carrier.
+func (c *carrier) set(m map[string]any, k, member string, ts []Text, where string) error {
+	if ts == nil {
+		return nil
 	}
-	if s != nil {
-		m[k] = *s
+	s := pickText(ts, c.lang)
+	if s == nil {
+		return core.Fieldf(where, "has no text in any of its %d entries; ED-269 holds the text, not only its language", len(ts))
+	}
+	m[k] = *s
+	if len(ts) > 1 {
+		if c.lists == nil {
+			c.lists = map[string]any{}
+		}
+		list := make([]any, 0, len(ts))
+		for _, t := range ts {
+			e := map[string]any{"lang": t.Lang}
+			if t.Text != nil {
+				e["text"] = *t.Text
+			}
+			list = append(list, e)
+		}
+		c.lists[member] = list
 	}
 	return nil
 }
 
-func toZone(f *Feature, path string) (map[string]any, error) {
+func toZone(f *Feature, path, lang string) (map[string]any, error) {
 	z := &f.Properties
 	here := path + ".properties"
 	if z.Type == core.ZoneUSpace {
@@ -397,14 +558,14 @@ func toZone(f *Feature, path string) (map[string]any, error) {
 		"type":        z.Variant,
 		"restriction": z.Type.ED269(),
 	}
-	if err := setText(m, "name", z.Name, here+".name"); err != nil {
-		return nil, err
-	}
-	if err := setText(m, "message", z.Message, here+".message"); err != nil {
-		return nil, err
-	}
-	if err := setText(m, "otherReasonInfo", z.OtherReasonInfo, here+".otherReasonInfo"); err != nil {
-		return nil, err
+	c := &carrier{lang: lang}
+	for _, t := range []struct {
+		k  string
+		ts []Text
+	}{{"name", z.Name}, {"message", z.Message}, {"otherReasonInfo", z.OtherReasonInfo}} {
+		if err := c.set(m, t.k, t.k, t.ts, here+"."+t.k); err != nil {
+			return nil, err
+		}
 	}
 	if z.Reason != nil {
 		rs := make([]string, 0, len(z.Reason))
@@ -422,18 +583,29 @@ func toZone(f *Feature, path string) (map[string]any, error) {
 	if z.RegulationExemption != nil {
 		m["regulationExemption"] = *z.RegulationExemption
 	}
-	if err := toExtended(m, z, here); err != nil {
+	rest, err := toExtended(m, z, here)
+	if err != nil {
 		return nil, err
 	}
 	auths := make([]any, 0, len(z.ZoneAuthority))
 	for k := range z.ZoneAuthority {
-		a, err := toAuthority(&z.ZoneAuthority[k], index(here+".zoneAuthority", k))
+		a, err := toAuthority(&z.ZoneAuthority[k], index(here+".zoneAuthority", k), index("zoneAuthority", k), c)
 		if err != nil {
 			return nil, err
 		}
 		auths = append(auths, a)
 	}
 	m["zoneAuthority"] = auths
+	if c.lists != nil {
+		block, err := json.Marshal(map[string]any{textsKey: c.lists})
+		if err != nil {
+			return nil, core.Fieldf(here, "%v", err)
+		}
+		rest[ED269Key] = block
+	}
+	if len(rest) > 0 {
+		m["extendedProperties"] = rest
+	}
 	periods, err := toApplicability(z.LimitedApplicability, here+".limitedApplicability")
 	if err != nil {
 		return nil, err
@@ -447,16 +619,16 @@ func toZone(f *Feature, path string) (map[string]any, error) {
 	return m, nil
 }
 
-// toExtended restores the ED269Key fields and writes the rest of
+// toExtended restores the ED269Key fields and returns the rest of
 // extendedProperties.
-func toExtended(m map[string]any, z *UASZone, here string) error {
+func toExtended(m map[string]any, z *UASZone, here string) (map[string]json.RawMessage, error) {
 	if z.RestrictionConditions != nil {
 		m["restrictionConditions"] = *z.RestrictionConditions
 	}
-	if z.ExtendedProperties == nil {
-		return nil
-	}
 	rest := map[string]json.RawMessage{}
+	if z.ExtendedProperties == nil {
+		return rest, nil
+	}
 	for k, v := range z.ExtendedProperties {
 		if k != ED269Key {
 			rest[k] = v
@@ -466,20 +638,20 @@ func toExtended(m map[string]any, z *UASZone, here string) error {
 		where := here + ".extendedProperties." + ED269Key
 		var kept map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &kept); err != nil || kept == nil {
-			return core.Fieldf(where, "must be an object")
+			return nil, core.Fieldf(where, "must be an object")
 		}
 		for k, v := range kept {
 			switch k {
 			case "uSpaceClass", "title":
 				var s string
 				if err := json.Unmarshal(v, &s); err != nil {
-					return core.Fieldf(where+"."+k, "must be a string")
+					return nil, core.Fieldf(where+"."+k, "must be a string")
 				}
 				m[k] = s
 			case "restrictionConditions":
 				var list []string
 				if err := json.Unmarshal(v, &list); err != nil || list == nil {
-					return core.Fieldf(where+"."+k, "must be a list of strings")
+					return nil, core.Fieldf(where+"."+k, "must be a list of strings")
 				}
 				// The list stands for restrictionConditions only while the
 				// ED-318 text is still its join; an edited text wins.
@@ -487,23 +659,20 @@ func toExtended(m map[string]any, z *UASZone, here string) error {
 					m["restrictionConditions"] = list
 				}
 			default:
-				return core.Fieldf(where+"."+k, "is not one of %s", strings.Join(ed269KeyFields, ", "))
+				return nil, core.Fieldf(where+"."+k, "is not one of %s", strings.Join(ed269KeyFields, ", "))
 			}
 		}
 	}
-	if len(rest) > 0 {
-		m["extendedProperties"] = rest
-	}
-	return nil
+	return rest, nil
 }
 
-func toAuthority(a *Authority, where string) (map[string]any, error) {
+func toAuthority(a *Authority, where, member string, c *carrier) (map[string]any, error) {
 	m := map[string]any{"purpose": a.Purpose}
 	for _, t := range []struct {
 		k  string
 		ts []Text
 	}{{"name", a.Name}, {"service", a.Service}, {"contactName", a.ContactName}} {
-		if err := setText(m, t.k, t.ts, where+"."+t.k); err != nil {
+		if err := c.set(m, t.k, member+"."+t.k, t.ts, where+"."+t.k); err != nil {
 			return nil, err
 		}
 	}

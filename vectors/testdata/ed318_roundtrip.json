@@ -5906,7 +5906,8 @@
      },
      "name": "Test zones around Tbilisi (ED-318)",
      "type": "FeatureCollection"
-    }
+    },
+    "lang": "en-GB"
    },
    "expected": {
     "ed269": {
@@ -6051,6 +6052,300 @@
     "mapped": true
    },
    "why": "The mappable subset maps onto ED-269 for legacy consumers: type becomes restriction in ED-269's spelling, variant becomes type, one-language texts become strings, the layer becomes a volume (the WGS84 limit is this project's ED-269 extension, Z-05), no limitedApplicability becomes one permanent period."
+  },
+  {
+   "name": "map-two-languages-to-ed269",
+   "owner": [
+    "authority",
+    "cisp",
+    "ussp",
+    "ansp"
+   ],
+   "input": {
+    "kind": "to_ed269",
+    "document": {
+     "features": [
+      {
+       "geometry": {
+        "coordinates": [
+         [
+          [
+           44.8,
+           41.7
+          ],
+          [
+           44.82,
+           41.7
+          ],
+          [
+           44.82,
+           41.72
+          ],
+          [
+           44.8,
+           41.72
+          ],
+          [
+           44.8,
+           41.7
+          ]
+         ],
+         [
+          [
+           44.805,
+           41.705
+          ],
+          [
+           44.815,
+           41.705
+          ],
+          [
+           44.815,
+           41.715
+          ],
+          [
+           44.805,
+           41.715
+          ],
+          [
+           44.805,
+           41.705
+          ]
+         ]
+        ],
+        "layer": {
+         "lower": 0,
+         "lowerReference": "AGL",
+         "uom": "m",
+         "upper": 600,
+         "upperReference": "WGS84"
+        },
+        "type": "Polygon"
+       },
+       "properties": {
+        "country": "GEO",
+        "extendedProperties": {
+         "source": "test"
+        },
+        "identifier": "TSR001",
+        "limitedApplicability": [
+         {
+          "endDateTime": "2027-01-01T00:00:00+04:00",
+          "schedule": [
+           {
+            "day": [
+             "MON",
+             "TUE",
+             "WED",
+             "THU",
+             "FRI"
+            ],
+            "endTime": "18:00:00+04:00",
+            "startTime": "08:00:00+04:00"
+           }
+          ],
+          "startDateTime": "2026-10-01T00:00:00+04:00"
+         }
+        ],
+        "message": [
+         {
+          "lang": "en-GB",
+          "text": "Authorisation required on weekdays"
+         }
+        ],
+        "name": [
+         {
+          "lang": "en-GB",
+          "text": "Test authorisation zone"
+         },
+         {
+          "lang": "ka-GE",
+          "text": "სატესტო ნებართვის ზონა"
+         }
+        ],
+        "reason": [
+         "SENSITIVE",
+         "PRIVACY"
+        ],
+        "restrictionConditions": "Authorisation by the authority",
+        "type": "REQ_AUTHORIZATION",
+        "variant": "COMMON",
+        "zoneAuthority": [
+         {
+          "email": "zones@example.invalid",
+          "intervalBefore": "P2D",
+          "name": [
+           {
+            "lang": "en-GB",
+            "text": "Test authority"
+           }
+          ],
+          "purpose": "AUTHORIZATION",
+          "siteURL": "https://example.invalid/zones"
+         }
+        ]
+       },
+       "type": "Feature"
+      }
+     ],
+     "metadata": {
+      "description": [
+       {
+        "lang": "en-GB",
+        "text": "Invented zones around Tbilisi for tests; not real restrictions"
+       }
+      ],
+      "issued": "2026-09-30T12:00:00.5Z",
+      "otherGeoid": "urn:ogc:def:crs:EPSG::3855",
+      "provider": [
+       {
+        "lang": "en-GB",
+        "text": "Test authority"
+       },
+       {
+        "lang": "ka-GE",
+        "text": "სატესტო უწყება"
+       }
+      ],
+      "technicalLimitations": [
+       {
+        "lang": "en-GB",
+        "text": "Test data with no legal force"
+       }
+      ],
+      "validFrom": "2026-10-01T00:00:00Z",
+      "validTo": "2027-10-01T00:00:00+04:00"
+     },
+     "name": "Test zones around Tbilisi (ED-318)",
+     "type": "FeatureCollection"
+    },
+    "lang": "ka-GE"
+   },
+   "expected": {
+    "ed269": {
+     "features": [
+      {
+       "applicability": [
+        {
+         "endDateTime": "2027-01-01T00:00:00+04:00",
+         "permanent": "NO",
+         "schedule": [
+          {
+           "day": [
+            "MON",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI"
+           ],
+           "endTime": "18:00:00+04:00",
+           "startTime": "08:00:00+04:00"
+          }
+         ],
+         "startDateTime": "2026-10-01T00:00:00+04:00"
+        }
+       ],
+       "country": "GEO",
+       "extendedProperties": {
+        "ed269": {
+         "texts": {
+          "name": [
+           {
+            "lang": "en-GB",
+            "text": "Test authorisation zone"
+           },
+           {
+            "lang": "ka-GE",
+            "text": "სატესტო ნებართვის ზონა"
+           }
+          ]
+         }
+        },
+        "source": "test"
+       },
+       "geometry": [
+        {
+         "horizontalProjection": {
+          "coordinates": [
+           [
+            [
+             44.8,
+             41.7
+            ],
+            [
+             44.82,
+             41.7
+            ],
+            [
+             44.82,
+             41.72
+            ],
+            [
+             44.8,
+             41.72
+            ],
+            [
+             44.8,
+             41.7
+            ]
+           ],
+           [
+            [
+             44.805,
+             41.705
+            ],
+            [
+             44.815,
+             41.705
+            ],
+            [
+             44.815,
+             41.715
+            ],
+            [
+             44.805,
+             41.715
+            ],
+            [
+             44.805,
+             41.705
+            ]
+           ]
+          ],
+          "type": "Polygon"
+         },
+         "lowerLimit": 0,
+         "lowerVerticalReference": "AGL",
+         "uomDimensions": "M",
+         "upperLimit": 600,
+         "upperVerticalReference": "WGS84"
+        }
+       ],
+       "identifier": "TSR001",
+       "message": "Authorisation required on weekdays",
+       "name": "სატესტო ნებართვის ზონა",
+       "reason": [
+        "SENSITIVE",
+        "PRIVACY"
+       ],
+       "restriction": "REQ_AUTHORISATION",
+       "restrictionConditions": "Authorisation by the authority",
+       "type": "COMMON",
+       "zoneAuthority": [
+        {
+         "email": "zones@example.invalid",
+         "intervalBefore": "P2D",
+         "name": "Test authority",
+         "purpose": "AUTHORIZATION",
+         "siteURL": "https://example.invalid/zones"
+        }
+       ]
+      }
+     ]
+    },
+    "mapped": true
+   },
+   "why": "ED-269 holds one string per text: the preferred language's (ka-GE here; else English, else the first), and the whole list travels in extendedProperties.ed269.texts so that the way back restores every language (owner decision on PR #16)."
   },
   {
    "name": "refuse-ed269-mapping-uspace",

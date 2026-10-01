@@ -81,7 +81,11 @@
 // return. What one side cannot hold is refused with a *core.FieldError,
 // never dropped or approximated: from ED-269 a FOREIGN_TERRITORY reason
 // and a zone without an authority or a purpose; to ED-269 USPACE, DAR,
-// daylight events, texts in several languages and two-layer zones.
+// daylight events and two-layer zones. A text in several languages is
+// not refused: ToED269 writes the one in the caller's language, else
+// English, else the first, and carries the whole list in the ED-269
+// zone's extendedProperties.ed269.texts, from which FromED269 restores
+// it.
 // ed269 -> ED-318 -> ed269 is the identity on the mappable zones of
 // ed269_parse.json's valid file.
 //
@@ -104,7 +108,7 @@
 // day between its dates (at most MaxEventDays), resolved at the centre of
 // the part's bounding box.
 //
-// Vector: vectors/testdata/ed318_roundtrip.json (21 cases), written by
+// Vector: vectors/testdata/ed318_roundtrip.json (22 cases), written by
 // ed318/internal/genvectors from testdata/authority_collection.json and
 // the cases in source.json; proposed upstream to uspace-lab. Milestone
 // G-M2. Owned by WP-12.

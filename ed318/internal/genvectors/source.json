@@ -78,6 +78,7 @@
       "name": "map-mappable-subset-to-ed269",
       "kind": "to_ed269",
       "features": [2, 4],
+      "lang": "en-GB",
       "expected": {
         "mapped": true,
         "ed269": {
@@ -141,6 +142,62 @@
         }
       },
       "why": "The mappable subset maps onto ED-269 for legacy consumers: type becomes restriction in ED-269's spelling, variant becomes type, one-language texts become strings, the layer becomes a volume (the WGS84 limit is this project's ED-269 extension, Z-05), no limitedApplicability becomes one permanent period."
+    },
+    {
+      "name": "map-two-languages-to-ed269",
+      "kind": "to_ed269",
+      "features": [2],
+      "lang": "ka-GE",
+      "patch": [{"op": "replace", "path": "/features/0/properties/name", "value": [{"text": "Test authorisation zone", "lang": "en-GB"}, {"text": "სატესტო ნებართვის ზონა", "lang": "ka-GE"}]}],
+      "expected": {
+        "mapped": true,
+        "ed269": {
+          "features": [
+            {
+              "identifier": "TSR001",
+              "country": "GEO",
+              "name": "სატესტო ნებართვის ზონა",
+              "type": "COMMON",
+              "restriction": "REQ_AUTHORISATION",
+              "reason": ["SENSITIVE", "PRIVACY"],
+              "message": "Authorisation required on weekdays",
+              "applicability": [
+                {
+                  "permanent": "NO",
+                  "startDateTime": "2026-10-01T00:00:00+04:00",
+                  "endDateTime": "2027-01-01T00:00:00+04:00",
+                  "schedule": [{"day": ["MON", "TUE", "WED", "THU", "FRI"], "startTime": "08:00:00+04:00", "endTime": "18:00:00+04:00"}]
+                }
+              ],
+              "zoneAuthority": [
+                {"name": "Test authority", "siteURL": "https://example.invalid/zones", "email": "zones@example.invalid", "purpose": "AUTHORIZATION", "intervalBefore": "P2D"}
+              ],
+              "geometry": [
+                {
+                  "uomDimensions": "M",
+                  "lowerLimit": 0,
+                  "lowerVerticalReference": "AGL",
+                  "upperLimit": 600,
+                  "upperVerticalReference": "WGS84",
+                  "horizontalProjection": {
+                    "type": "Polygon",
+                    "coordinates": [
+                      [[44.8, 41.7], [44.82, 41.7], [44.82, 41.72], [44.8, 41.72], [44.8, 41.7]],
+                      [[44.805, 41.705], [44.815, 41.705], [44.815, 41.715], [44.805, 41.715], [44.805, 41.705]]
+                    ]
+                  }
+                }
+              ],
+              "restrictionConditions": "Authorisation by the authority",
+              "extendedProperties": {
+                "source": "test",
+                "ed269": {"texts": {"name": [{"text": "Test authorisation zone", "lang": "en-GB"}, {"text": "სატესტო ნებართვის ზონა", "lang": "ka-GE"}]}}
+              }
+            }
+          ]
+        }
+      },
+      "why": "ED-269 holds one string per text: the preferred language's (ka-GE here; else English, else the first), and the whole list travels in extendedProperties.ed269.texts so that the way back restores every language (owner decision on PR #16)."
     },
     {
       "name": "refuse-ed269-mapping-uspace",

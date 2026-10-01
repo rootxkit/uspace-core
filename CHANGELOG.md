@@ -146,7 +146,7 @@ Each entry names the work package and the vectors it affects.
 
 The standards types: ED-318 zones, F3411-22a network Remote ID and
 F3548-21 strategic coordination. Adds the local knowledge vector
-`ed318_roundtrip.json` (21 cases; 681 in all with the 660 of the lab).
+`ed318_roundtrip.json` (22 cases; 682 in all with the 660 of the lab).
 
 ### Added
 
@@ -174,7 +174,7 @@ F3548-21 strategic coordination. Adds the local knowledge vector
   an unresolvable event reported as not evaluated, and `ToZones`. The
   geometry's vertical-limit names (`layer`) are taken from both sources
   and remain unverified against the EUROCAE text. Passes
-  `ed318_roundtrip.json` (21/21), which `ed318/internal/genvectors` writes.
+  `ed318_roundtrip.json` (22/22), which `ed318/internal/genvectors` writes.
   [WP-12]
 
 ## [0.1.0] - unreleased (G-M1)

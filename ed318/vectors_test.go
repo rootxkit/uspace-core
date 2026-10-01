@@ -100,7 +100,7 @@ func parseOrFail(t *testing.T, doc []byte) *FeatureCollection {
 }
 
 func runToED269Case(t *testing.T, in vectorInput, exp vectorExpected) {
-	doc, err := ToED269(parseOrFail(t, in.Document))
+	doc, err := ToED269(parseOrFail(t, in.Document), in.Lang)
 	if exp.Mapped == nil {
 		t.Fatal("no expected.mapped")
 	}
@@ -143,7 +143,7 @@ func runFromED269Case(t *testing.T, in vectorInput, exp vectorExpected) {
 		t.Errorf("ED-318 differs:\n got %s\nwant %s", out, exp.ED318)
 	}
 	// The mapping is accepted by Parse and maps back to the input.
-	back, err := ToED269(parseOrFail(t, out))
+	back, err := ToED269(parseOrFail(t, out), "en-GB")
 	if err != nil {
 		t.Fatal(err)
 	}

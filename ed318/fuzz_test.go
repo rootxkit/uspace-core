@@ -90,7 +90,7 @@ func FuzzParseED318(f *testing.F) {
 			t.Fatalf("Parse(Export(c)) differs from c\n%s", out)
 		}
 		_, _ = ToZones(fc, FixedDaylight{})
-		_, _ = ToED269(fc)
+		_, _ = ToED269(fc, "")
 		for i := range fc.Features {
 			_, _ = Applies(fc.Features[i].Properties.LimitedApplicability, at, center(boxOf(fc.Features[i].Geometry)), NOAADaylight{})
 		}

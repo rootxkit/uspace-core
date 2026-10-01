@@ -185,6 +185,9 @@ func buildCase(base map[string]any, daylight json.RawMessage, c *sourceCase) (ve
 			}
 		}
 		vc.Input.Document = doc
+		if c.Kind == "to_ed269" {
+			vc.Input.Lang = c.Lang
+		}
 		if c.Kind == "applies" {
 			vc.Input.At, vc.Input.Where = c.At, c.Where
 			if c.UseDaylight {

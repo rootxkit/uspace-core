@@ -134,7 +134,7 @@ func TestED269MapsBothWays(t *testing.T) {
 	if probs != nil {
 		t.Fatalf("the mapped ED-318 is refused: %v\n%s", probs, raw)
 	}
-	back, err := ToED269(reread)
+	back, err := ToED269(reread, "en-GB")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestED269WithoutAuthorityRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	back, err := ToED269(fc)
+	back, err := ToED269(fc, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,21 +228,17 @@ func TestToED269Refusals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ToED269(good); err != nil {
+	if _, err := ToED269(good, ""); err != nil {
 		t.Fatalf("the mappable collection: %v", err)
 	}
 	event := EventSR
-	two := "second"
 	cases := map[string]struct {
 		mut   func(fc *FeatureCollection)
 		field string
 	}{
-		"uspace": {func(fc *FeatureCollection) { fc.Features[0].Properties.Type = core.ZoneUSpace }, "features[0].properties.type"},
-		"dar":    {func(fc *FeatureCollection) { fc.Features[0].Properties.Reason = []string{"DAR"} }, "features[0].properties.reason[0]"},
-		"two names": {func(fc *FeatureCollection) {
-			fc.Features[0].Properties.Name = append(fc.Features[0].Properties.Name, Text{Text: &two, Lang: "ka"})
-		}, "features[0].properties.name"},
-		"lang only": {func(fc *FeatureCollection) { fc.Features[0].Properties.Message = []Text{{Lang: "en"}} }, "features[0].properties.message[0].text"},
+		"uspace":    {func(fc *FeatureCollection) { fc.Features[0].Properties.Type = core.ZoneUSpace }, "features[0].properties.type"},
+		"dar":       {func(fc *FeatureCollection) { fc.Features[0].Properties.Reason = []string{"DAR"} }, "features[0].properties.reason[0]"},
+		"lang only": {func(fc *FeatureCollection) { fc.Features[0].Properties.Message = []Text{{Lang: "en"}} }, "features[0].properties.message"},
 		"start event": {func(fc *FeatureCollection) {
 			fc.Features[1].Properties.LimitedApplicability[0].Schedule = []DailyPeriod{{Day: []string{"ANY"}, StartEvent: &event, EndEvent: &event}}
 		}, "features[1].properties.limitedApplicability[0].schedule[0].startEvent"},
@@ -278,13 +274,13 @@ func TestToED269Refusals(t *testing.T) {
 			t.Fatal(err)
 		}
 		c.mut(fc)
-		_, err = ToED269(fc)
+		_, err = ToED269(fc, "")
 		var fe *core.FieldError
 		if !errors.As(err, &fe) || fe.Field != c.field {
 			t.Errorf("%s: %v, want a FieldError on %q", name, err, c.field)
 		}
 	}
-	if _, err := ToED269(nil); err == nil {
+	if _, err := ToED269(nil, ""); err == nil {
 		t.Error("a nil collection mapped")
 	}
 }
@@ -298,7 +294,7 @@ func TestToED269EditedConditionsWin(t *testing.T) {
 	}
 	edited := "Notify 48 h before"
 	fc.Features[0].Properties.RestrictionConditions = &edited
-	doc, err := ToED269(fc)
+	doc, err := ToED269(fc, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,6 +308,117 @@ func TestShortestFeet(t *testing.T) {
 	for _, ft := range []float64{1640, 3500, 250.5, 1, 12345.678, 0.1} {
 		if got := shortestFeet(ft * core.FeetToMetres); got != ft {
 			t.Errorf("%v ft -> %v m -> %v ft", ft, ft*core.FeetToMetres, got)
+		}
+	}
+}
+
+func txt(s, lang string) Text { return Text{Text: &s, Lang: lang} }
+
+// ToED269 writes the text in the preferred language, else English, else
+// the first given.
+func TestToED269PicksALanguage(t *testing.T) {
+	for _, c := range []struct {
+		names []Text
+		lang  string
+		want  string
+	}{
+		{[]Text{txt("ka", "ka-GE"), txt("en", "en-GB"), txt("fr", "fr-FR")}, "ka-GE", "ka"},
+		{[]Text{txt("ka", "ka-GE"), txt("en", "en-GB"), txt("fr", "fr-FR")}, "FR-fr", "fr"},
+		{[]Text{txt("ka", "ka-GE"), txt("en", "en-GB"), txt("fr", "fr-FR")}, "de", "en"},
+		{[]Text{txt("ka", "ka-GE"), txt("en", "en"), txt("fr", "fr-FR")}, "", "en"},
+		{[]Text{txt("ka", "ka-GE"), txt("fr", "fr-FR")}, "de", "ka"},
+		{[]Text{{Lang: "de"}, txt("fr", "fr-FR")}, "de", "fr"},
+	} {
+		got := pickText(c.names, c.lang)
+		if got == nil || *got != c.want {
+			t.Errorf("%v in %q: %v, want %q", c.names, c.lang, got, c.want)
+		}
+	}
+	if pickText([]Text{{Lang: "de"}}, "de") != nil {
+		t.Error("a text picked from an entry without one")
+	}
+}
+
+// Texts in several languages map to ED-269 without being refused and
+// come back whole: the other languages travel in the ED-269 zone's
+// extendedProperties.ed269.texts.
+func TestToED269CarriesOtherLanguages(t *testing.T) {
+	fc, err := FromED269(only(validED269(t), "TST001"), Metadata{}, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &fc.Features[0].Properties
+	u.Name = []Text{txt("სატესტო", "ka-GE"), txt("Test prohibited square with a hole", "en-GB")}
+	u.ZoneAuthority[0].Name = []Text{txt("Test authority", "en-GB"), txt("უწყება", "ka-GE")}
+	doc, err := ToED269(fc, "en-GB")
+	if err != nil {
+		t.Fatalf("several languages refused: %v", err)
+	}
+	z := doc.Zones[0]
+	if *z.Name != "Test prohibited square with a hole" || *z.ZoneAuthority[0].Name != "Test authority" {
+		t.Errorf("chosen texts %q, %q", *z.Name, *z.ZoneAuthority[0].Name)
+	}
+	if !strings.Contains(string(z.ExtendedProperties), `"ed269":{"texts":{`) || !strings.Contains(string(z.ExtendedProperties), "სატესტო") {
+		t.Errorf("carried texts: %s", z.ExtendedProperties)
+	}
+	// Through ED-269 JSON and back: every language returns, and the
+	// carrier does not stay in extendedProperties.
+	raw, err := ed269.Export(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reread, probs := ed269.Parse(raw, ed269.Limits{})
+	if probs != nil {
+		t.Fatal(probs)
+	}
+	back, err := FromED269(reread, Metadata{}, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := back.Features[0].Properties
+	if !reflect.DeepEqual(b.Name, u.Name) || !reflect.DeepEqual(b.ZoneAuthority[0].Name, u.ZoneAuthority[0].Name) {
+		t.Errorf("languages lost: %+v / %+v", b.Name, b.ZoneAuthority[0].Name)
+	}
+	if b.ExtendedProperties != nil {
+		t.Errorf("the carrier stayed: %v", b.ExtendedProperties)
+	}
+	// E-01: one language carries nothing.
+	one, err := FromED269(only(validED269(t), "TST001"), Metadata{}, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	single, err := ToED269(one, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if single.Zones[0].ExtendedProperties != nil {
+		t.Errorf("a single language was carried: %s", single.Zones[0].ExtendedProperties)
+	}
+}
+
+// A carried list that no longer holds the ED-269 text, carries a member
+// the zone does not have, or is not what ToED269 writes, is refused.
+func TestFromED269CarriedTextsRefusals(t *testing.T) {
+	base := only(validED269(t), "TST001")
+	cases := map[string]struct {
+		ext   string
+		field string
+	}{
+		"edited text":     {`{"ed269":{"texts":{"name":[{"text":"old","lang":"en"},{"text":"ძველი","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"absent member":   {`{"ed269":{"texts":{"zoneAuthority[3].name":[{"text":"x","lang":"en"}]}}}`, "features[0].extendedProperties.ed269.texts.zoneAuthority[3].name"},
+		"other member":    {`{"ed269":{"names":{}}}`, "features[0].extendedProperties.ed269.names"},
+		"texts not lists": {`{"ed269":{"texts":[]}}`, "features[0].extendedProperties.ed269.texts"},
+		"no lang":         {`{"ed269":{"texts":{"name":[{"text":"x"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"not an object":   {`{"ed269":1}`, "features[0].extendedProperties.ed269"},
+	}
+	for name, c := range cases {
+		d := *base
+		d.Zones = []ed269.GeoZone{base.Zones[0]}
+		d.Zones[0].ExtendedProperties = json.RawMessage(c.ext)
+		_, err := FromED269(&d, Metadata{}, "en")
+		var fe *core.FieldError
+		if !errors.As(err, &fe) || fe.Field != c.field {
+			t.Errorf("%s: %v, want a FieldError on %q", name, err, c.field)
 		}
 	}
 }

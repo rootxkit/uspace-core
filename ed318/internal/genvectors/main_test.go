@@ -35,7 +35,7 @@ func TestCommittedVectorIsGenerated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Cases) != 21 || len(f.Owners) != 4 || f.UtmCommit != utm {
+	if len(f.Cases) != 22 || len(f.Owners) != 4 || f.UtmCommit != utm {
 		t.Errorf("%d cases, owners %v, utm %s", len(f.Cases), f.Owners, f.UtmCommit)
 	}
 }
