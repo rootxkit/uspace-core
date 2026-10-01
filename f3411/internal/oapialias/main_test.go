@@ -125,3 +125,35 @@ func TestRewriteFile(t *testing.T) {
 		t.Error("a missing file was rewritten")
 	}
 }
+
+// -source records the generated file's hash in SOURCE, replacing the
+// line it wrote before, and the hash ignores CRLF line endings.
+func TestRecordHash(t *testing.T) {
+	dir := t.TempDir()
+	file, source := filepath.Join(dir, "types.gen.go"), filepath.Join(dir, "SOURCE")
+	if err := os.WriteFile(file, []byte("package x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("# c\nspec_commit = abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := recordHash(file, source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _ := os.ReadFile(source)
+	want := "# c\nspec_commit = abc\ngenerated_sha256 = " + GeneratedHash([]byte("package x\n")) + "\n"
+	if string(got) != want {
+		t.Errorf("SOURCE:\n%s\nwant\n%s", got, want)
+	}
+	if GeneratedHash([]byte("a\r\nb\r\n")) != GeneratedHash([]byte("a\nb\n")) {
+		t.Error("CRLF changes the hash")
+	}
+	if err := recordHash(filepath.Join(dir, "none.go"), source); err == nil {
+		t.Error("a missing file was hashed")
+	}
+	if err := setKey(filepath.Join(dir, "NONE"), "k", "v"); err == nil {
+		t.Error("a missing SOURCE was written")
+	}
+}

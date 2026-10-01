@@ -22,11 +22,18 @@
 // package is documented in doc.go). A union with more than one variant is
 // an error: it would need a real union type and a decision.
 //
-//	go run ../f3411/internal/oapialias -file types.gen.go
+//	go run ../f3411/internal/oapialias -file types.gen.go -source SOURCE
+//
+// With -source it also records the rewritten file's SHA-256 (of its LF
+// form) as `generated_sha256` in the SOURCE file, which the package tests
+// compare offline: a generated file edited by hand, or regenerated without
+// committing the new hash, fails the build without network access.
 package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -43,15 +50,57 @@ import (
 
 func main() {
 	file := flag.String("file", "", "generated Go file to rewrite in place")
+	source := flag.String("source", "", "SOURCE file in which to record the generated file's SHA-256")
 	flag.Parse()
 	if *file == "" {
 		fmt.Fprintln(os.Stderr, "oapialias: -file is required")
 		os.Exit(2) //nolint:forbidigo // a command reports failure by its exit status
 	}
-	if err := rewriteFile(*file); err != nil {
+	err := rewriteFile(*file)
+	if err == nil && *source != "" {
+		err = recordHash(*file, *source)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "oapialias:", err)
 		os.Exit(1) //nolint:forbidigo // a command reports failure by its exit status
 	}
+}
+
+// GeneratedHash is the SHA-256 of a generated file in its LF form, so
+// that a checkout with CRLF line endings hashes the same.
+func GeneratedHash(src []byte) string {
+	sum := sha256.Sum256(bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n")))
+	return hex.EncodeToString(sum[:])
+}
+
+// recordHash writes `generated_sha256 = <hash>` into the SOURCE file,
+// replacing the line when there is one.
+func recordHash(file, source string) error {
+	src, err := os.ReadFile(file) //nolint:gosec // G304: the path is this command's own flag
+	if err != nil {
+		return err
+	}
+	return setKey(source, "generated_sha256", GeneratedHash(src))
+}
+
+// setKey sets `key = value` in a SOURCE file.
+func setKey(source, key, value string) error {
+	raw, err := os.ReadFile(source) //nolint:gosec // G304: the path is this command's own flag
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	line := key + " = " + value
+	done := false
+	for i, l := range lines {
+		if k, _, ok := strings.Cut(l, "="); ok && strings.TrimSpace(k) == key {
+			lines[i], done = line, true
+		}
+	}
+	if !done {
+		lines = append(lines, line)
+	}
+	return os.WriteFile(source, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
 // rewriteFile rewrites path in place.
