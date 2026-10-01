@@ -21,8 +21,11 @@
 //
 // Unknown members are ignored, never refused (spec 02 section 1);
 // UnmarshalOperationalIntent reads untrusted bytes with a size bound
-// (MaxMessageBytes) and returns a *core.FieldError naming the member on a
-// type error. It never panics (fuzzed).
+// (MaxMessageBytes), then checks the members a judgement rests on
+// (required presence, the state and availability enumerations, time order,
+// each volume's outline and altitude ranges; the exact list is in
+// validate.go) and returns a *core.FieldError naming the member on any
+// failure. It never panics (fuzzed, with the checks as an invariant).
 //
 // # Conversions
 //

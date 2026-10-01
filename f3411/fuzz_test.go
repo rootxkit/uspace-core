@@ -9,8 +9,9 @@ import (
 )
 
 // FuzzUnmarshalRIDFlight: any bytes either decode or are refused with an
-// error, never a panic; a decoded flight's accessors never panic; and a
-// decoded flight marshals and decodes back to an equal value.
+// error, never a panic; an accepted flight satisfies the checks of
+// validate.go; its accessors never panic; and it marshals and decodes back
+// to an equal value.
 func FuzzUnmarshalRIDFlight(f *testing.F) {
 	entries, err := os.ReadDir(filepath.Join("testdata", "examples"))
 	if err != nil {
@@ -29,6 +30,24 @@ func FuzzUnmarshalRIDFlight(f *testing.F) {
 		fl, err := UnmarshalRIDFlight(data)
 		if err != nil {
 			return
+		}
+		// What an accepted flight guarantees (validate.go).
+		if fl.Id == "" || !fl.AircraftType.Valid() {
+			t.Fatalf("accepted without an id or a known aircraft type: %q %q", fl.Id, fl.AircraftType)
+		}
+		if s := fl.CurrentState; s != nil {
+			p := s.Position
+			if (p.Lat != nil && (*p.Lat < -90 || *p.Lat > 90)) || (p.Lng != nil && (*p.Lng < -180 || *p.Lng > 180)) {
+				t.Fatalf("accepted a position out of range: %v %v", p.Lat, p.Lng)
+			}
+			if s.Timestamp.Format != RFC3339 || s.Timestamp.Value.IsZero() || !s.SpeedAccuracy.Valid() {
+				t.Fatalf("accepted a state without a valid timestamp or speed accuracy: %+v", s)
+			}
+			if s.OperationalStatus != nil && !s.OperationalStatus.Valid() {
+				t.Fatalf("accepted status %q", *s.OperationalStatus)
+			}
+		} else if fl.OperatingArea == nil || fl.OperatingArea.Volumes == nil || len(*fl.OperatingArea.Volumes) == 0 {
+			t.Fatal("accepted a flight with neither current_state nor an operating area")
 		}
 		if s := fl.CurrentState; s != nil {
 			_ = s.SpeedMS()

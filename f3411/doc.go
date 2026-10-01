@@ -19,8 +19,11 @@
 //
 // Unknown members are ignored, never refused (spec 02 section 1);
 // UnmarshalRIDFlight and UnmarshalGetFlightsResponse read untrusted bytes
-// with a size bound (MaxMessageBytes) and return a *core.FieldError
-// naming the member on a type error. They never panic (fuzzed).
+// with a size bound (MaxMessageBytes), then check the members a judgement
+// rests on (required presence, enumerations, latitude, longitude,
+// altitude, speed, track and time ranges; the exact list is in
+// validate.go) and return a *core.FieldError naming the member on any
+// failure. They never panic (fuzzed, with the checks as an invariant).
 //
 // # Special values
 //

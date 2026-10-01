@@ -30,12 +30,20 @@ func FuzzUnmarshalOperationalIntent(f *testing.F) {
 		if err != nil {
 			return
 		}
+		// What an accepted intent guarantees (validate.go).
+		r := oi.Reference
+		if r.Id == "" || r.Manager == "" || !r.State.Valid() || !r.UssAvailability.Valid() ||
+			r.TimeStart.Format != RFC3339 || r.TimeEnd.Format != RFC3339 || r.TimeEnd.Value.Before(r.TimeStart.Value) {
+			t.Fatalf("accepted an invalid reference: %+v", r)
+		}
 		for _, vs := range []*[]Volume4D{oi.Details.Volumes, oi.Details.OffNominalVolumes} {
 			if vs == nil {
 				continue
 			}
 			for _, v := range *vs {
-				_, _, _, _ = Volume4DToZonesEnvelope(v)
+				if _, _, _, err := Volume4DToZonesEnvelope(v); err != nil {
+					t.Fatalf("accepted a volume without an envelope: %v", err)
+				}
 				if v.Volume.AltitudeLower != nil {
 					_, _ = v.Volume.AltitudeLower.HAEM()
 				}

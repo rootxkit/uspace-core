@@ -14,15 +14,22 @@ const MaxMessageBytes = 4 << 20
 
 // UnmarshalOperationalIntent reads one OperationalIntent (reference and
 // details, the body of GET /uss/v1/operational_intents/{entityid}) from
-// untrusted bytes. Unknown members are ignored, never refused (spec 02
-// section 1: within a major, unknown fields are ignored); a member of the
-// wrong JSON type, invalid JSON or more than MaxMessageBytes is refused
-// with a *core.FieldError. It never panics. Altitudes are checked when
-// read (Altitude.HAEM), not here.
+// untrusted bytes and checks the members a judgement rests on: required
+// presence, the state and availability enumerations, the time order, and
+// each volume's outline and altitude ranges, as listed in validate.go
+// (exactly those; nothing else is checked). Unknown members are ignored,
+// never refused (spec 02 section 1). Invalid JSON, a member of the wrong
+// JSON type, more than MaxMessageBytes or a failed check is refused with a
+// *core.FieldError naming the member. It never panics.
 func UnmarshalOperationalIntent(data []byte) (*OperationalIntent, error) {
 	var oi OperationalIntent
 	if err := unmarshal(data, "operational_intent", &oi); err != nil {
 		return nil, err
+	}
+	c := &checker{}
+	c.intent("operational_intent", &oi)
+	if c.err != nil {
+		return nil, c.err
 	}
 	return &oi, nil
 }
