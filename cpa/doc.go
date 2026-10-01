@@ -30,6 +30,17 @@
 //     velocity noise stay in conflict, and a diverging pair stays in
 //     conflict until it is past the minimum. The minima are strict
 //     ("60 m is not < 60").
+//   - More generally, a conflict is a loss of separation at any time in
+//     the window [0, TCPAMaxS]: the interval where the horizontal
+//     distance is below its minimum overlaps the interval where the
+//     vertical gap is below its minimum (the horizontal interval alone
+//     when the vertical is unknown). Both are closed-form. This contains
+//     the cpa.json test above and adds the pairs it misses: a vertical
+//     gap of 21.4 m at t_cpa that is under 20 m a second earlier, and a
+//     pair that enters the minima within the window while its t_cpa is
+//     beyond it. Result.LoSStartS is the earliest time in the overlap
+//     (0 when inside now). The reported t_cpa and distances are
+//     unchanged.
 //   - A pressure altitude is a vertical position of unknown accuracy
 //     (R-09): when either state has VerticalKnown false the vertical
 //     minimum counts as not met, the pair is judged on the horizontal

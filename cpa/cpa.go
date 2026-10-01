@@ -185,8 +185,14 @@ type Result struct {
 	DAltNowM float64
 	// VerticalKnown is true only when both states' verticals are known.
 	VerticalKnown bool
-	// Conflict is the verdict (C-03).
+	// Conflict is the verdict: a loss of separation now or within the
+	// window (C-03; see Evaluate).
 	Conflict bool
+	// LoSStartS is, when Conflict is true, the earliest time from now at
+	// which the pair is inside both minima: 0 when it is inside now. It
+	// ranks conflicts by time to loss of separation. 0 when Conflict is
+	// false.
+	LoSStartS float64
 }
 
 // metresPerDegree returns the metres per degree of latitude and of
@@ -263,10 +269,22 @@ func before(a, b State) bool {
 //  4. t_cpa = -(rel_pos . rel_vel) / |rel_vel|^2 from the horizontal
 //     motion only, 0 when |rel_vel| < 1e-6 m/s, clamped to >= 0.
 //  5. Distances now and at t_cpa; the vertical gap at t_cpa uses the
-//     vertical velocities (down positive).
-//  6. conflict = (d_h_now < d_h_min AND (vertical unknown OR d_alt_now <
-//     d_v_min)) OR (t_cpa < t_max AND d_cpa_h < d_h_min AND (vertical
-//     unknown OR d_alt_at_cpa < d_v_min)).
+//     vertical velocities (down positive). These are the reported
+//     numbers.
+//  6. Conflict is a loss of separation at any time in [0, TCPAMaxS]: the
+//     open interval of t where the horizontal distance is below
+//     DHorizontalMinM (a quadratic inequality) overlaps the open interval
+//     where the vertical gap is below DVerticalMinM (a linear one), within
+//     the window. With the vertical unknown the horizontal interval alone
+//     decides. This contains the cpa.json criterion, (d_h_now < d_h_min
+//     AND (vertical unknown OR d_alt_now < d_v_min)) OR (t_cpa < t_max AND
+//     d_cpa_h < d_h_min AND (vertical unknown OR d_alt_at_cpa <
+//     d_v_min)), which is also evaluated and ORed in, so no conflict of
+//     the old test can be lost to rounding. It adds the pairs that the old
+//     test misses: a vertical gap below the minimum a second before
+//     t_cpa but not at it, and a pair that enters the minima within the
+//     window although t_cpa is beyond it. LoSStartS is the earliest time
+//     in the overlap.
 //
 // Polar limit: a pair with either aircraft within polarReachFactor x
 // (NeighbourRadiusM + top speed x TCPAMaxS) of a pole, before or after
@@ -346,6 +364,68 @@ func Evaluate(a, b State, pol Policy) Result {
 		(!r.VerticalKnown || r.DAltNowM < pol.DVerticalMinM)
 	insideAtCPA := r.TCPAS < pol.TCPAMaxS && r.DCPAHorizontalM < pol.DHorizontalMinM &&
 		(!r.VerticalKnown || r.DAltAtCPAM < pol.DVerticalMinM)
-	r.Conflict = insideNow || insideAtCPA
+
+	startS, endS := horizontalInside(relNorthM, relEastM, relVNMS, relVEMS, pol.DHorizontalMinM)
+	if r.VerticalKnown {
+		vStartS, vEndS := verticalInside(dAltM, a.VDMS-b.VDMS, pol.DVerticalMinM)
+		startS, endS = math.Max(startS, vStartS), math.Min(endS, vEndS)
+	}
+	if math.IsNaN(startS) || math.IsNaN(endS) {
+		return Result{NotJudged: ReasonOutOfRange}
+	}
+	// The open interval (startS, endS) meets the closed window [0, T].
+	lossInWindow := startS < endS && endS > 0 && startS < pol.TCPAMaxS
+
+	r.Conflict = insideNow || insideAtCPA || lossInWindow
+	switch {
+	case insideNow:
+		r.LoSStartS = 0
+	case lossInWindow:
+		r.LoSStartS = math.Max(startS, 0)
+	case insideAtCPA:
+		// Only reachable if rounding put t_cpa just outside the interval.
+		r.LoSStartS = r.TCPAS
+	}
 	return r
+}
+
+// horizontalInside returns the open interval of t in which the
+// horizontal distance |p + v t| is below minM: the roots of
+// |v|^2 t^2 + 2 (p.v) t + |p|^2 - minM^2 = 0, computed in the stable
+// form. Empty is (+Inf, -Inf), always is (-Inf, +Inf). Below the
+// minRelSpeedMS guard the distance is taken as constant, as for t_cpa.
+func horizontalInside(pNorthM, pEastM, vNorthMS, vEastMS, minM float64) (startS, endS float64) {
+	a := vNorthMS*vNorthMS + vEastMS*vEastMS
+	halfB := pNorthM*vNorthMS + pEastM*vEastMS
+	c := pNorthM*pNorthM + pEastM*pEastM - minM*minM
+	if a < minRelSpeedMS*minRelSpeedMS {
+		if c < 0 {
+			return math.Inf(-1), math.Inf(1)
+		}
+		return math.Inf(1), math.Inf(-1)
+	}
+	disc := halfB*halfB - a*c
+	if math.IsNaN(disc) {
+		return math.NaN(), math.NaN()
+	}
+	if disc <= 0 {
+		return math.Inf(1), math.Inf(-1)
+	}
+	q := -(halfB + math.Copysign(math.Sqrt(disc), halfB))
+	t1, t2 := q/a, c/q
+	return math.Min(t1, t2), math.Max(t1, t2)
+}
+
+// verticalInside returns the open interval of t in which the vertical gap
+// |gap + rate t| is below minM. Empty is (+Inf, -Inf), always is
+// (-Inf, +Inf).
+func verticalInside(gapM, rateMS, minM float64) (startS, endS float64) {
+	if rateMS == 0 {
+		if math.Abs(gapM) < minM {
+			return math.Inf(-1), math.Inf(1)
+		}
+		return math.Inf(1), math.Inf(-1)
+	}
+	t1, t2 := (-minM-gapM)/rateMS, (minM-gapM)/rateMS
+	return math.Min(t1, t2), math.Max(t1, t2)
 }

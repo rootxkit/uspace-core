@@ -141,18 +141,104 @@ func TestStrictMinima(t *testing.T) {
 	}
 }
 
+// TestWindowIsStrict: the window is judged on the start of the loss of
+// separation. Head-on from 1 km at 20 m/s closing, the pair is inside
+// 60 m from t = 47 s (t_cpa 50 s): a window ending exactly there is
+// clear, a hair longer is a conflict.
 func TestWindowIsStrict(t *testing.T) {
 	a, b := at(0, 0, 550).moving(10, 0, 0), at(1000, 0, 550).moving(-10, 0, 0)
 	r := Evaluate(a, b, DefaultPolicy)
 	mustJudge(t, r)
-	pol := DefaultPolicy
-	pol.TCPAMaxS = r.TCPAS
-	if Evaluate(a, b, pol).Conflict {
-		t.Fatal("t_cpa equal to the window is a conflict, want not (strict <)")
+	if !r.Conflict || math.Abs(r.LoSStartS-(r.DHorizontalNowM-60)/20) > 1e-9 {
+		t.Fatalf("%+v, want a conflict starting when the gap reaches 60 m", r)
 	}
-	pol.TCPAMaxS = math.Nextafter(r.TCPAS, math.Inf(1))
-	if !Evaluate(a, b, pol).Conflict {
-		t.Fatal("t_cpa just inside the window is not a conflict")
+	pol := DefaultPolicy
+	pol.TCPAMaxS = r.LoSStartS
+	if Evaluate(a, b, pol).Conflict {
+		t.Fatal("loss of separation starting exactly at the window's end is a conflict, want not")
+	}
+	pol.TCPAMaxS = math.Nextafter(r.LoSStartS, math.Inf(1))
+	if got := Evaluate(a, b, pol); !got.Conflict || got.LoSStartS != r.LoSStartS {
+		t.Fatalf("loss of separation just inside the window: %+v, want conflict from %v", got, r.LoSStartS)
+	}
+}
+
+// TestLossOfSeparationBeforeCPA: the vertical gap is 21.4 m at t_cpa
+// (50 s) but under 20 m from 47 s to 49 s, while the pair is inside the
+// horizontal minimum; the old test, which looks at t_cpa only, called
+// it clear. Its twin is under 20 m vertically only before 45.7 s, when
+// the pair is still horizontally clear: no overlap, no conflict.
+func TestLossOfSeparationBeforeCPA(t *testing.T) {
+	a := at(0, 0, 550).moving(10, 0, 1.4) // descending 1.4 m/s
+	b := at(1000, 0, 501.4).moving(-10, 0, 0)
+	r := Evaluate(a, b, DefaultPolicy)
+	mustJudge(t, r)
+	if math.Abs(r.DAltAtCPAM-21.4) > 0.01 || !r.Conflict {
+		t.Fatalf("%+v, want 21.4 m at t_cpa and a conflict", r)
+	}
+	if r.LoSStartS < 46.9 || r.LoSStartS > 47.1 {
+		t.Fatalf("LoSStartS = %v, want the horizontal entry at about 47 s", r.LoSStartS)
+	}
+	twin := Evaluate(a, at(1000, 0, 506).moving(-10, 0, 0), DefaultPolicy)
+	mustJudge(t, twin)
+	if twin.Conflict || twin.LoSStartS != 0 {
+		t.Fatalf("%+v, want clear: the vertical and horizontal intervals do not overlap", twin)
+	}
+}
+
+// TestLossOfSeparationBeyondCPAWindow: closing at 1 m/s from 110 m,
+// t_cpa is 110 s, beyond the 60 s window, but the pair is inside 60 m
+// from 50 s. The twin from 125 m enters at 65 s: clear.
+func TestLossOfSeparationBeyondCPAWindow(t *testing.T) {
+	a := at(0, 0, 550)
+	r := Evaluate(a, at(110, 0, 550).moving(-1, 0, 0), DefaultPolicy)
+	mustJudge(t, r)
+	if r.TCPAS < DefaultPolicy.TCPAMaxS || !r.Conflict || math.Abs(r.LoSStartS-(r.DHorizontalNowM-60)) > 1e-6 {
+		t.Fatalf("%+v, want t_cpa beyond the window, a conflict from about 50 s", r)
+	}
+	twin := Evaluate(a, at(125, 0, 550).moving(-1, 0, 0), DefaultPolicy)
+	mustJudge(t, twin)
+	if twin.Conflict {
+		t.Fatalf("%+v, want clear: the minima are reached at 65 s", twin)
+	}
+}
+
+// TestLossOfSeparationIntervals pins the interval helpers on their
+// degenerate branches.
+func TestLossOfSeparationIntervals(t *testing.T) {
+	inf := math.Inf(1)
+	for _, tc := range []struct {
+		name           string
+		start, end     float64
+		wantS, wantEnd float64
+	}{
+		{"h-still-inside", 0, 0, -inf, inf},
+		{"h-still-outside", 0, 0, inf, -inf},
+		{"h-tangent", 0, 0, inf, -inf},
+		{"v-level-inside", 0, 0, -inf, inf},
+		{"v-level-outside", 0, 0, inf, -inf},
+		{"v-closing", 0, 0, 5, 45},
+	} {
+		switch tc.name {
+		case "h-still-inside":
+			tc.start, tc.end = horizontalInside(30, 0, 0, 0, 60)
+		case "h-still-outside":
+			tc.start, tc.end = horizontalInside(80, 0, 1e-7, 0, 60)
+		case "h-tangent":
+			tc.start, tc.end = horizontalInside(-100, 60, 1, 0, 60) // passes at exactly 60 m
+		case "v-level-inside":
+			tc.start, tc.end = verticalInside(10, 0, 20)
+		case "v-level-outside":
+			tc.start, tc.end = verticalInside(-20, 0, 20)
+		case "v-closing":
+			tc.start, tc.end = verticalInside(-50, 2, 40) // |-50 + 2t| < 40
+		}
+		if tc.start != tc.wantS || tc.end != tc.wantEnd {
+			t.Errorf("%s: (%v, %v), want (%v, %v)", tc.name, tc.start, tc.end, tc.wantS, tc.wantEnd)
+		}
+	}
+	if s, e := horizontalInside(math.MaxFloat64, math.MaxFloat64, math.MaxFloat64, math.MaxFloat64, 60); !math.IsNaN(s) || !math.IsNaN(e) {
+		t.Errorf("overflowing discriminant: (%v, %v), want NaN", s, e)
 	}
 }
 

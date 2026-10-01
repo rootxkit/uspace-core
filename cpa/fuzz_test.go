@@ -77,8 +77,11 @@ func FuzzEvaluate(f *testing.F) {
 			t.Fatalf("unknown vertical reported as a number: %+v", r)
 		}
 		insideNow := r.DHorizontalNowM < pol.DHorizontalMinM && (!r.VerticalKnown || r.DAltNowM < pol.DVerticalMinM)
-		if insideNow && !r.Conflict {
-			t.Fatalf("inside the minima now but no conflict: %+v", r)
+		if insideNow && (!r.Conflict || r.LoSStartS != 0) {
+			t.Fatalf("inside the minima now but %+v", r)
+		}
+		if (r.Conflict && !(r.LoSStartS >= 0 && r.LoSStartS <= pol.TCPAMaxS)) || (!r.Conflict && r.LoSStartS != 0) {
+			t.Fatalf("LoSStartS %v outside the window for conflict %v", r.LoSStartS, r.Conflict)
 		}
 	})
 }

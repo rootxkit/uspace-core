@@ -63,7 +63,9 @@ Each entry names the work package and the vectors it affects.
   `zones_applicability.json` (32 cases). [WP-5]
 - `cpa`: closest point of approach in the mid-latitude tangent plane
   with the older sample advanced, `t_cpa` clamped to >= 0, the vertical
-  gap at `t_cpa`, inside the minima now as a conflict and pressure
+  gap at `t_cpa`, a conflict as a loss of separation anywhere in the
+  window (closed-form intervals, with `LoSStartS`), inside the minima
+  now as a conflict and pressure
   tracks as unknown vertical; non-finite inputs, an invalid policy and
   overflow are not judged (with a reason), never judged clear; results
   are identical in either order; a pair within the polar limit (10 x
