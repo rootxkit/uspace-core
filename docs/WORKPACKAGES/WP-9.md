@@ -109,6 +109,11 @@ Expected: `judged`; when judged `t_cpa_s` (0.01), `d_cpa_horizontal_m`,
 
 ## Done when
 
+- [ ] Lint run locally before every push, with the pinned linters:
+  `make tools` (once; installs golangci-lint v2.14.0 and staticcheck
+  v0.8.1, the versions CI runs) then `make lint` (gofmt, vet,
+  staticcheck, golangci-lint; it refuses any other golangci-lint
+  version) prints no issue. Paste its last lines into the PR.
 - [ ] 27/27 vector cases pass with symmetry; `-race -shuffle=on` green; coverage >= 95 %.
 - [ ] Lint clean; benchmarks reported with allocs/op; `doc.go` rewritten (C-10: the prediction is a straight line); CHANGELOG line; PR with outputs.
 

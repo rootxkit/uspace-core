@@ -668,7 +668,9 @@ Jobs on push to `main`, tags `v*`, and pull requests, ubuntu-latest, Go
 from `go.mod`:
 
 1. `build-vet-lint`: gofmt check, `go build`, `go vet`, `go mod tidy`
-   clean, staticcheck, golangci-lint (`golangci/golangci-lint-action@v8`).
+   clean, staticcheck v0.8.1, golangci-lint v2.14.0
+   (`golangci/golangci-lint-action@v8`; both versions pinned, matching the
+   `Makefile`, so `make tools lint` reproduces the job locally).
 2. `test-race`: `go test -race -count=1 -shuffle=on -coverprofile` for the
    whole module; coverage summary printed; profile uploaded.
 3. `vectors`: `scripts/check-vectors.sh` (SHA256SUMS offline; byte diff

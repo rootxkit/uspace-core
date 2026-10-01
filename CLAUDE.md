@@ -91,13 +91,22 @@ changing anything; a work package brief is in `docs/WORKPACKAGES/`.
 Run, in this order, and paste the last lines of each into the PR:
 
 ```
-make fmt-check vet staticcheck
-golangci-lint run
+make tools          # once per machine: the linter versions CI pins
+make lint           # gofmt, vet, staticcheck, golangci-lint; must print no issue
 make race
 make vectors
 make fuzz-smoke FUZZTIME=10s
 make bench
 ```
+
+Run `make lint` locally before every push, not only at the end: CI runs
+golangci-lint v2.14.0 and staticcheck v0.8.1 (pinned in
+`.github/workflows/ci.yml` and the `Makefile`), and `make tools` installs
+exactly those. `make lint` refuses to run another golangci-lint version,
+because a different version reports different issues. Without `make`:
+`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`,
+`go install honnef.co/go/tools/cmd/staticcheck@v0.8.1`, then `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `golangci-lint run ./...`.
 
 Then check the brief's done-when list item by item. If a vector cannot
 pass without a behaviour the plan did not foresee, stop and write it down

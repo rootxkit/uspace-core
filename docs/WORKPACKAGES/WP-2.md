@@ -133,6 +133,11 @@ synthetic grid from the test's encoder or the real file (skip). The
 
 ## Done when
 
+- [ ] Lint run locally before every push, with the pinned linters:
+  `make tools` (once; installs golangci-lint v2.14.0 and staticcheck
+  v0.8.1, the versions CI runs) then `make lint` (gofmt, vet,
+  staticcheck, golangci-lint; it refuses any other golangci-lint
+  version) prints no issue. Paste its last lines into the PR.
 - [ ] 18 synthetic cases pass, 30 GeographicLib cases skip visibly (or pass with the file); `-race -shuffle=on` green.
 - [ ] Coverage >= 90 % in each of the three packages.
 - [ ] Lint clean; fuzz targets run 10 s without a crasher.

@@ -171,6 +171,11 @@ vn, ve and nil vd. Document.
 
 ## Done when
 
+- [ ] Lint run locally before every push, with the pinned linters:
+  `make tools` (once; installs golangci-lint v2.14.0 and staticcheck
+  v0.8.1, the versions CI runs) then `make lint` (gofmt, vet,
+  staticcheck, golangci-lint; it refuses any other golangci-lint
+  version) prints no issue. Paste its last lines into the PR.
 - [ ] 25 + 24 + 16 vector cases pass; `-race -shuffle=on` green; coverage >= 90 % in both packages.
 - [ ] Fuzz clean; lint clean; benchmarks reported.
 - [ ] Both `doc.go` rewritten (I-07 limit documented in `rid`); CHANGELOG line; PR with outputs.

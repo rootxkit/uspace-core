@@ -27,15 +27,49 @@ go test -count=1 -cover ./core/ ./odid/ ./vectors/
 scripts/check-vectors.sh
     offline: 16 files OK; online: match uspace-lab@c6b7f33
 scripts/fuzz-smoke.sh -> no targets yet (expected)
+staticcheck ./...         (v0.8.1)  -> nothing
+golangci-lint run ./...   (v2.14.0) -> 0 issues.
 ```
 
-golangci-lint and staticcheck were not run locally (not installed on the
-authoring machine), and `go test -race` could not run locally either
-(the authoring toolchain has no cgo); CI on ubuntu runs all three. The
-vendored JSON files are LF in the index and the working copy
-(`.gitattributes`); `SHA256SUMS` is computed over LF bytes. If `.golangci.yml` needs a fix for the
-installed linter version, the first WP to hit it fixes it in a separate
-`ci:` commit and says so in its PR.
+The first CI run of `plan/initial` failed on golangci-lint (missing doc
+comments on exported constants, `fmt.Printf` in `scripts/manifest-list`,
+gosec G304 in `vectors.Read`), on gitleaks (the public operator numbers
+in `serials_and_registration.json`), and on the script jobs (the scripts
+were committed without the executable bit). All are fixed on this
+branch: every exported identifier has a doc comment, `scripts/` may print
+(forbidigo exclusion in `.golangci.yml`), the vector harness reads through
+an `os.Root`, `.gitleaks.toml` allow-lists the `compare_key` lines of the
+vendored vectors, and the scripts are mode 755.
+
+`go test -race` could not run locally (the authoring toolchain has no
+cgo); CI on ubuntu runs it. The vendored JSON files are LF in the index
+and the working copy (`.gitattributes`); `SHA256SUMS` is computed over LF
+bytes.
+
+## Local checks before every push
+
+CI pins its linters: golangci-lint v2.14.0 and staticcheck v0.8.1 (in
+`.github/workflows/ci.yml` and the `Makefile`). Every WP agent installs
+exactly those and runs them locally before it pushes; a push that fails
+lint in CI is a push that skipped this step.
+
+```
+make tools          # once per machine: go install of both pinned versions
+make lint           # gofmt, vet, staticcheck, golangci-lint; must print no issue
+```
+
+`make lint` refuses to run a golangci-lint other than the pinned one,
+because another version reports different issues. Without `make`:
+
+```
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+gofmt -l .  &&  go vet ./...  &&  staticcheck ./...  &&  golangci-lint run ./...
+```
+
+Bumping a linter version is its own `ci:` commit that changes both files
+and fixes whatever the new version reports, never a config change to
+silence it.
 
 ## What every WP inherits
 
