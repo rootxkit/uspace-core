@@ -95,6 +95,12 @@ may add exported functions and types; it may not rename, remove or change
 the meaning of what is listed here without updating this plan. Pointer
 results mean "unknown / none" (a vector's `null`), never a zero value.
 
+**Stable since `v1.0.0`.** This API, with what the work packages added to
+it, is declared stable (G-M3). From `v1.0.0` the rule above is the semver
+rule of §10: an addition is a minor, a removal, rename or change of
+meaning is a major. `CHANGELOG.md` under `[1.0.0]` lists what is
+deliberately left unstable.
+
 ### 3.1 `core` (frozen, written)
 
 ```go
@@ -682,11 +688,21 @@ from `go.mod`:
 5. `bench`: all benchmarks, `scripts/bench-report.sh` writes the
    target table into the job summary; artifact uploaded; never gating.
 6. `gitleaks` (06 §4).
-7. (WP-13) `semver-gate`: a diff under `vectors/testdata/` on a PR
-   requires `CHANGELOG.md` to add a new major heading and the PR label
-   `behaviour-change`; otherwise the job fails (`00 §6.3`).
+7. (WP-13) `tag`, on `v*` tags only, after jobs 1-4, 6 and
+   govulncheck: `scripts/release-check.sh` (tag equals the top CHANGELOG
+   heading, module path, `local_files` empty from v1, manifest coverage
+   strict, the lab diff required), `scripts/consumer-check.sh` on the
+   published module, then the GitHub release from the CHANGELOG.
 
-Branch protection on `main` requires jobs 1-4 and 6.
+The semver gate (WP-13) is its own workflow, `semver-gate.yml`, on pull
+requests only: a diff under `vectors/testdata/` requires a CHANGELOG line
+with the clause and a new lab pin, and a behaviour change also a new
+major heading and the PR label `behaviour-change` (`00 §6.3`). It is not
+a job of this workflow because a label change must start a fresh run
+with fresh labels. `docs/RELEASING.md` §3.2 has the rules.
+
+Branch protection on `main` requires jobs 1-4 and 6 and `semver-gate`
+(the exact check names are in `docs/RELEASING.md` §7).
 
 ---
 

@@ -15,6 +15,7 @@ once and is pinned by the knowledge vectors of `uspace-lab`
 - Work packages: [`docs/WORKPACKAGES/`](docs/WORKPACKAGES/)
 - Rules for contributors and agents: [`CLAUDE.md`](CLAUDE.md)
 - Versioning and history: [`CHANGELOG.md`](CHANGELOG.md)
+- Releases, behaviour changes and upgrading: [`docs/RELEASING.md`](docs/RELEASING.md)
 
 ```
 make build vet lint    # gofmt, go vet, staticcheck, golangci-lint
