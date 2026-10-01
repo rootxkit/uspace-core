@@ -17,6 +17,12 @@ Each entry names the work package and the vectors it affects.
   the 16 knowledge vector files (596 cases) vendored from
   `uspace-lab@c6b7f33` (generated from `utm@484cd22`), CI, lint and
   Makefile. [WP-0]
+- `timeplace`: Remote ID broadcast time reconstruction with the four
+  fallbacks, network state and batch placement on the ingest clock;
+  `rid`: the identity-per-transmitter Tracker, utm's uuid5 aircraft ids,
+  AMSL altitude selection with the pressure fallback and hold, NED
+  velocity and the airborne rule. Vectors `rid_time.json` (25),
+  `rid_identity.json` (24), `pressure_altitude.json` (16). [WP-6]
 
 ## [0.1.0] - unreleased (G-M1)
 
