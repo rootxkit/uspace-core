@@ -30,15 +30,15 @@ func (r VerticalRef) Valid() bool {
 type AltSource string
 
 const (
-	// AltGeodetic: HAE through the geoid.
+	// AltGeodetic is the geodetic HAE converted through the geoid.
 	AltGeodetic AltSource = "geodetic"
-	// AltPressure: the broadcast pressure altitude (ISA 1013.25 hPa, not
+	// AltPressure is the broadcast pressure altitude (ISA 1013.25 hPa, not
 	// AMSL) standing in for a missing or poor geodetic one (LESSONS R-08).
 	// Every vertical judgement on it is widened (R-09).
 	AltPressure AltSource = "pressure"
-	// AltNetwork: an altitude a network provider asserted (F3411 alt).
+	// AltNetwork is an altitude a network provider asserted (F3411 alt).
 	AltNetwork AltSource = "network"
-	// AltNone: no usable altitude. Vertical judgements do not run.
+	// AltNone means no usable altitude. Vertical judgements do not run.
 	AltNone AltSource = "none"
 )
 

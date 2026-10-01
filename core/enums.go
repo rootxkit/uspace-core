@@ -5,11 +5,19 @@ package core
 type Trust string
 
 const (
+	// TrustAuthenticated is a message from a sender that proved who it is
+	// with a credential.
 	TrustAuthenticated Trust = "authenticated"
-	TrustProvider      Trust = "provider"
-	TrustSurveillance  Trust = "surveillance"
-	TrustBroadcast     Trust = "broadcast"
-	TrustSensor        Trust = "sensor"
+	// TrustProvider is a message relayed by a network Remote ID or
+	// surveillance service provider.
+	TrustProvider Trust = "provider"
+	// TrustSurveillance is a track from a surveillance feed.
+	TrustSurveillance Trust = "surveillance"
+	// TrustBroadcast is direct Remote ID as broadcast: unauthenticated and
+	// unverified.
+	TrustBroadcast Trust = "broadcast"
+	// TrustSensor is a detection by a sensor.
+	TrustSensor Trust = "sensor"
 	// TrustSimulated is lab only; production ingest refuses it (06 T11).
 	TrustSimulated Trust = "simulated"
 )
@@ -18,8 +26,11 @@ const (
 type Severity string
 
 const (
-	SeverityInfo     Severity = "info"
-	SeverityWarning  Severity = "warning"
+	// SeverityInfo is informational; no action is expected.
+	SeverityInfo Severity = "info"
+	// SeverityWarning needs attention but is not yet a violation.
+	SeverityWarning Severity = "warning"
+	// SeverityCritical needs action now.
 	SeverityCritical Severity = "critical"
 )
 
@@ -31,11 +42,17 @@ const (
 type ZoneType string
 
 const (
-	ZoneProhibited       ZoneType = "PROHIBITED"
+	// ZoneProhibited is a zone no UAS may enter.
+	ZoneProhibited ZoneType = "PROHIBITED"
+	// ZoneReqAuthorization is a zone that needs an authorisation to enter
+	// (ED-269 spells it REQ_AUTHORISATION).
 	ZoneReqAuthorization ZoneType = "REQ_AUTHORIZATION"
-	ZoneConditional      ZoneType = "CONDITIONAL"
-	ZoneNoRestriction    ZoneType = "NO_RESTRICTION"
-	ZoneUSpace           ZoneType = "USPACE"
+	// ZoneConditional is a zone with conditions attached to entry.
+	ZoneConditional ZoneType = "CONDITIONAL"
+	// ZoneNoRestriction is a zone published for information only.
+	ZoneNoRestriction ZoneType = "NO_RESTRICTION"
+	// ZoneUSpace is a U-space airspace; it has no ED-269 restriction.
+	ZoneUSpace ZoneType = "USPACE"
 )
 
 // Valid reports whether z is a known ED-318 zone type.

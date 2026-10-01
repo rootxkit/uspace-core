@@ -6,16 +6,16 @@ import "time"
 type TimeSource string
 
 const (
-	// TimeSourceClock: captured_at derived from the source's own ts
+	// TimeSourceClock is captured_at derived from the source's own ts
 	// placed within its batch (T-02).
 	TimeSourceClock TimeSource = "source_clock"
-	// TimeBroadcast: a Remote ID broadcast time within tolerance (T-07).
+	// TimeBroadcast is a Remote ID broadcast time within tolerance (T-07).
 	TimeBroadcast TimeSource = "broadcast"
-	// TimeReceiver: placed at the receiver's receipt time (fallback).
+	// TimeReceiver is captured_at placed at the receiver's receipt time (fallback).
 	TimeReceiver TimeSource = "receiver"
-	// TimeProvider: placed from a network provider's response (T-02).
+	// TimeProvider is captured_at placed from a network provider's response (T-02).
 	TimeProvider TimeSource = "provider"
-	// TimeSystem: placed at this system's arrival time (T-12).
+	// TimeSystem is captured_at placed at this system's arrival time (T-12).
 	TimeSystem TimeSource = "system"
 )
 

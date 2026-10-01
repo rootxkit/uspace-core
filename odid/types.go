@@ -10,13 +10,20 @@ package odid
 type MessageType uint8
 
 const (
-	TypeBasicID        MessageType = 0x0
-	TypeLocation       MessageType = 0x1
+	// TypeBasicID is the Basic ID message (BasicID).
+	TypeBasicID MessageType = 0x0
+	// TypeLocation is the Location/Vector message (Location).
+	TypeLocation MessageType = 0x1
+	// TypeAuthentication is the Authentication message (Authentication).
 	TypeAuthentication MessageType = 0x2
-	TypeSelfID         MessageType = 0x3
-	TypeSystem         MessageType = 0x4
-	TypeOperatorID     MessageType = 0x5
-	TypeMessagePack    MessageType = 0xF
+	// TypeSelfID is the Self-ID message (SelfID).
+	TypeSelfID MessageType = 0x3
+	// TypeSystem is the System message (System).
+	TypeSystem MessageType = 0x4
+	// TypeOperatorID is the Operator ID message (OperatorID).
+	TypeOperatorID MessageType = 0x5
+	// TypeMessagePack is a Message Pack carrying several messages.
+	TypeMessagePack MessageType = 0xF
 )
 
 // MessageSize is the size of every ODID message on the wire.
@@ -27,10 +34,15 @@ const MessageSize = 25
 type IDType uint8
 
 const (
-	IDTypeNone            IDType = 0
-	IDTypeSerial          IDType = 1 // ANSI/CTA-2063-A serial
+	// IDTypeNone is no identity type declared.
+	IDTypeNone IDType = 0
+	// IDTypeSerial is an ANSI/CTA-2063-A serial number.
+	IDTypeSerial IDType = 1
+	// IDTypeCAARegistration is a civil aviation authority registration ID.
 	IDTypeCAARegistration IDType = 2
-	IDTypeUTMAssigned     IDType = 3
+	// IDTypeUTMAssigned is a UTM-assigned UUID.
+	IDTypeUTMAssigned IDType = 3
+	// IDTypeSpecificSession is a specific session ID.
 	IDTypeSpecificSession IDType = 4
 )
 
@@ -39,10 +51,15 @@ const (
 type Status uint8
 
 const (
-	StatusUndeclared            Status = 0
-	StatusGround                Status = 1
-	StatusAirborne              Status = 2
-	StatusEmergency             Status = 3
+	// StatusUndeclared is no status declared; it counts as airborne.
+	StatusUndeclared Status = 0
+	// StatusGround is on the ground: the only "not airborne" status.
+	StatusGround Status = 1
+	// StatusAirborne is airborne.
+	StatusAirborne Status = 2
+	// StatusEmergency is an emergency declared by the operator.
+	StatusEmergency Status = 3
+	// StatusRemoteIDSystemFailure is a declared Remote ID system failure.
 	StatusRemoteIDSystemFailure Status = 4
 )
 
@@ -54,8 +71,10 @@ func (s Status) Airborne() bool { return s != StatusGround }
 type HeightReference uint8
 
 const (
+	// HeightOverTakeoff is height above the take-off point.
 	HeightOverTakeoff HeightReference = 0
-	HeightOverGround  HeightReference = 1
+	// HeightOverGround is height above the ground below the aircraft.
+	HeightOverGround HeightReference = 1
 )
 
 // Message is one decoded ODID message.
