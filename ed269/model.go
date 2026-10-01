@@ -155,9 +155,10 @@ type Authority struct {
 // For the list fields, nil is absent and an empty non-nil slice is a
 // published empty list.
 type GeoZone struct {
-	Identifier      string
-	Country         string
-	Name            *string
+	Identifier string
+	Country    string
+	Name       *string
+	// Type is the ED-269 zone type: COMMON or CUSTOMIZED.
 	Type            string
 	Restriction     Restriction
 	Reason          []Reason

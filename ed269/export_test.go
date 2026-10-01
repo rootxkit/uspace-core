@@ -49,6 +49,7 @@ func byValue(v any) any {
 // vectors.
 func TestAcceptedVariants(t *testing.T) {
 	cases := map[string]map[string]any{
+		"type CUSTOMIZED":            {"type": "CUSTOMIZED"},
 		"reason absent":              {"reason": nil},
 		"reason empty":               {"reason": []any{}},
 		"conditions as a string":     {"restrictionConditions": "Notify first"},

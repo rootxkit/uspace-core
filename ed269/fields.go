@@ -18,6 +18,7 @@ var (
 		"AIR_TRAFFIC", "SENSITIVE", "PRIVACY", "POPULATION", "NATURE",
 		"NOISE", "FOREIGN_TERRITORY", "EMERGENCY", "OTHER",
 	}
+	typeValues    = []string{"COMMON", "CUSTOMIZED"}
 	purposeValues = []string{"AUTHORIZATION", "NOTIFICATION", "INFORMATION"}
 	yesNoValues   = []string{"YES", "NO"}
 	uomValues     = []string{"M", "FT"}

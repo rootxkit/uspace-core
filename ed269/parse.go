@@ -187,7 +187,11 @@ func (p *parser) zone(v *value, path string) *GeoZone {
 	}
 	z.Country = country
 	z.Name = p.optionalText(v.get("name"), join(path, "name"), p.lim.NameMax)
-	z.Type, _ = p.requiredText(v, "type", path, 0)
+	if t := v.get("type"); !present(t) {
+		p.ps.add(join(path, "type"), "missing: required")
+	} else if s, ok := p.enum(t, join(path, "type"), typeValues); ok {
+		z.Type = s
+	}
 	z.Restriction = p.restriction(v.get("restriction"), join(path, "restriction"))
 	z.Reason = p.reasons(v.get("reason"), join(path, "reason"))
 	z.Message = p.optionalText(v.get("message"), join(path, "message"), p.lim.MessageMax)

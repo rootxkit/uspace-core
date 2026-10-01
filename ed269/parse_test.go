@@ -101,6 +101,8 @@ func TestRefusals(t *testing.T) {
 		{"country four letters", map[string]any{"country": "GEOR"}, nil, f0 + ".country", "at most 3"},
 		{"name long", map[string]any{"name": strings.Repeat("n", 201)}, nil, f0 + ".name", "at most 200"},
 		{"name counts characters", map[string]any{"name": strings.Repeat("ö", 201)}, nil, f0 + ".name", "is 201 characters"},
+		{"type outside the enumeration", map[string]any{"type": "CUSTOM"}, nil, f0 + ".type", "'CUSTOM' is not one of COMMON, CUSTOMIZED"},
+		{"type number", map[string]any{"type": 1}, nil, f0 + ".type", "not a number"},
 		{"restriction missing", map[string]any{"restriction": nil}, nil, f0 + ".restriction", "missing"},
 		{"restriction number", map[string]any{"restriction": 1}, nil, f0 + ".restriction", "not a number"},
 		{"reason not a list", map[string]any{"reason": "NOISE"}, nil, f0 + ".reason", "must be a list"},
