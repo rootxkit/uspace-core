@@ -15,17 +15,31 @@
 // against), checked against InterUSS uas_standards
 // src/uas_standards/eurocae_ed318.py at commit
 // 6e182f43ec960b3bccf131c9006ff9979dd8a56e. Where the two disagree the
-// schema is followed and the difference written down:
+// schema is followed, because it is what InterUSS validates against
+// (owner decision on PR #16). Every disagreement found:
 //
-//   - a zone authority's siteURL, email and phone are strings (the schema
-//     and its examples); uas_standards types them as {text, lang};
-//   - dataSource's creation time is creationDate in the schema and
-//     creationDateTime in uas_standards: both are read, each into its own
-//     field, and written back as read; its originator is {text, lang}
-//     (schema), not a string;
-//   - message texts are bounded at 200 characters like every
-//     textShortType (schema); uas_standards declares a textLongType of
-//     1,000 for them.
+//  1. A zone authority's siteURL, email and phone: strings in the schema
+//     and its examples; {text, lang} objects in uas_standards. Strings.
+//  2. dataSource's creation time: creationDate in the schema,
+//     creationDateTime in uas_standards. Both are read, each into its own
+//     field, and written back as read (the schema leaves the object open,
+//     so its validator accepts either).
+//  3. dataSource's originator: {text, lang} in the schema, a string in
+//     uas_standards. {text, lang}.
+//  4. message: a list of textShortType (200 characters) in the schema; of
+//     TextLongType (1,000) in uas_standards. 200.
+//  5. zoneAuthority: required with at least one entry in the schema; a
+//     list with no minimum in uas_standards. At least one.
+//  6. The collection's metadata: optional in the schema, required in
+//     uas_standards' ED318Schema. Optional.
+//  7. The collection's title: a member of uas_standards' ED318Schema, not
+//     of the schema (which leaves the collection open). Read and written
+//     as published.
+//  8. identifier: at most 7 characters in the schema; no bound in
+//     uas_standards. 7.
+//  9. A daily period's day list: the schema writes minItems 1 and
+//     maxItems 7 inside `items`, where they constrain nothing; no bound in
+//     uas_standards. 1 to 7, as the schema evidently intends.
 //
 // # UNVERIFIED: the layer names and the circle radius unit
 //
