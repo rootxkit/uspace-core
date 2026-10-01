@@ -22,6 +22,7 @@ const (
 	opSuspended = "op-suspended"
 	opRevoked   = "op-revoked"
 	opMissing   = "op-missing"
+	opOther     = "op-other-status"
 	regActive   = "GEOabcd1234efgh"
 )
 
@@ -32,6 +33,7 @@ func registry() *identify.Snapshot {
 			{OperatorID: opActive, RegistrationNumber: regActive, Status: identify.StatusActive},
 			{OperatorID: opSuspended, RegistrationNumber: "GEOSUSP00000001", Status: identify.StatusSuspended},
 			{OperatorID: opRevoked, RegistrationNumber: "GEOREVK00000001", Status: identify.StatusRevoked},
+			{OperatorID: opOther, RegistrationNumber: "GEOOTHR00000001", Status: "under_review"},
 		},
 		[]identify.UASFacts{
 			{DroneID: "d-active", Serial: "SN-A", RegistrationStatus: identify.StatusActive, OperatorID: ptr(opActive), InRegistry: true},
@@ -44,6 +46,8 @@ func registry() *identify.Snapshot {
 			{DroneID: "d-orphan", Serial: "SN-ORPH", RegistrationStatus: identify.StatusActive, InRegistry: false},
 			{DroneID: "d-case", Serial: "SN-CASE", RegistrationStatus: " Suspended ", OperatorID: ptr(opActive), InRegistry: true},
 			{DroneID: "d-other-status", Serial: "SN-PENDING", RegistrationStatus: "pending", OperatorID: ptr(opActive), InRegistry: true},
+			{DroneID: "d-active-case", Serial: "SN-ACTIVE-CASE", RegistrationStatus: " Active ", OperatorID: ptr(opActive), InRegistry: true},
+			{DroneID: "d-op-other", Serial: "SN-OP-OTHER", RegistrationStatus: identify.StatusActive, OperatorID: ptr(opOther), InRegistry: true},
 		},
 	)
 }
@@ -138,10 +142,14 @@ func TestResolveBroadcastTable(t *testing.T) {
 			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorAbsent, ptr("SN-A"), nil, nil, false, ptr("d-active"), bc}, true},
 		{"operator-mismatch", ptr("SN-A"), ptr("GEOSUSP00000001"),
 			wantIdent{core.IdentUnknownOperator, core.ReasonOperatorMismatch, ptr("SN-A"), ptr("GEOSUSP00000001"), ptr(regActive), true, ptr("d-active"), bc}, true},
-		// A status the table does not name is not a suspension (open
-		// question in the PR): the aircraft resolves on its operator.
-		{"other-status-is-not-a-suspension", ptr("SN-PENDING"), ptr(regActive),
-			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), bc}, false},
+		// An unrecognised status fails safe: it is a suspension, never
+		// active. Its twin: "active" in any case and spacing registers.
+		{"unrecognised-uas-status-is-suspended", ptr("SN-PENDING"), ptr(regActive),
+			wantIdent{core.IdentSuspended, core.ReasonUASSuspended, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), bc}, false},
+		{"active-status-case-and-space-registers", ptr("SN-ACTIVE-CASE"), ptr(regActive),
+			wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-ACTIVE-CASE"), ptr(regActive), nil, false, ptr("d-active-case"), bc}, false},
+		{"unrecognised-operator-status-is-suspended", ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"),
+			wantIdent{core.IdentSuspended, core.ReasonOperatorSuspended, ptr("SN-OP-OTHER"), ptr("GEOOTHR00000001"), nil, false, ptr("d-op-other"), bc}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -244,6 +252,8 @@ func TestResolveBound(t *testing.T) {
 			wantIdent{core.IdentSuspended, core.ReasonOperatorSuspended, ptr("SN-OS"), ptr("GEOSUSP00000001"), nil, false, ptr("d-op-susp"), au}},
 		{"operator-revoked", reg, "d-op-rev",
 			wantIdent{core.IdentSuspended, core.ReasonOperatorRevoked, ptr("SN-OR"), ptr("GEOREVK00000001"), nil, false, ptr("d-op-rev"), au}},
+		{"unrecognised-status-is-suspended", reg, "d-other-status",
+			wantIdent{core.IdentSuspended, core.ReasonUASSuspended, ptr("SN-PENDING"), ptr(regActive), nil, false, ptr("d-other-status"), au}},
 		{"empty-drone-id-names-nothing", reg, "  ",
 			wantIdent{core.IdentUnknownOperator, core.ReasonNotInRegistry, nil, nil, nil, false, nil, au}},
 		{"registry-unavailable", nil, "d-active",

@@ -8,7 +8,10 @@ import (
 )
 
 // Registration statuses as the registry projection writes them. An empty
-// status reads as active, as the predecessor read a NULL column.
+// status reads as active, as the predecessor read a NULL column. Any other
+// value is not recognised and fails safe: it is handled as suspended
+// (uas_suspended or operator_suspended), never as active, because core
+// has no reason code for an unrecognised status.
 const (
 	StatusActive    = "active"
 	StatusSuspended = "suspended"
@@ -187,13 +190,15 @@ func (s *Snapshot) Operator(operatorID string) (OperatorFacts, bool) {
 }
 
 // inactive classifies a registration status: revoked, suspended, or
-// neither. Case and surrounding space are ignored.
+// neither. Case and surrounding space are ignored. Only active and the
+// empty status are neither; an unrecognised status is suspended (fail
+// safe).
 func inactive(status string) (suspended, revoked bool) {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case StatusSuspended:
-		return true, false
+	case StatusActive, "":
+		return false, false
 	case StatusRevoked:
 		return false, true
 	}
-	return false, false
+	return true, false
 }
