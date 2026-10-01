@@ -61,8 +61,35 @@ func TestAltitudeSelectorHoldOff(t *testing.T) {
 func BenchmarkSelectAltitude(b *testing.B) {
 	in := AltInput{AltHAEM: f64(520), AltPressureM: f64(507.5), VertAccuracyCode: 4, UndulationM: f64(20)}
 	pol := DefaultAltPolicy()
-	pol.HoldPressure = false
 	for b.Loop() {
 		_ = SelectAltitude(in, pol)
+	}
+}
+
+// The default policy enables the selector's hold but never makes the
+// stateless path hold: a good geodetic altitude is used (absence), and
+// pressure is used only when the caller says the hold is in force
+// (presence).
+func TestSelectAltitudeDefaultPolicyHoldPair(t *testing.T) {
+	pol := DefaultAltPolicy()
+	in := AltInput{AltHAEM: f64(520), AltPressureM: f64(507.5), VertAccuracyCode: 4, UndulationM: f64(20)}
+	r := SelectAltitude(in, pol)
+	if r.Source != core.AltGeodetic || r.AltAMSLM == nil || *r.AltAMSLM != 500 {
+		t.Errorf("default policy, hold not active: %+v, want geodetic 500", r)
+	}
+	in.PressureHoldActive = true
+	r = SelectAltitude(in, pol)
+	if r.Source != core.AltPressure || r.AltAMSLM == nil || *r.AltAMSLM != 507.5 {
+		t.Errorf("default policy, hold active: %+v, want pressure 507.5", r)
+	}
+}
+
+// The selector decides the hold itself: a caller's PressureHoldActive is
+// ignored.
+func TestAltitudeSelectorOwnsHoldActive(t *testing.T) {
+	s := NewAltitudeSelector(DefaultAltPolicy())
+	in := AltInput{AltHAEM: f64(520), AltPressureM: f64(507.5), VertAccuracyCode: 4, UndulationM: f64(20), PressureHoldActive: true}
+	if r := s.Select(in, 0); r.Source != core.AltGeodetic {
+		t.Errorf("no poor fix yet: %+v, want geodetic", r)
 	}
 }

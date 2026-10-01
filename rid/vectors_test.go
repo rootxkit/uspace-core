@@ -232,10 +232,13 @@ func TestVectorsPressureAltitude(t *testing.T) {
 			if in.VertAccuracyCode == nil || in.MinVerticalAccuracy == nil || in.HoldPressure == nil {
 				t.Fatal("stateless case without vert_accuracy_code, min_vertical_accuracy or hold_pressure")
 			}
-			pol := AltPolicy{MinVerticalAccuracy: *in.MinVerticalAccuracy, HoldPressure: *in.HoldPressure}
+			// hold_pressure is "the hold is in force for this message".
+			pol := DefaultAltPolicy()
+			pol.MinVerticalAccuracy = *in.MinVerticalAccuracy
 			got := SelectAltitude(AltInput{
 				AltHAEM: in.AltHAEM, AltPressureM: in.AltPressureM,
 				VertAccuracyCode: *in.VertAccuracyCode, UndulationM: in.GeoidUndulationM,
+				PressureHoldActive: *in.HoldPressure,
 			}, pol)
 			compareAltitude(t, "result", got, altitudeResult{AltAMSLM: exp.AltAMSLM, AltSource: exp.AltSource})
 			return

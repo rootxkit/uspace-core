@@ -25,6 +25,11 @@ type AltInput struct {
 	// position; nil when no geoid is configured or the position is
 	// unknown.
 	UndulationM *float64
+	// PressureHoldActive says the track's pressure hold is in force for
+	// this message: pressure first, while there is one. A stateless
+	// caller leaves it false; AltitudeSelector sets it itself from the
+	// hold window. It is never inferred from the policy.
+	PressureHoldActive bool
 }
 
 // AltPolicy holds the altitude selection thresholds (R-08).
@@ -32,10 +37,10 @@ type AltPolicy struct {
 	// MinVerticalAccuracy is the lowest known vertical accuracy code at
 	// which the geodetic altitude is used. Default 2 (under 45 m).
 	MinVerticalAccuracy uint8
-	// HoldPressure: in SelectAltitude, the pressure hold is in force for
-	// this message (pressure first, while there is one). In an
-	// AltitudeSelector, the hold is enabled and the selector decides when
-	// it is in force. Default true.
+	// HoldPressure enables the pressure hold of an AltitudeSelector
+	// (configuration only; whether the hold is in force for a message is
+	// AltInput.PressureHoldActive). SelectAltitude ignores it. Default
+	// true.
 	HoldPressure bool
 	// PressureHoldS is how long an AltitudeSelector stays on pressure
 	// after the last poor geodetic altitude. Default 10 s.
@@ -80,7 +85,7 @@ func geodeticUsable(in AltInput, minAccuracy uint8) bool {
 // SelectAltitude chooses the AMSL altitude of one Location without state
 // (R-07, R-08):
 //
-//   - while the hold is in force (pol.HoldPressure) and there is a
+//   - while the hold is in force (in.PressureHoldActive) and there is a
 //     pressure altitude: the pressure altitude;
 //   - a usable geodetic altitude with a geoid: HAE - N (geodetic);
 //   - a usable geodetic altitude without a geoid: none, even with a
@@ -90,12 +95,9 @@ func geodeticUsable(in AltInput, minAccuracy uint8) bool {
 //     pressure altitude as broadcast (pressure, not AMSL);
 //   - otherwise none.
 func SelectAltitude(in AltInput, pol AltPolicy) AltResult {
-	return selectAltitude(in, pol.MinVerticalAccuracy, pol.HoldPressure)
-}
-
-func selectAltitude(in AltInput, minAccuracy uint8, holding bool) AltResult {
+	minAccuracy := pol.MinVerticalAccuracy
 	pressure := finite(in.AltPressureM)
-	if holding && pressure != nil {
+	if in.PressureHoldActive && pressure != nil {
 		v := *pressure
 		return AltResult{AltAMSLM: &v, Source: core.AltPressure}
 	}
@@ -133,12 +135,13 @@ func NewAltitudeSelector(pol AltPolicy) *AltitudeSelector {
 
 // Select chooses the altitude of one Location of the track at nowS (the
 // tracker's monotonic clock, seconds). The hold is in force while nowS is
-// strictly before the end of the hold.
+// strictly before the end of the hold. The selector sets
+// in.PressureHoldActive itself; the caller's value is ignored.
 func (s *AltitudeSelector) Select(in AltInput, nowS float64) AltResult {
 	if !geodeticUsable(in, s.pol.MinVerticalAccuracy) {
 		s.pressureUntilS = nowS + s.pol.PressureHoldS
 		s.poorSeen = true
 	}
-	holding := s.pol.HoldPressure && s.poorSeen && nowS < s.pressureUntilS
-	return selectAltitude(in, s.pol.MinVerticalAccuracy, holding)
+	in.PressureHoldActive = s.pol.HoldPressure && s.poorSeen && nowS < s.pressureUntilS
+	return SelectAltitude(in, s.pol)
 }
