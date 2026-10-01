@@ -86,8 +86,12 @@ func (s State) horizontalOnly() State {
 // caller loads them from configuration; DefaultPolicy documents the
 // values the vectors pin.
 type Policy struct {
-	// TCPAMaxS is the look-ahead window: a closest approach this far
-	// ahead or further is not yet a conflict (strictly less is).
+	// TCPAMaxS is the look-ahead window [0, TCPAMaxS]: the pair is in
+	// conflict when it is inside both minima at any time in it. It bounds
+	// the start of the loss of separation, not t_cpa: a loss starting
+	// strictly before TCPAMaxS is a conflict, one starting exactly at it
+	// or later is not yet (TestWindowIsStrict), whatever t_cpa is. Zero
+	// means "inside the minima now" only.
 	TCPAMaxS float64
 	// DHorizontalMinM is the horizontal minimum; strictly less is inside.
 	DHorizontalMinM float64
@@ -195,9 +199,10 @@ type Result struct {
 	// window (C-03; see Evaluate).
 	Conflict bool
 	// LoSStartS is, when Conflict is true, the earliest time from now at
-	// which the pair is inside both minima: 0 when it is inside now. It
-	// ranks conflicts by time to loss of separation. 0 when Conflict is
-	// false.
+	// which the pair is inside both minima: 0 when it is inside now. When
+	// the vertical is unknown it is the start of the horizontal interval
+	// alone (the vertical minimum counts as not met). It ranks conflicts
+	// by time to loss of separation. 0 when Conflict is false.
 	LoSStartS float64
 }
 
@@ -383,6 +388,9 @@ func Evaluate(a, b State, pol Policy) Result {
 	// The open interval (startS, endS) meets the closed window [0, T].
 	lossInWindow := startS < endS && endS > 0 && startS < pol.TCPAMaxS
 
+	// insideNow and insideAtCPA are the cpa.json criterion; lossInWindow
+	// contains both in exact arithmetic. The OR is the safety net for the
+	// sub-ulp rounding cases where it does not (see below).
 	r.Conflict = insideNow || insideAtCPA || lossInWindow
 	switch {
 	case insideNow:
@@ -390,7 +398,11 @@ func Evaluate(a, b State, pol Policy) Result {
 	case lossInWindow:
 		r.LoSStartS = math.Max(startS, 0)
 	case insideAtCPA:
-		// Only reachable if rounding put t_cpa just outside the interval.
+		// Reachable only through sub-ulp rounding: for example a lateral
+		// miss of 60 m minus one ulp, where d_cpa_h is computed as just
+		// below the minimum but the quadratic's discriminant rounds to
+		// zero (disc == 0) and the horizontal interval comes out empty.
+		// The OR above keeps the conflict for exactly this case.
 		r.LoSStartS = r.TCPAS
 	}
 	return r
