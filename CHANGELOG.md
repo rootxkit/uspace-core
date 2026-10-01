@@ -17,6 +17,10 @@ Each entry names the work package and the vectors it affects.
   the 16 knowledge vector files (596 cases) vendored from
   `uspace-lab@c6b7f33` (generated from `utm@484cd22`), CI, lint and
   Makefile. [WP-0]
+- `geodesy`: WGS84 Vincenty inverse, haversine (spoof distance only),
+  local tangent plane with antimeridian wrapping, circle and polygon
+  containment with holes, bounding boxes and ring validation; passes
+  `geodesy.json` (17 cases). [WP-1]
 - `odid` codec: `Decode`, `DecodeMessage`, `Encode`, `EncodePack`,
   `TypeOf` and the wire sentinels, from the opendroneid-core-c layout;
   passes `odid_decode.json` (187/187, every accepted frame re-encoded byte
