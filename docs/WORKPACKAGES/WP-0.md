@@ -30,7 +30,10 @@ scripts/fuzz-smoke.sh -> no targets yet (expected)
 ```
 
 golangci-lint and staticcheck were not run locally (not installed on the
-authoring machine); CI runs them. If `.golangci.yml` needs a fix for the
+authoring machine), and `go test -race` could not run locally either
+(the authoring toolchain has no cgo); CI on ubuntu runs all three. The
+vendored JSON files are LF in the index and the working copy
+(`.gitattributes`); `SHA256SUMS` is computed over LF bytes. If `.golangci.yml` needs a fix for the
 installed linter version, the first WP to hit it fixes it in a separate
 `ci:` commit and says so in its PR.
 

@@ -33,7 +33,7 @@ if ! ( git -C "$tmp" init -q && git -C "$tmp" remote add origin "$repo" \
   if [[ "${REQUIRE_LAB:-0}" == "1" ]]; then exit 1; fi
   exit 0
 fi
-if diff -r "${excludes[@]}" "$tmp/$path" "$dst"; then
+if diff -r --strip-trailing-cr "${excludes[@]}" "$tmp/$path" "$dst"; then
   echo "ok: vendored vectors match uspace-lab@${commit:0:12}"
 else
   echo "mismatch: vendored vectors differ from uspace-lab@${commit:0:12}; run scripts/sync-vectors.sh" >&2
