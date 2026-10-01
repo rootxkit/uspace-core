@@ -83,8 +83,10 @@ Each entry names the work package and the vectors it affects.
   containment (bounding box, polygon with holes, circle by geodesic
   distance, antimeridian), applicability at captured_at, each vertical
   limit in its own reference with the unjudged-AGL warning and the
-  pressure margin, the height limit over known ground, a bounding-box
-  grid `Index`, and the counters `zone_checks_not_evaluated`,
+  pressure margin (capped at the zone's own severity), the height limit
+  over known ground, USPACE at info, a bounding-box grid `Index` bounded
+  per zone and in total (`IndexLimits`), every missing reference in
+  `Result.Reasons`, and the counters `zone_checks_not_evaluated`,
   `zone_limits_not_judged`, `height_checks_not_evaluated`; passes
   `zones_vertical.json` (38 cases). [WP-8]
 - `cpa`: closest point of approach in the mid-latitude tangent plane
