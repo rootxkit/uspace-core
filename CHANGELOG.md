@@ -35,6 +35,12 @@ Each entry names the work package and the vectors it affects.
   once per `RetryAfter`). Vectors: `terrain_geoid.json`, 18 synthetic
   cases pass, 30 GeographicLib cases skip without `USPACE_GEOID_DIR`.
   [WP-2]
+- `timeplace`: Remote ID broadcast time reconstruction with the four
+  fallbacks, network state and batch placement on the ingest clock;
+  `rid`: the identity-per-transmitter Tracker, utm's uuid5 aircraft ids,
+  AMSL altitude selection with the pressure fallback and hold, NED
+  velocity and the airborne rule. Vectors `rid_time.json` (25),
+  `rid_identity.json` (24), `pressure_altitude.json` (16). [WP-6]
 
 ## [0.1.0] - unreleased (G-M1)
 
