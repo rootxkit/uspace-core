@@ -16,6 +16,16 @@ type Problem struct {
 // Problems is every problem found in one input, capped at
 // Limits.MaxProblems; Truncated counts the problems beyond the cap. A nil
 // *Problems means the input was accepted.
+//
+// *Problems implements error, but never assign one to an error variable
+// or return it as error without a nil check: a nil *Problems stored in an
+// error is a non-nil error (Go's typed nil), and the caller would read an
+// accepted document as refused. Write
+//
+//	if probs != nil {
+//		return probs
+//	}
+//	return nil
 type Problems struct { //nolint:errname // docs/PLAN.md section 3.7 names it Problems; it is a report first and an error second
 	List      []Problem
 	Truncated int
