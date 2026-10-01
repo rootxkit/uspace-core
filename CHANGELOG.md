@@ -112,8 +112,8 @@ Each entry names the work package and the vectors it affects.
   `source_disabled` (through a `sources.Follower`, by version and epoch),
   `landed` and `flight_ended` (`Drop`); the aircraft cap evicts only
   aircraft without an active alert and otherwise refuses new ids
-  (`rejected_capacity`, `CapacityExceeded`), and no one source holds more
-  than `MaxSourceShare` of it (`rejected_source_share`), with refusals
+  (`rejected_capacity`, `CapacityExceeded`), and no one source adds new
+  ids past `MaxSourceShare` of it in alert holders (`rejected_source_share`), with refusals
   reported in `Events.Refused` at a limited rate; a resolved conflict carries the clearing
   judgement's separation in `Cleared.ClearingDetail` beside the last
   in-conflict detail (C-14). Zone alerts are keyed by country and

@@ -202,7 +202,9 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS, maxWall
 	perSource := map[sourceKey]int{}
 	for _, ac := range m.aircraft {
 		evictable = evictable || len(ac.alerts) == 0
-		perSource[ac.src]++
+		if len(ac.alerts) > 0 {
+			perSource[ac.src]++
+		}
 	}
 	if m.CapacityExceeded() != (m.Tracked() >= fuzzMaxAircraft && !evictable) {
 		t.Fatalf("CapacityExceeded %v with %d held, evictable %v", m.CapacityExceeded(), m.Tracked(), evictable)
@@ -216,8 +218,13 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS, maxWall
 		}
 	}
 	for i := range ev.Refused {
-		if r := ev.Refused[i]; r.ID == "" || (r.Reason != RefusedSourceShare && r.Reason != RefusedCapacity) {
+		r := ev.Refused[i]
+		if r.ID == "" || (r.Reason != RefusedSourceShare && r.Reason != RefusedCapacity) {
 			t.Fatalf("refusal %+v", r)
+		}
+		// Checked at the refusal: the sweep after it may clear alerts.
+		if r.Reason == RefusedSourceShare && r.SourceAlertHolders < m.sourceShareLimit() {
+			t.Fatalf("source_share refusal with %d alert holders, limit %d", r.SourceAlertHolders, m.sourceShareLimit())
 		}
 	}
 	pooled := 0

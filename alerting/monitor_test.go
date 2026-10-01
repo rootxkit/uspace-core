@@ -646,7 +646,6 @@ func TestMismatchSurvivesLandingButNotDrop(t *testing.T) {
 func TestMaxAircraftEvicts(t *testing.T) {
 	const n = 50_001
 	cfg := DefaultConfig()
-	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := NewMonitor(cfg)
 	for i := range n {
 		tr := at(fmt.Sprintf("U%05d", i), 0, 0, 0)
@@ -672,9 +671,12 @@ func TestEvictionSparesAlertHolders(t *testing.T) {
 	// counted, the condition is exposed, and nothing is cleared.
 	cfg := DefaultConfig()
 	cfg.MaxAircraft = 2
-	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := headOn(t, cfg)
-	wantEvents(t, "C refused", m.Observe(at("C", 9000, 0, 0), 0), nil, nil)
+	// From another station, so the relay's share of alert holders does
+	// not decide first.
+	c := at("C", 9000, 0, 0)
+	c.Station = "gs-3"
+	wantEvents(t, "C refused", m.Observe(c, 0), nil, nil)
 	if got := m.Counters().Get(CounterRejectedCapacity); got != 1 {
 		t.Fatalf("rejected_capacity = %d", got)
 	}
@@ -684,8 +686,11 @@ func TestEvictionSparesAlertHolders(t *testing.T) {
 	// Twin: an aircraft without an alert is evicted instead, silently.
 	cfg.MaxAircraft = 3
 	m = headOn(t, cfg)
-	m.Observe(at("C", 9000, 0, 0), 0)
-	wantEvents(t, "D evicts C", m.Observe(at("D", 12000, 0, 0), 0), nil, nil)
+	c.Station = "gs-3"
+	m.Observe(c, 0)
+	d := at("D", 12000, 0, 0)
+	d.Station = "gs-4"
+	wantEvents(t, "D evicts C", m.Observe(d, 0), nil, nil)
 	if _, ok := m.aircraft["C"]; ok || m.Counters().Get(CounterAircraftEvicted) != 1 || m.CapacityExceeded() {
 		t.Fatal("C was not the one evicted")
 	}
@@ -697,19 +702,27 @@ func TestEvictionSparesAlertHolders(t *testing.T) {
 func TestEvictionPrefersGroundThenUnidentified(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxAircraft = 5
-	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := headOn(t, cfg)
-	m.Observe(at("C", 9000, 0, 0), 0) // flying, identified, oldest
-	d := at("D", 12000, 0, 0)
+	// The others come from another station, so the relay's share of
+	// alert holders (A and B) does not refuse them.
+	other := func(tr Track) Track {
+		tr.Station = "gs-2"
+		return tr
+	}
+	m.Observe(other(at("C", 9000, 0, 0)), 0) // flying, identified, oldest
+	d := other(at("D", 12000, 0, 0))
 	d.Identified = ptr(false) // flying, unidentified
 	m.Observe(d, 0)
-	e := at("E", 15000, 0, 0)
+	e := other(at("E", 15000, 0, 0))
 	e.Flying = nil // unknown flying: no track
 	m.Observe(e, 0)
+	if m.Tracked() != 5 {
+		t.Fatalf("%d tracked before the evictions", m.Tracked())
+	}
 	evicts := func(id, want string) {
 		t.Helper()
-		m.Observe(at(id, 30000+float64(len(id))*100, 0, 0), 0)
-		if _, ok := m.aircraft[want]; ok {
+		m.Observe(other(at(id, 30000+float64(len(id))*100, 0, 0)), 0)
+		if _, ok := m.aircraft[want]; ok || m.aircraft[id] == nil {
 			t.Fatalf("%s arrived and %s was not evicted", id, want)
 		}
 	}
@@ -725,7 +738,6 @@ func TestSpoofedFloodNeverClearsARealConflict(t *testing.T) {
 	// Review probe: 50 000 spoofed ids after a real conflict. The old
 	// least-recently-used eviction cleared it as evicted.
 	cfg := DefaultConfig()
-	cfg.MaxSourceShare = 1 // one source: the share is tested on its own
 	m := headOn(t, cfg)
 	for i := range 50_000 {
 		tr := at(fmt.Sprintf("S%05d", i), 20000, 0, 0.5)
@@ -1258,6 +1270,9 @@ func TestOneSourceFloodCannotFillTheCap(t *testing.T) {
 	if got := m.Counters().Get(CounterRejectedSourceShare + "/remote_id/rx-evil"); got != 500 {
 		t.Fatalf("rejected_source_share/remote_id/rx-evil = %d, want 500", got)
 	}
+	if held := m.bySource[sourceKey{typ: "remote_id", station: "rx-evil"}]; held != 500 {
+		t.Fatalf("rx-evil holds %d alert holders, want its share of 500", held)
+	}
 	if got := m.Counters().Get(CounterRejectedSourceShare); got != 500 || m.CapacityExceeded() {
 		t.Fatalf("rejected_source_share = %d, exceeded %v", got, m.CapacityExceeded())
 	}
@@ -1378,5 +1393,16 @@ func TestClearAfterMustExceedTwiceTheTolerance(t *testing.T) {
 	cfg.ClearAfterS = 2.5
 	if got := NewMonitor(cfg).Config().ClearAfterS; got != 2.5 {
 		t.Fatalf("ClearAfterS %v", got)
+	}
+}
+
+func TestSmallCapSingleSourceJudgesThePair(t *testing.T) {
+	// Review probe: MaxAircraft 2, one relay, the default share. The share
+	// counts alert holders only, so the free slot takes B.
+	cfg := DefaultConfig()
+	cfg.MaxAircraft = 2
+	m := headOn(t, cfg)
+	if got := m.Counters().Get(CounterRejectedSourceShare); got != 0 {
+		t.Fatalf("rejected_source_share = %d", got)
 	}
 }

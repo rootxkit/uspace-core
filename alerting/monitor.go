@@ -65,6 +65,8 @@ type aircraft struct {
 	order   []orderEntry
 	// alerts holds the keys of the active alerts this aircraft is part of.
 	alerts map[string]struct{}
+	// held: counted among its source's alert holders (bySource).
+	held bool
 	// identUnidentified: the last identification heard said unidentified.
 	identUnidentified bool
 	// pool is the eviction pool ac is in (poolNone while it holds an
@@ -109,7 +111,8 @@ type Monitor struct {
 	// pools hold the aircraft without an active alert, each least recently
 	// heard first (E-10).
 	pools [poolCount]*list.List
-	// bySource counts the aircraft held per source of their last sample;
+	// bySource counts the aircraft holding an active alert per source of
+	// their last sample (the share is counted against them only);
 	// refusals rate-limits Events.Refused per source (bounded by
 	// maxRefusalSources).
 	bySource map[sourceKey]int
@@ -334,14 +337,20 @@ type refusalState struct {
 	suppressed uint64
 }
 
-// sourceShareLimit is how many aircraft one source may hold.
+// sourceShareLimit is how many alert-holding aircraft one source may
+// hold.
 func (m *Monitor) sourceShareLimit() int {
 	return max(1, int(math.Floor(m.cfg.MaxSourceShare*float64(m.cfg.MaxAircraft))))
 }
 
 // record returns the aircraft id, heard from src, and marks it heard. A
 // new id is refused when src already holds MaxSourceShare of MaxAircraft
-// (rejected_source_share). Past MaxAircraft a new id evicts one aircraft
+// in aircraft with an active alert (rejected_source_share): a source fills
+// free and evictable slots freely, but a flood of alert holders from one
+// source stops at its share and leaves the rest of the cap to the others
+// (owner decision on PR #15). The bound is on new ids: aircraft a source
+// already holds may still gain alerts past its share, and then
+// CapacityExceeded and rejected_capacity show it. Past MaxAircraft a new id evicts one aircraft
 // without an active alert (not flying first, then unidentified, then the
 // least recently heard), counted as aircraft_evicted; when every
 // aircraft holds an alert the new id is refused (rejected_capacity). A
@@ -370,23 +379,31 @@ func (m *Monitor) record(id string, src sourceKey, wallS float64, ev *Events) *a
 	}
 	ac := &aircraft{id: id, src: src, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1), pool: poolNone}
 	m.aircraft[id] = ac
-	m.bySource[src]++
 	m.reclass(ac, true)
 	return ac
 }
 
-// setSource moves ac's source count to src.
+// setSource moves ac, and its place in the alert holders' count, to src.
 func (m *Monitor) setSource(ac *aircraft, src sourceKey) {
 	if ac.src == src {
 		return
 	}
-	m.uncount(ac)
+	held := ac.held
+	m.setHeld(ac, false)
 	ac.src = src
-	m.bySource[src]++
+	m.setHeld(ac, held)
 }
 
-// uncount takes ac out of its source's count.
-func (m *Monitor) uncount(ac *aircraft) {
+// setHeld counts ac among its source's alert holders, or not.
+func (m *Monitor) setHeld(ac *aircraft, held bool) {
+	if ac.held == held {
+		return
+	}
+	ac.held = held
+	if held {
+		m.bySource[ac.src]++
+		return
+	}
 	if m.bySource[ac.src]--; m.bySource[ac.src] <= 0 {
 		delete(m.bySource, ac.src)
 	}
@@ -404,14 +421,14 @@ func (m *Monitor) refuse(id string, src sourceKey, reason RefusalReason, counter
 			clear(m.refusals)
 		}
 		m.refusals[src] = &refusalState{lastS: wallS}
-		ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS})
+		ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS, SourceAlertHolders: m.bySource[src]})
 		return
 	}
 	if !(wallS-st.lastS >= m.cfg.RefusalEventIntervalS) {
 		st.suppressed++
 		return
 	}
-	ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS, Suppressed: st.suppressed})
+	ev.Refused = append(ev.Refused, Refusal{ID: id, Source: src.typ, Station: src.station, Reason: reason, AtS: wallS, Suppressed: st.suppressed, SourceAlertHolders: m.bySource[src]})
 	st.lastS, st.suppressed = wallS, 0
 }
 
@@ -428,6 +445,7 @@ func (m *Monitor) victim() *aircraft {
 // reclass moves ac into the pool it belongs in now; touch also marks it
 // the most recently heard of its pool.
 func (m *Monitor) reclass(ac *aircraft, touch bool) {
+	m.setHeld(ac, len(ac.alerts) > 0)
 	p := poolOf(ac)
 	if p == ac.pool && !touch {
 		return
@@ -449,7 +467,7 @@ func (m *Monitor) forget(ac *aircraft) {
 		m.pools[ac.pool].Remove(ac.elem)
 		ac.elem = nil
 	}
-	m.uncount(ac)
+	m.setHeld(ac, false)
 	delete(m.aircraft, ac.id)
 }
 

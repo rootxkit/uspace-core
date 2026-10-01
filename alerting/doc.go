@@ -41,9 +41,10 @@
 // neither does the aircraft cap (E-10): past Config.MaxAircraft only an
 // aircraft without an active alert is evicted, and when every one holds
 // an alert a new id is refused (rejected_capacity, CapacityExceeded). No
-// one source may hold more than Config.MaxSourceShare of the cap
-// (rejected_source_share), so a flooding receiver leaves room for the
-// others. Every refusal is counted in total and per source and reported
+// one source may add a new id while it holds Config.MaxSourceShare of the
+// cap in alert-holding aircraft (rejected_source_share), so a receiver
+// flooding alert holders leaves room for the others; free and evictable
+// slots are open to every source. Every refusal is counted in total and per source and reported
 // in Events.Refused, at most once per source per
 // Config.RefusalEventIntervalS: the caller alerts on it.
 //

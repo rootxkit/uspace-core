@@ -101,7 +101,8 @@ const (
 	// plus "/<source>/<station>".
 	CounterRejectedCapacity = "rejected_capacity"
 	// CounterRejectedSourceShare counts samples of a new id refused
-	// because its source holds MaxSourceShare of MaxAircraft. Also counted
+	// because its source holds MaxSourceShare of MaxAircraft in alert
+	// holders. Also counted
 	// per source under this name plus "/<source>/<station>".
 	CounterRejectedSourceShare = "rejected_source_share"
 	// CounterSourceOrderEvicted counts per-source ordering entries evicted
@@ -172,9 +173,11 @@ type Config struct {
 	// is refused. An alert is never cleared to make room.
 	MaxAircraft int
 	// MaxSourceShare is the largest share of MaxAircraft one source key
-	// (type and station or receiver) may hold, in (0, 1]: a new id from a
-	// source already holding it is refused (rejected_source_share), so one
-	// flooding receiver leaves room for the others. Default 0.5.
+	// (type and station or receiver) may hold in aircraft with an active
+	// alert, in (0, 1]: a new id from a source already holding it is
+	// refused (rejected_source_share), so one receiver flooding alert
+	// holders leaves room for the others. Free and evictable slots are
+	// open to any source. 1 turns the share off. Default 0.5.
 	MaxSourceShare float64
 	// RefusalEventIntervalS rate-limits Events.Refused: at most one
 	// Refusal per source key per interval of wall time, carrying how many
@@ -331,6 +334,10 @@ type Refusal struct {
 	Reason              RefusalReason
 	AtS                 float64
 	Suppressed          uint64
+	// SourceAlertHolders is how many aircraft with an active alert the
+	// source held when it was refused (at least its share for
+	// source_share).
+	SourceAlertHolders int
 }
 
 // validTime reports whether a configured time is usable: finite and not
