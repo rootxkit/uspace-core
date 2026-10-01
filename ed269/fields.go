@@ -18,12 +18,15 @@ var (
 		"AIR_TRAFFIC", "SENSITIVE", "PRIVACY", "POPULATION", "NATURE",
 		"NOISE", "FOREIGN_TERRITORY", "EMERGENCY", "OTHER",
 	}
-	typeValues    = []string{"COMMON", "CUSTOMIZED"}
+	typeValues    = []string{"COMMON", typeCustomized}
 	purposeValues = []string{"AUTHORIZATION", "NOTIFICATION", "INFORMATION"}
 	yesNoValues   = []string{"YES", "NO"}
 	uomValues     = []string{"M", "FT"}
 	refValues     = []string{"AGL", "AMSL", "WGS84"}
 )
+
+// typeCustomized is the ED-269 zone type spelt with a Z, as published.
+const typeCustomized = "CUSTOMIZED" //nolint:misspell // the ED-269 enumeration value, kept exactly
 
 // unknown reports every member of v not in allowed; false when any.
 func (p *parser) unknown(v *value, path string, allowed []string, reason string) bool {

@@ -102,7 +102,7 @@ func TestRefusals(t *testing.T) {
 		{"country four letters", map[string]any{"country": "GEOR"}, nil, f0 + ".country", "at most 3"},
 		{"name long", map[string]any{"name": strings.Repeat("n", 201)}, nil, f0 + ".name", "at most 200"},
 		{"name counts characters", map[string]any{"name": strings.Repeat("ö", 201)}, nil, f0 + ".name", "is 201 characters"},
-		{"type outside the enumeration", map[string]any{"type": "CUSTOM"}, nil, f0 + ".type", "'CUSTOM' is not one of COMMON, CUSTOMIZED"},
+		{"type outside the enumeration", map[string]any{"type": "CUSTOM"}, nil, f0 + ".type", "'CUSTOM' is not one of COMMON, " + typeCustomized},
 		{"type number", map[string]any{"type": 1}, nil, f0 + ".type", "not a number"},
 		{"restriction missing", map[string]any{"restriction": nil}, nil, f0 + ".restriction", "missing"},
 		{"restriction number", map[string]any{"restriction": 1}, nil, f0 + ".restriction", "not a number"},
@@ -375,7 +375,7 @@ func TestReasonsClipValues(t *testing.T) {
 		tail  string
 	}{
 		{"string value", map[string]any{"restriction": long}, nil, "features[0].restriction", "…' is not one of PROHIBITED"},
-		{"type value", map[string]any{"type": long}, nil, "features[0].type", "…' is not one of COMMON, CUSTOMIZED"},
+		{"type value", map[string]any{"type": long}, nil, "features[0].type", "…' is not one of COMMON, " + typeCustomized},
 		{"subtree", nil, map[string]any{"horizontalProjection": map[string]any{"type": map[string]any{long: []any{long, 1, long}}}}, "features[0].geometry[0].horizontalProjection.type", "… is not Polygon or Circle"},
 		{"number text", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "radius": 5, "center": []any{1, raw("1" + strings.Repeat("0", 300))}}}, "features[0].geometry[0].horizontalProjection.center", "…] is outside longitude and latitude ranges"},
 	}

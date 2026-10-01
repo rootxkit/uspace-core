@@ -158,7 +158,8 @@ type GeoZone struct {
 	Identifier string
 	Country    string
 	Name       *string
-	// Type is the ED-269 zone type: COMMON or CUSTOMIZED.
+	// Type is the ED-269 zone type: COMMON or the customised type (spelt
+	// with a Z in ED-269).
 	Type            string
 	Restriction     Restriction
 	Reason          []Reason
