@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/rootxkit/uspace-core/core"
 )
@@ -351,5 +352,46 @@ func TestFirstInvalid(t *testing.T) {
 	}
 	if got := firstInvalid([]byte("ok")); got != "invalid encoding" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// A reason quotes at most reasonValueMax characters of a value, so that a
+// hostile value cannot make the report large; the phrase after it stays.
+func TestReasonsClipValues(t *testing.T) {
+	long := strings.Repeat("é", 5000)
+	tests := []struct {
+		name  string
+		set   map[string]any
+		vol   map[string]any
+		field string
+		tail  string
+	}{
+		{"string value", map[string]any{"restriction": long}, nil, "features[0].restriction", "…' is not one of PROHIBITED"},
+		{"type value", map[string]any{"type": long}, nil, "features[0].type", "…' is not one of COMMON, CUSTOMIZED"},
+		{"subtree", nil, map[string]any{"horizontalProjection": map[string]any{"type": map[string]any{long: []any{long, 1, long}}}}, "features[0].geometry[0].horizontalProjection.type", "… is not Polygon or Circle"},
+		{"number text", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "radius": 5, "center": []any{1, raw("1" + strings.Repeat("0", 300))}}}, "features[0].geometry[0].horizontalProjection.center", "…] is outside longitude and latitude ranges"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, probs := Parse(docOf(t, feature(t, tc.set, tc.vol)), DefaultLimits)
+			if !hasProblem(probs, tc.field, tc.tail) {
+				t.Fatalf("want %s ending %q; got %v", tc.field, tc.tail, probs)
+			}
+			for _, p := range probs.List {
+				if n := utf8.RuneCountInString(p.Reason); n > 2*reasonValueMax+80 {
+					t.Errorf("%s: reason of %d characters", p.Field, n)
+				}
+				if !utf8.ValidString(p.Reason) {
+					t.Errorf("%s: reason is not UTF-8", p.Field)
+				}
+			}
+		})
+	}
+	// The accepted twin: a value at the cap is quoted whole.
+	if got := quote(strings.Repeat("a", reasonValueMax)); got != "'"+strings.Repeat("a", reasonValueMax)+"'" {
+		t.Errorf("quote at the cap: %s", got)
+	}
+	if got := capText("aé", 2); got != "a" {
+		t.Errorf("capText on a character boundary: %q", got)
 	}
 }

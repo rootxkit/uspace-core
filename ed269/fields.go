@@ -51,11 +51,28 @@ func (p *parser) enum(v *value, where string, allowed []string) (string, bool) {
 	return v.s, true
 }
 
-// quote writes a string as the reasons show it: 'value'.
-func quote(s string) string { return "'" + s + "'" }
+// reasonValueMax is the most characters of a value a reason quotes; a
+// longer value is cut and ends in an ellipsis, so that a hostile value
+// cannot make a report large. Every phrase a vector binds stays whole.
+const reasonValueMax = 64
+
+// clip cuts s to reasonValueMax characters plus an ellipsis.
+func clip(s string) string {
+	n := 0
+	for i := range s {
+		if n == reasonValueMax {
+			return s[:i] + "…"
+		}
+		n++
+	}
+	return s
+}
+
+// quote writes a string as the reasons show it: 'value', clipped.
+func quote(s string) string { return "'" + clip(s) + "'" }
 
 // show writes a value as the reasons show it: strings quoted, the rest as
-// JSON.
+// compact JSON, both clipped.
 func show(v *value) string {
 	if v == nil {
 		return "null"
@@ -64,6 +81,6 @@ func show(v *value) string {
 		return quote(v.s)
 	}
 	var b bytes.Buffer
-	compact(v, &b)
-	return b.String()
+	compactUpTo(v, &b, 4*reasonValueMax+4)
+	return clip(b.String())
 }

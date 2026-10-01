@@ -222,23 +222,31 @@ func pathOf(root string, stack []frame) string {
 
 // compact writes v back as compact JSON, member order and number text as
 // read.
-func compact(v *value, b *bytes.Buffer) {
+func compact(v *value, b *bytes.Buffer) { compactUpTo(v, b, 0) }
+
+// compactUpTo is compact that stops writing once b holds at least limit
+// bytes (0: no limit), so that a reason quoting a large subtree costs
+// no more than its cap.
+func compactUpTo(v *value, b *bytes.Buffer, limit int) {
+	if limit > 0 && b.Len() >= limit {
+		return
+	}
 	switch v.kind {
 	case kindNull:
 		b.WriteString("null")
 	case kindBool:
 		b.WriteString(strconv.FormatBool(v.b))
 	case kindNumber:
-		b.WriteString(v.s)
+		b.WriteString(capText(v.s, limit))
 	case kindString:
-		writeString(b, v.s)
+		writeString(b, capText(v.s, limit))
 	case kindArray:
 		b.WriteByte('[')
 		for i, e := range v.arr {
 			if i > 0 {
 				b.WriteByte(',')
 			}
-			compact(e, b)
+			compactUpTo(e, b, limit)
 		}
 		b.WriteByte(']')
 	case kindObject:
@@ -247,12 +255,28 @@ func compact(v *value, b *bytes.Buffer) {
 			if i > 0 {
 				b.WriteByte(',')
 			}
-			writeString(b, k)
+			writeString(b, capText(k, limit))
 			b.WriteByte(':')
-			compact(v.vals[i], b)
+			compactUpTo(v.vals[i], b, limit)
 		}
 		b.WriteByte('}')
 	}
+}
+
+// capText cuts s to at most limit bytes on a character boundary (0: no
+// limit).
+func capText(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	cut := 0
+	for i := range s {
+		if i > limit {
+			break
+		}
+		cut = i
+	}
+	return s[:cut]
 }
 
 // writeString writes s as a JSON string without HTML escaping.

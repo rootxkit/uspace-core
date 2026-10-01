@@ -508,7 +508,7 @@ func (p *parser) position(v *value, where string) (Position, bool) {
 		return Position{}, false
 	}
 	if lon < -180 || lon > 180 || lat < -90 || lat > 90 {
-		p.ps.add(where, "["+v.arr[0].s+", "+v.arr[1].s+"] is outside longitude and latitude ranges")
+		p.ps.add(where, "["+clip(v.arr[0].s)+", "+clip(v.arr[1].s)+"] is outside longitude and latitude ranges")
 		return Position{}, false
 	}
 	return Position{LatDeg: lat, LonDeg: lon}, true
