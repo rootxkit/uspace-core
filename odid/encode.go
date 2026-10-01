@@ -289,9 +289,7 @@ func encodeDirection(p *float64) (raw, ew uint8, err error) {
 	switch {
 	case d == 360:
 		d = 0
-	case d == SpecialDirection:
-		return 0, 0, core.Fieldf("direction_deg", "%v rounds to %d, the unknown direction; pass nil", *p, SpecialDirection)
-	case d < 0 || d > math.MaxUint8+180:
+	case d < 0 || d > 360:
 		return 0, 0, core.Fieldf("direction_deg", "%v is outside 0 to 360", *p)
 	}
 	if d >= 180 {

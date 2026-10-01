@@ -57,7 +57,7 @@ func FuzzDecode(f *testing.F) {
 		if err != nil {
 			t.Fatalf("re-encoded frame refused: %v\n%x", err, enc)
 		}
-		if !reflect.DeepEqual(onCircle(all), onCircle(again)) {
+		if !reflect.DeepEqual(all, again) {
 			t.Fatalf("round trip changed the values:\n%#v\n%#v", all, again)
 		}
 		if canonical(frame) && !bytes.Equal(enc, frame) {
@@ -66,29 +66,12 @@ func FuzzDecode(f *testing.F) {
 	})
 }
 
-// onCircle folds every Location direction into [0, 360). The reference
-// decoder (decodeDirection) turns raw 180 with the east/west bit into 360
-// and raw 181-255 with it into 361-435 (361 aside); the encoder writes
-// 360 as 0 (R-02), so those directions survive a round trip only as the
-// same direction on the circle.
-func onCircle(ms []Message) []Message {
-	out := make([]Message, len(ms))
-	for i, m := range ms {
-		if l, ok := m.(Location); ok && l.DirectionDeg != nil {
-			d := math.Mod(*l.DirectionDeg, 360)
-			l.DirectionDeg = &d
-			m = l
-		}
-		out[i] = m
-	}
-	return out
-}
-
 // canonical reports whether every message of an accepted frame uses the
 // one encoding the encoder writes for its values: version 2 (the pack's
 // and each message's), reserved
 // bits and bytes zero, a direction of 180 or more carried with the
-// east/west bit (and 360 as 0), a speed of 63.75 m/s in the high range.
+// east/west bit and its raw byte under 180 (only 181 with the bit, the
+// unknown direction, is above), a speed of 63.75 m/s in the high range.
 func canonical(frame []byte) bool {
 	if frame[0]&nibble != ProtocolVersion {
 		return false
@@ -113,7 +96,7 @@ func canonical(frame []byte) bool {
 			flags := m[offLocFlags]
 			ew := flags&locFlagEWDirection != 0
 			if flags&locFlagReserved != 0 || m[offLocTSAccuracy]>>4 != 0 || m[offLocReserved3] != 0 ||
-				(!ew && m[offLocDirection] >= 180) || (ew && m[offLocDirection] == 180) ||
+				(!ew && m[offLocDirection] >= 180) || (ew && m[offLocDirection] >= 180 && m[offLocDirection] != directionRawUnknown) ||
 				(flags&locFlagSpeedMult == 0 && m[offLocSpeedH] == speedHRawUnknown) {
 				return false
 			}

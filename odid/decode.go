@@ -225,7 +225,9 @@ func decodeLocation(b *[MessageSize]byte) Location {
 	if flags&locFlagEWDirection != 0 {
 		v[0] += 180
 	}
-	if v[0] != SpecialDirection {
+	// 361 is the standard's unknown; 360 and 362-435 are not directions
+	// either, only a malformed frame carries them: all decode as unknown.
+	if v[0] < 360 {
 		l.DirectionDeg = &v[0]
 	}
 

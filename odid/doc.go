@@ -27,7 +27,8 @@
 // # Decoding
 //
 // Decode takes one 25-byte message or one pack. The standard's "unknown"
-// encodings (direction 361, horizontal speed 255 m/s, vertical speed
+// encodings (direction 361, and 360 or more, which only a malformed
+// frame carries; horizontal speed 255 m/s, vertical speed
 // 63 m/s, altitude -1000 m, timestamp 0xFFFF, position 0, 0) decode to nil
 // (R-01); latitude 0 alone is the equator. Height keeps its reference flag
 // (R-12). Self-ID, Authentication and undefined types decode to nothing
@@ -35,11 +36,6 @@
 // whole, before any message in it is decoded (R-03). Every refusal is a
 // *core.FieldError on "frame" or "pack[i]". Nothing indexes the input
 // before its length is checked; FuzzDecode holds that.
-//
-// Directions decode as the reference library decodes them: the raw byte
-// plus 180 when the east/west bit is set, so a malformed frame can carry
-// 360 to 435 (361 aside, which is unknown). They are not folded into
-// [0, 360) here; the encoder writes 360 as 0.
 //
 // Strings lose their trailing NUL padding only; case and every other byte
 // are kept as broadcast, so a decoded message always re-encodes to the

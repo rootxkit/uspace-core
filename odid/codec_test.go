@@ -230,7 +230,9 @@ func TestDecodeSentinelsAndPresence(t *testing.T) {
 		want  *float64
 	}{
 		{"direction 361", func(b []byte) { b[1] |= locFlagEWDirection; b[2] = 181 }, func(l Location) *float64 { return l.DirectionDeg }, nil},
-		{"direction 360", func(b []byte) { b[1] |= locFlagEWDirection; b[2] = 180 }, func(l Location) *float64 { return l.DirectionDeg }, ptr(360)},
+		{"direction 360 is unknown", func(b []byte) { b[1] |= locFlagEWDirection; b[2] = 180 }, func(l Location) *float64 { return l.DirectionDeg }, nil},
+		{"direction 435 is unknown", func(b []byte) { b[1] |= locFlagEWDirection; b[2] = 255 }, func(l Location) *float64 { return l.DirectionDeg }, nil},
+		{"direction 359", func(b []byte) { b[1] |= locFlagEWDirection; b[2] = 179 }, func(l Location) *float64 { return l.DirectionDeg }, ptr(359)},
 		{"direction 181 without the bit", func(b []byte) { b[2] = 181 }, func(l Location) *float64 { return l.DirectionDeg }, ptr(181)},
 		{"speed 255 high", func(b []byte) { b[1] |= locFlagSpeedMult; b[3] = 255 }, func(l Location) *float64 { return l.SpeedHorizontalMS }, nil},
 		{"speed 254 high", func(b []byte) { b[1] |= locFlagSpeedMult; b[3] = 254 }, func(l Location) *float64 { return l.SpeedHorizontalMS }, ptr(254.25)},
@@ -300,7 +302,6 @@ func TestEncodeQuantisation(t *testing.T) {
 		{"179.5 rounds to 180", func(l *Location) { l.DirectionDeg = ptr(179.5) }, raw{2, 0, locFlagEWDirection, locFlagEWDirection}},
 		{"179.4 stays east", func(l *Location) { l.DirectionDeg = ptr(179.4) }, raw{2, 179, locFlagEWDirection, 0}},
 		{"-0.4 is north", func(l *Location) { l.DirectionDeg = ptr(-0.4) }, raw{2, 0, locFlagEWDirection, 0}},
-		{"435 is the top of the wire", func(l *Location) { l.DirectionDeg = ptr(435) }, raw{2, 255, locFlagEWDirection, locFlagEWDirection}},
 		{"nil direction", func(l *Location) { l.DirectionDeg = nil }, raw{2, 181, locFlagEWDirection, locFlagEWDirection}},
 		{"63.5 m/s low", func(l *Location) { l.SpeedHorizontalMS = ptr(63.5) }, raw{3, 254, locFlagSpeedMult, 0}},
 		{"63.75 m/s high", func(l *Location) { l.SpeedHorizontalMS = ptr(63.75) }, raw{3, 0, locFlagSpeedMult, locFlagSpeedMult}},
@@ -333,7 +334,8 @@ func TestEncodeQuantisation(t *testing.T) {
 		name, field, phrase string
 		change              func(*Location)
 	}{
-		{"direction 360.6", "direction_deg", "unknown direction", func(l *Location) { l.DirectionDeg = ptr(360.6) }},
+		{"direction 360.6", "direction_deg", "outside 0 to 360", func(l *Location) { l.DirectionDeg = ptr(360.6) }},
+		{"direction 435", "direction_deg", "outside 0 to 360", func(l *Location) { l.DirectionDeg = ptr(435) }},
 		{"direction 435.5", "direction_deg", "outside 0 to 360", func(l *Location) { l.DirectionDeg = ptr(435.5) }},
 		{"direction -0.5", "direction_deg", "outside 0 to 360", func(l *Location) { l.DirectionDeg = ptr(-0.5) }},
 		{"direction NaN", "direction_deg", "not a finite number", func(l *Location) { l.DirectionDeg = ptr(math.NaN()) }},
@@ -483,7 +485,7 @@ func TestEncodePackRefusals(t *testing.T) {
 		{"three Basic IDs", "pack[2]", "too many Basic ID messages in a pack", []Message{basic, basic, basic}},
 		{"two Locations", "pack[1]", "more than one LOCATION message in a pack", []Message{loc, loc}},
 		{"nil message", "pack[1]", "nil", []Message{loc, nil}},
-		{"a message refused", "pack[1].direction_deg", "unknown direction", []Message{basic, bad}},
+		{"a message refused", "pack[1].direction_deg", "outside 0 to 360", []Message{basic, bad}},
 		{"a foreign message", "pack[0].message", "is not an ODID message", []Message{foreign{}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
