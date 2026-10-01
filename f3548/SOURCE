@@ -1,0 +1,15 @@
+# Where the f3548 types and constants come from. Update together with
+# generate.go and re-run `go generate ./f3548`.
+uas_standards_repo = https://github.com/interuss/uas_standards
+uas_standards_commit = 6e182f43ec960b3bccf131c9006ff9979dd8a56e
+# uas_standards generates its v21 api.py from this file (its
+# tools/openapi_conversion/generate_apis.sh: "F3548-21" from
+# interfaces/astm/f3548/v21/utm.yaml), at the submodule commit
+# uas_standards pins:
+spec_repo = https://github.com/interuss/astm-utm-protocol
+spec_commit = 1d3d8fbe75414e23d7e19ce35955770bea5e413f
+spec_path = utm.yaml
+spec_title = UTM API (USS->DSS and USS->USS) 1.0.0
+constants = src/uas_standards/astm/f3548/v21/constants.py
+generator = github.com/oapi-codegen/oapi-codegen/v2 v2.8.0, types only (oapi-codegen.yaml)
+postprocess = ../f3411/internal/oapialias (one-element anyOf unions become aliases)

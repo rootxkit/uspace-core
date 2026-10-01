@@ -1,0 +1,16 @@
+{
+  "operational_intent_id": "2f8343be-6482-4d1b-a474-16847e01af1e",
+  "telemetry": {
+    "time_measured": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+    "position": {
+      "longitude": -118.456,
+      "latitude": 34.123,
+      "accuracy_h": "HAUnknown",
+      "accuracy_v": "VAUnknown",
+      "extrapolated": true,
+      "altitude": {"value": 19.5, "reference": "W84", "units": "M"}
+    },
+    "velocity": {"speed": 200.1, "units_speed": "MetersPerSecond", "track": 120}
+  },
+  "next_telemetry_opportunity": {"value": "1985-04-12T23:20:51.52Z", "format": "RFC3339"}
+}
