@@ -320,3 +320,39 @@ func BenchmarkTrackerTake(b *testing.B) {
 		}
 	}
 }
+
+// S-35: an observation names the receiver that lent its identity. The
+// absence pair: the own receiver's identity names the own receiver.
+func TestIdentityReceiverLent(t *testing.T) {
+	tr := NewTracker(DefaultSettings())
+	b := frame(0, serial("SN-1"), loc(41.7))
+	b.Receiver = "rx-b"
+	if o := tr.Take(b); o == nil || o.IdentityReceiver != "rx-b" {
+		t.Fatalf("own identity at rx-b: %+v", o)
+	}
+	a := frame(0.5, loc(41.71))
+	a.Receiver = "rx-a"
+	o := tr.Take(a)
+	if o == nil || !o.Identified || o.Receiver != "rx-a" || o.IdentityReceiver != "rx-b" {
+		t.Errorf("borrowed identity: %+v, want Receiver rx-a lent by rx-b", o)
+	}
+}
+
+func TestIdentityReceiverOwn(t *testing.T) {
+	tr := NewTracker(DefaultSettings())
+	b := frame(0, serial("SN-1"))
+	b.Receiver = "rx-b"
+	tr.Take(b)
+	a := frame(0.5, serial("SN-1"), loc(41.71))
+	a.Receiver = "rx-a"
+	o := tr.Take(a)
+	if o == nil || o.Receiver != "rx-a" || o.IdentityReceiver != "rx-a" {
+		t.Errorf("own identity: %+v, want rx-a from rx-a", o)
+	}
+	// Unidentified: no lender.
+	u := Frame{Receiver: "rx-z", Transmitter: "ZZ", Messages: []odid.Message{loc(41.7)}, NowS: 10, RxTS: rxAt(10)}
+	tr2 := NewTracker(Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: -1})
+	if o := tr2.Take(u); o == nil || o.Identified || o.IdentityReceiver != "" {
+		t.Errorf("unidentified: %+v, want no lender", o)
+	}
+}

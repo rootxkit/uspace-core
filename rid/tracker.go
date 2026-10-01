@@ -99,6 +99,10 @@ type Observation struct {
 	// Receiver and Transmitter are those of the frame that carried the
 	// Location.
 	Receiver, Transmitter string
+	// IdentityReceiver is the receiver whose Basic ID identified the
+	// Location: Receiver itself, or another receiver that lent its fresh
+	// identity for the same address (I-03, S-35). Empty when unidentified.
+	IdentityReceiver string
 	// RxTS is the receive time of the frame that carried the Location
 	// (not of a later Basic ID that completed it).
 	RxTS time.Time
@@ -224,7 +228,7 @@ func (t *Tracker) Take(f Frame) *Observation {
 	if st.location == nil || st.published {
 		return nil
 	}
-	basic := t.identityFor(st, f.NowS)
+	basic, lender := t.identityFor(st, f.NowS)
 	if basic == nil {
 		if f.NowS-t.unidentifiedSince(st) < t.s.IdentifyWithinS {
 			return nil
@@ -232,7 +236,7 @@ func (t *Tracker) Take(f Frame) *Observation {
 		t.counters.Inc(CounterUnidentified)
 	}
 	st.published = true
-	return st.observation(basic)
+	return st.observation(basic, lender)
 }
 
 func (st *state) setLocation(loc *odid.Location, rx time.Time) {
@@ -348,37 +352,38 @@ func (t *Tracker) fresh(id identity, nowS float64) bool {
 	return nowS-id.heardS <= t.s.IdentityTTLS
 }
 
-// identityFor is the fresh identity for a Location held by st: its own
-// receiver's first, else one another receiver holds for the same address
-// under the same TTL (I-03). Nil when there is none.
-func (t *Tracker) identityFor(st *state, nowS float64) *odid.BasicID {
-	if b := t.preferred([]*state{st}, nowS); b != nil {
-		return b
-	}
-	return t.preferred(st.transmitter.states, nowS)
-}
-
-// preferred picks among the fresh identities of states: a serial over any
-// other ID type (a serial is fixed to the airframe, a registration can
-// move, I-05), then the one heard last. Nil when none is fresh.
-func (t *Tracker) preferred(states []*state, nowS float64) *odid.BasicID {
-	var best *identity
-	for _, st := range states {
-		for i := range st.identities {
-			id := &st.identities[i]
-			if !t.fresh(*id, nowS) {
-				continue
-			}
-			if best == nil || better(id, best) {
-				best = id
+// identityFor is the fresh identity for a Location held by st and the
+// receiver it came from: st's own receiver's first, else one another
+// receiver holds for the same address under the same TTL (I-03). Nil when
+// there is none.
+func (t *Tracker) identityFor(st *state, nowS float64) (*odid.BasicID, string) {
+	best, from := t.freshest(nil, "", st, nowS)
+	if best == nil {
+		for _, other := range st.transmitter.states {
+			if other != st {
+				best, from = t.freshest(best, from, other, nowS)
 			}
 		}
 	}
 	if best == nil {
-		return nil
+		return nil, ""
 	}
 	b := best.basic
-	return &b
+	return &b, from
+}
+
+// freshest returns the preferred of best and the fresh identities of st:
+// a serial over any other ID type (a serial is fixed to the airframe, a
+// registration can move, I-05), then the one heard last; from is the
+// receiver that holds it.
+func (t *Tracker) freshest(best *identity, from string, st *state, nowS float64) (*identity, string) {
+	for i := range st.identities {
+		id := &st.identities[i]
+		if t.fresh(*id, nowS) && (best == nil || better(id, best)) {
+			best, from = id, st.key.receiver
+		}
+	}
+	return best, from
 }
 
 // better reports whether a is preferred over b.
@@ -451,9 +456,9 @@ func (t *Tracker) unidentifiedSince(st *state) float64 {
 	return max(st.startedS, latest+t.s.IdentityTTLS)
 }
 
-// observation builds the observation of st's Location under basic, or
-// unidentified when basic is nil.
-func (st *state) observation(basic *odid.BasicID) *Observation {
+// observation builds the observation of st's Location under basic, lent
+// by the receiver lender, or unidentified when basic is nil.
+func (st *state) observation(basic *odid.BasicID, lender string) *Observation {
 	o := &Observation{
 		Location:    *st.location,
 		Receiver:    st.key.receiver,
@@ -470,6 +475,7 @@ func (st *state) observation(basic *odid.BasicID) *Observation {
 		o.Identified = true
 		o.UAID = basic.UAID
 		o.IDType = basic.IDType
+		o.IdentityReceiver = lender
 	}
 	if st.operator != nil {
 		op := st.operator.OperatorID
