@@ -92,6 +92,12 @@ linters:
       - path: internal/pgm/
         text: "panic"
         linters: [forbidigo]
+      # scripts/ holds repository tooling (package main, run by CI shell
+      # steps), not library code: a CLI prints its output to stdout. Only
+      # the print rule is lifted; panic, log and os.Exit stay forbidden.
+      - path: ^scripts/
+        text: "fmt\\.Print"
+        linters: [forbidigo]
 
 formatters:
   enable:

@@ -37,12 +37,16 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
+      # Linter versions are pinned (and match the Makefile's
+      # STATICCHECK_VERSION and GOLANGCI_LINT_VERSION) so a local run with
+      # `make tools lint` reports exactly what CI reports. Bump them in both
+      # places in one `ci:` commit.
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.14.0
 
   test-race:
     name: test with the race detector

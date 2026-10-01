@@ -6,7 +6,12 @@ PKGS    ?= ./...
 FUZZTIME ?= 10s
 LAB     ?= ../uspace-lab
 
-.PHONY: all build vet fmt fmt-check lint staticcheck test race cover vectors \
+# Linter versions pinned to the ones .github/workflows/ci.yml runs. Change
+# both files together. `make tools` installs them into $(go env GOPATH)/bin.
+GOLANGCI_LINT_VERSION ?= v2.14.0
+STATICCHECK_VERSION   ?= v0.8.1
+
+.PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
         check-vectors sync-vectors fuzz-smoke bench tidy ci clean
 
 all: ci
@@ -23,11 +28,18 @@ fmt:
 fmt-check:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 
-staticcheck:
-	$(GO) run honnef.co/go/tools/cmd/staticcheck@latest $(PKGS)
+tools:
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
 
+staticcheck:
+	$(GO) run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) $(PKGS)
+
+# Refuses to run a golangci-lint other than the pinned one: a different
+# version enables different checks and would pass locally but fail in CI.
 lint: fmt-check vet staticcheck
-	golangci-lint run
+	@v="v$$(golangci-lint version --short 2>/dev/null)"; 	if [ "$$v" != "$(GOLANGCI_LINT_VERSION)" ]; then 	  echo "golangci-lint $$v found, CI runs $(GOLANGCI_LINT_VERSION): run 'make tools'"; exit 1; fi
+	golangci-lint run $(PKGS)
 
 tidy:
 	$(GO) mod tidy
