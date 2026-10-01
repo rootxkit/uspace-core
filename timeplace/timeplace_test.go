@@ -324,3 +324,25 @@ func BenchmarkPlaceNetwork(b *testing.B) {
 		_, _, _ = PlaceNetwork(state, &resp, rx, pol)
 	}
 }
+
+// The accuracy field is 4 bits: code 15 widens the latency bound by
+// 1.5 s, and a code above 15 is unknown and widens nothing.
+func TestAccuracyCodeBeyondTheField(t *testing.T) {
+	pol := DefaultBroadcastPolicy()
+	at := rx.Add(-6 * time.Second)
+	if p := PlaceBroadcast(tenthsAt(at), 15, rx, pol); p.Fallback != FallbackNone {
+		t.Errorf("code 15, 6 s old: %+v, want believed (5 s + 1.5 s)", p)
+	}
+	if p := PlaceBroadcast(tenthsAt(at), 0, rx, pol); p.Fallback != FallbackTooOld {
+		t.Errorf("code 0, 6 s old: %+v, want too_old", p)
+	}
+	old := rx.Add(-30 * time.Second)
+	for _, code := range []uint8{16, 200, 255} {
+		if p := PlaceBroadcast(tenthsAt(old), code, rx, pol); p.Fallback != FallbackTooOld {
+			t.Errorf("code %d, 30 s old: %+v, want too_old", code, p)
+		}
+		if got := AccuracyS(code); got != 0 {
+			t.Errorf("AccuracyS(%d) = %v, want 0", code, got)
+		}
+	}
+}

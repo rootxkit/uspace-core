@@ -74,14 +74,23 @@ type Placement struct {
 	Fallback Fallback
 }
 
+// maxAccuracyCode is the largest MAV_ODID_TIME_ACC code: the wire field
+// is 4 bits.
+const maxAccuracyCode = 15
+
 // AccuracyS converts a MAV_ODID_TIME_ACC code to seconds: 0 is unknown
-// and gives 0, code k gives k/10 s.
+// and gives 0, code k in 1..15 gives k/10 s. A code above 15 cannot come
+// off the 4-bit wire field and is read as unknown (0), never trusted to
+// widen a bound.
 func AccuracyS(code uint8) float64 {
-	return float64(code) / 10
+	return accuracy(code).Seconds()
 }
 
 // accuracy is AccuracyS as an exact duration.
 func accuracy(code uint8) time.Duration {
+	if code > maxAccuracyCode {
+		return 0
+	}
 	return time.Duration(code) * 100 * time.Millisecond
 }
 
