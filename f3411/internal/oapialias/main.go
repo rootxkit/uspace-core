@@ -204,8 +204,8 @@ func rewrite(src []byte) ([]byte, int, error) {
 	var multi []string
 	for name := range unions {
 		vs := variantsOf(f, name)
-		if len(vs) != 1 {
-			multi = append(multi, fmt.Sprintf("%s (%d variants)", name, len(vs)))
+		if len(vs) != 1 || strings.HasPrefix(vs[0], "?") {
+			multi = append(multi, fmt.Sprintf("%s (%d variants: %s)", name, len(vs), strings.Join(vs, ", ")))
 			continue
 		}
 		variants[name] = vs[0]
@@ -296,12 +296,17 @@ func variantsOf(f *ast.File, name string) []string {
 		if !ok || receiverName(fd) != name || !strings.HasPrefix(fd.Name.Name, "As") {
 			continue
 		}
-		if fd.Type.Results == nil || len(fd.Type.Results.List) == 0 {
-			continue
+		// Every As method counts as a variant, whatever it returns: a
+		// union is aliased only when it is provably one named type, so an
+		// As method whose result is not the type its name says is counted
+		// under a name no alias can take and the rewrite is refused.
+		variant := "?" + fd.Name.Name
+		if fd.Type.Results != nil && len(fd.Type.Results.List) > 0 {
+			if id, ok := fd.Type.Results.List[0].Type.(*ast.Ident); ok && fd.Name.Name == "As"+id.Name {
+				variant = id.Name
+			}
 		}
-		if id, ok := fd.Type.Results.List[0].Type.(*ast.Ident); ok {
-			out = append(out, id.Name)
-		}
+		out = append(out, variant)
 	}
 	return out
 }

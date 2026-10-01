@@ -53,12 +53,18 @@
 //     lowerReference (AGL, AMSL or WGS84) and uom (m or ft), as the schema
 //     (Schema_LayeredGeoJSON.json) and uas_standards (VerticalLayer) both
 //     show them.
+//   - UNVERIFIED: an absent `uom` means metres. The schema says so for
+//     upper and lower ("If this member is not specified, the units should
+//     be assumed to be metres"); the EUROCAE text has not been checked.
 //   - UNVERIFIED: the unit of a circle's radius. A circle is a GeoJSON
 //     Point with an `extent` of subType Circle and a `radius`; neither the
 //     schema (Schema_GeoJSONGeometries.json, where radius is a bare
 //     number) nor uas_standards (ExtentCircle) states its unit, and the
 //     layer's uom is described for upper and lower only. This package
 //     reads the radius as metres.
+//
+// Free-text members the schema leaves unbounded are bounded at
+// MaxFreeTextChars characters.
 //
 // Several layers are a GeometryCollection of geometries, each with its
 // layer, as in the schema's two-layer example.

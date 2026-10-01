@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/rootxkit/uspace-core/core"
+	"github.com/rootxkit/uspace-core/ed269"
 )
 
 // baseDocument is testdata/authority_collection.json, the accepted
@@ -510,4 +511,55 @@ func TestMultiPolygonRefusedWhole(t *testing.T) {
 	if _, probs := Parse(raw, Limits{}); probs != nil {
 		t.Errorf("the polygons as two features: %v", probs)
 	}
+}
+
+// Every free-text member is bounded at MaxFreeTextChars characters, and a
+// member at the bound is accepted (E-10).
+func TestFreeTextBounded(t *testing.T) {
+	set := map[string]func(d map[string]any, v string){
+		"title":       func(d map[string]any, v string) { d["title"] = v },
+		"description": func(d map[string]any, v string) { d["description"] = v },
+		"restrictionConditions": func(d map[string]any, v string) {
+			at(t, d, "features", 1, "properties").(map[string]any)["restrictionConditions"] = v
+		},
+		"siteURL": func(d map[string]any, v string) {
+			at(t, d, "features", 0, "properties", "zoneAuthority", 0).(map[string]any)["siteURL"] = v
+		},
+		"email": func(d map[string]any, v string) {
+			at(t, d, "features", 0, "properties", "zoneAuthority", 0).(map[string]any)["email"] = v
+		},
+		"intervalBefore": func(d map[string]any, v string) {
+			at(t, d, "features", 0, "properties", "zoneAuthority", 0).(map[string]any)["intervalBefore"] = v
+		},
+		"otherGeoid": func(d map[string]any, v string) { at(t, d, "metadata").(map[string]any)["otherGeoid"] = v },
+	}
+	for name, f := range set {
+		for _, c := range []struct {
+			n  int
+			ok bool
+		}{{MaxFreeTextChars, true}, {MaxFreeTextChars + 1, false}} {
+			d := baseDocument(t)
+			f(d, strings.Repeat("ა", c.n)) // multi-byte: the bound is in characters
+			raw, _ := json.Marshal(d)
+			_, probs := Parse(raw, Limits{})
+			if c.ok && probs != nil {
+				t.Errorf("%s of %d characters refused: %v", name, c.n, probs)
+			}
+			if !c.ok && !hasProblemSuffix(probs, name, "at most 2000") {
+				t.Errorf("%s of %d characters: %v", name, c.n, probs)
+			}
+		}
+	}
+}
+
+func hasProblemSuffix(probs *ed269.Problems, field, reason string) bool {
+	if probs == nil {
+		return false
+	}
+	for _, p := range probs.List {
+		if strings.HasSuffix(p.Field, field) && strings.Contains(p.Reason, reason) {
+			return true
+		}
+	}
+	return false
 }

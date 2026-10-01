@@ -96,11 +96,31 @@ type Other struct{}
 
 // MergeState`, 1)
 	_, _, err := rewrite([]byte(two))
-	if err == nil || !strings.Contains(err.Error(), "Flight_State (2 variants)") {
+	if err == nil || !strings.Contains(err.Error(), "Flight_State (2 variants") {
 		t.Fatalf("a two-variant union: %v", err)
 	}
 	if _, _, err := rewrite([]byte("package")); err == nil {
 		t.Error("unparseable source accepted")
+	}
+	// One As method whose result is not the type its name says (or not a
+	// named type) is not provably one variant: refused.
+	for name, as := range map[string]string{
+		"result not named": "func (t Flight_State) AsState() ([]State, error) { return nil, nil }",
+		"name mismatch":    "func (t Flight_State) AsState() (Other, error) { return Other{}, nil }",
+		"no result":        "func (t Flight_State) AsState() {}",
+	} {
+		src := strings.Replace(generated, `// AsState returns the union data inside the Flight_State as a State
+func (t Flight_State) AsState() (State, error) {
+	var body State
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}`, as+"\n\n// Other is other.\ntype Other struct{}", 1)
+		if src == generated {
+			t.Fatal("the test did not replace AsState")
+		}
+		if _, _, err := rewrite([]byte(src)); err == nil || !strings.Contains(err.Error(), "?AsState") {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
 

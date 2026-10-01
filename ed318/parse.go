@@ -47,6 +47,15 @@ const variantCustomized = "CUSTOMIZED" //nolint:misspell // the ED-318 enumerati
 
 const anyDay = "ANY"
 
+// MaxFreeTextChars bounds every free-text member the schema leaves
+// unbounded (restrictionConditions, an authority's siteURL, email and
+// intervalBefore, metadata otherGeoid, the collection's title and
+// description), in characters, so that one member cannot carry an
+// arbitrarily large string into every consumer (E-10). The schema's own
+// bounds (identifier 7, texts 200, phone 200, name 200) apply where it
+// sets them.
+const MaxFreeTextChars = 2000
+
 // Lengths the schema sets.
 const (
 	countryLen   = 3
@@ -147,8 +156,8 @@ func (p *parser) collection(root *value) *FeatureCollection {
 	fc := &FeatureCollection{Extra: extras(root, collectionFields)}
 	fc.Type = p.literal(root.get("type"), "type", "FeatureCollection")
 	fc.Name = p.optionalText(root.get("name"), "name", collNameMax)
-	fc.Title = p.optionalText(root.get("title"), "title", 0)
-	fc.Description = p.optionalText(root.get("description"), "description", 0)
+	fc.Title = p.optionalText(root.get("title"), "title", MaxFreeTextChars)
+	fc.Description = p.optionalText(root.get("description"), "description", MaxFreeTextChars)
 	fc.BBox = p.bbox(root.get("bbox"), "bbox")
 	if m := root.get("metadata"); present(m) {
 		fc.Metadata = p.metadata(m, "metadata")
@@ -261,7 +270,7 @@ func (p *parser) zone(v *value, path string) (UASZone, bool) {
 	if s, ok := p.requiredEnum(v.get("variant"), join(path, "variant"), variantValues); ok {
 		z.Variant = s
 	}
-	z.RestrictionConditions = p.optionalText(v.get("restrictionConditions"), join(path, "restrictionConditions"), 0)
+	z.RestrictionConditions = p.optionalText(v.get("restrictionConditions"), join(path, "restrictionConditions"), MaxFreeTextChars)
 	z.Region = p.integer(v.get("region"), join(path, "region"))
 	z.Reason = p.reasons(v.get("reason"), join(path, "reason"))
 	z.OtherReasonInfo = p.texts(v.get("otherReasonInfo"), join(path, "otherReasonInfo"), p.lim.NameMax)
@@ -496,13 +505,13 @@ func (p *parser) authorities(v *value, where string) []Authority {
 		a.Name = p.texts(raw.get("name"), join(here, "name"), p.lim.NameMax)
 		a.Service = p.texts(raw.get("service"), join(here, "service"), p.lim.NameMax)
 		a.ContactName = p.texts(raw.get("contactName"), join(here, "contactName"), p.lim.NameMax)
-		a.SiteURL = p.optionalText(raw.get("siteURL"), join(here, "siteURL"), 0)
-		a.Email = p.optionalText(raw.get("email"), join(here, "email"), 0)
+		a.SiteURL = p.optionalText(raw.get("siteURL"), join(here, "siteURL"), MaxFreeTextChars)
+		a.Email = p.optionalText(raw.get("email"), join(here, "email"), MaxFreeTextChars)
 		a.Phone = p.optionalText(raw.get("phone"), join(here, "phone"), phoneMax)
 		if s, ok := p.requiredEnum(raw.get("purpose"), join(here, "purpose"), purposeValues); ok {
 			a.Purpose = s
 		}
-		a.IntervalBefore = p.optionalText(raw.get("intervalBefore"), join(here, "intervalBefore"), 0)
+		a.IntervalBefore = p.optionalText(raw.get("intervalBefore"), join(here, "intervalBefore"), MaxFreeTextChars)
 		out = append(out, a)
 	}
 	return out
@@ -519,7 +528,7 @@ func (p *parser) metadata(v *value, where string) *Metadata {
 	m.Issued = p.dateTime(v.get("issued"), join(where, "issued"))
 	m.Provider = p.texts(v.get("provider"), join(where, "provider"), p.lim.NameMax)
 	m.Description = p.texts(v.get("description"), join(where, "description"), p.lim.NameMax)
-	m.OtherGeoid = p.optionalText(v.get("otherGeoid"), join(where, "otherGeoid"), 0)
+	m.OtherGeoid = p.optionalText(v.get("otherGeoid"), join(where, "otherGeoid"), MaxFreeTextChars)
 	m.TechnicalLimitations = p.texts(v.get("technicalLimitations"), join(where, "technicalLimitations"), p.lim.NameMax)
 	return m
 }
