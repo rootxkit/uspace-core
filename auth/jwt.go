@@ -67,8 +67,21 @@ type IssuerConfig struct {
 type Config struct {
 	// Issuers is the allow-list, keyed by the exact iss value.
 	Issuers map[string]IssuerConfig
-	// Audience is this system's id; aud must contain it.
+	// Audience is this system's id; aud must contain it or one of
+	// Audiences.
 	Audience string
+	// Audiences are further ids (hosts, M18) this system accepts: aud
+	// must contain Audience or any one of them. Empty means Audience
+	// alone, as in v1.0.0. Added in v1.1.0.
+	Audiences []string
+	// StrictSessionClaims refuses, as rejected_claims, a token whose
+	// roles is present but not an array of strings or whose realm is
+	// present but not a string (M20 session tokens). Off (the default,
+	// and v1.0.0's judgement), such a claim is ignored: Roles is nil and
+	// Realm empty, and the token is judged on its other claims. Every
+	// uspace system enables it; it is opt-in only so that v1.1.0 changes
+	// no judgement of v1.0.0. Added in v1.1.0.
+	StrictSessionClaims bool
 	// MaxSkew is the clock skew allowed on exp, nbf and iat.
 	MaxSkew time.Duration
 	// JWKSCacheTTL is how long a fetched JWKS is fresh. From
@@ -106,7 +119,9 @@ type Config struct {
 type Claims struct {
 	Issuer  string
 	Subject string
-	// Audience is the configured audience the token was accepted for.
+	// Audience is the configured audience the token was accepted for:
+	// Audience when aud contains it, otherwise the first of Audiences
+	// that aud contains.
 	Audience string
 	JTI      string
 	KeyID    string
@@ -116,6 +131,15 @@ type Claims struct {
 	ExpiresAt time.Time
 	// IssuedAt is zero when the token has no iat.
 	IssuedAt time.Time
+	// Roles is the roles claim, a JSON array of strings (M20 session
+	// tokens); nil when absent, and when malformed unless
+	// Config.StrictSessionClaims refuses it. Never required. Added in
+	// v1.1.0.
+	Roles []string
+	// Realm is the realm claim, a string (M20); empty when absent, and
+	// when malformed unless Config.StrictSessionClaims refuses it. Never
+	// required. Added in v1.1.0.
+	Realm string
 }
 
 // HasScope reports whether the token grants scope.
@@ -167,8 +191,23 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	if len(c.Issuers) == 0 {
 		return nil, core.Fieldf("issuers", "no issuer is allowed")
 	}
-	if c.Audience == "" {
+	if c.Audience == "" && len(c.Audiences) == 0 {
 		return nil, core.Fieldf("audience", "empty")
+	}
+	if slices.Contains(c.Audiences, "") {
+		return nil, core.Fieldf("audiences", "an audience is empty")
+	}
+	c.Audiences = slices.Clone(c.Audiences)
+	return newVerifier(ctx, c, "issuers", "issuer")
+}
+
+// newVerifier is NewVerifier without the audience: it applies the
+// defaults and loads the allow-listed key sets, naming the allow-list
+// field and its entries (noun) in its errors. The detached and compact
+// verifiers each hold one for its JWKS cache and its counters.
+func newVerifier(ctx context.Context, c Config, field, noun string) (*Verifier, error) {
+	if len(c.Issuers) == 0 {
+		return nil, core.Fieldf(field, "no %s is allowed", noun)
 	}
 	if c.MaxSkew < 0 || c.JWKSCacheTTL < 0 || c.MinRefreshInterval < 0 || c.MaxTokenBytes < 0 || c.MaxJWKSBytes < 0 ||
 		c.JWKSFetchTimeout < 0 || c.JWKSRefreshAhead < 0 {
@@ -206,10 +245,10 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	}
 	v := &Verifier{cfg: c, issuers: make(map[string]*issuerKeys, len(c.Issuers))}
 	for iss, ic := range c.Issuers {
-		field := "issuers." + iss
 		if iss == "" {
-			return nil, core.Fieldf("issuers", "an issuer is empty")
+			return nil, core.Fieldf(field, "an %s is empty", noun)
 		}
+		field := field + "." + iss
 		switch {
 		case ic.JWKSURL != "" && ic.Keys != nil:
 			return nil, core.Fieldf(field, "both a JWKS URL and static keys")
@@ -350,8 +389,9 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 	if err != nil {
 		return Claims{}, err
 	}
-	if !slices.Contains(aud, v.cfg.Audience) {
-		return Claims{}, refuseToken(CounterRejectedAudience, "aud", "does not contain %s", quoteShort(v.cfg.Audience))
+	matched, ok := v.matchAudience(aud)
+	if !ok {
+		return Claims{}, refuseToken(CounterRejectedAudience, "aud", "%s", v.audienceRefusal())
 	}
 	sub, ok := cl.str("sub")
 	if !ok || sub == "" {
@@ -369,10 +409,47 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 		}
 		scopes = strings.Fields(s)
 	}
+	var roles []string
+	if raw, has := cl["roles"]; has {
+		if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &roles) != nil || roles == nil {
+			if v.cfg.StrictSessionClaims {
+				return Claims{}, refuseToken(CounterRejectedClaims, "roles", "not an array of strings")
+			}
+			roles = nil
+		}
+	}
+	var realm string
+	if raw, has := cl["realm"]; has {
+		if realm, ok = jsonString(raw); !ok {
+			if v.cfg.StrictSessionClaims {
+				return Claims{}, refuseToken(CounterRejectedClaims, "realm", "not a string")
+			}
+			realm = ""
+		}
+	}
 	return Claims{
-		Issuer: iss, Subject: sub, Audience: v.cfg.Audience, JTI: jti, KeyID: kid,
-		Scopes: scopes, ExpiresAt: exp, IssuedAt: iat,
+		Issuer: iss, Subject: sub, Audience: matched, JTI: jti, KeyID: kid,
+		Scopes: scopes, ExpiresAt: exp, IssuedAt: iat, Roles: roles, Realm: realm,
 	}, nil
+}
+
+// matchAudience returns Audience when aud contains it, otherwise the
+// first of Audiences that aud contains.
+func (v *Verifier) matchAudience(aud []string) (string, bool) {
+	if v.cfg.Audience != "" && slices.Contains(aud, v.cfg.Audience) {
+		return v.cfg.Audience, true
+	}
+	return firstContained(v.cfg.Audiences, aud)
+}
+
+func (v *Verifier) audienceRefusal() string {
+	if len(v.cfg.Audiences) == 0 {
+		return "does not contain " + quoteShort(v.cfg.Audience)
+	}
+	if v.cfg.Audience == "" {
+		return fmt.Sprintf("does not contain any of the %d configured audiences", len(v.cfg.Audiences))
+	}
+	return fmt.Sprintf("does not contain %s or any of the %d further audiences", quoteShort(v.cfg.Audience), len(v.cfg.Audiences))
 }
 
 // claimSet is the payload's top-level members, undecoded.

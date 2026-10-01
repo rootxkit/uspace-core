@@ -25,6 +25,28 @@ for a behaviour change the line sits under the heading of the next major
   `conflict_checks_skipped`: a monitor whose owner discards conflict
   alerts skips the neighbour grid and `cpa.Evaluate` and still judges
   zones, the height limit and identification (Q-A9). [WP-16 C1]
+- auth: `KeyRing` holds a publisher's signing keys (one active, retired
+  keys kept in its JWKS for a two-key overlap; at most `MaxRingKeys`,
+  counted as `key_ring_full`), with `Issuer` sharing the ring's JWKS.
+  No vector changed [WP-14 C1]
+- auth: `SignDetached` and `DetachedVerifier` for `X-JWS-Signature`
+  (RFC 7515 Appendix F, RFC 7797 `b64:false`, `crit:["b64"]`, RS256,
+  `iat` within `DefaultDetachedMaxAge`), `ParseDetachedHeader`, and the
+  counters `rejected_b64`, `rejected_crit`, `rejected_publisher`,
+  `rejected_iat`, `rejected_too_large`. No vector changed [WP-14 C1]
+- auth: `SignCompact` and `CompactVerifier` for the compact delivery JWS
+  (M19: a JWT carrying `iss`, `aud`, `sub`, `iat`, `jti` and the message
+  as `body`, returned byte for byte). No vector changed [WP-14 C1]
+- auth: `Config.Audiences`, `Claims.Roles`, `Claims.Realm` and
+  `Config.StrictSessionClaims` (M18, M20). With `Audiences` empty the
+  verifier behaves as in 1.0.0. `StrictSessionClaims` (default off)
+  refuses a token whose `roles` is not an array of strings, or whose
+  `realm` is not a string, as `rejected_claims`; off, such a claim is
+  ignored as in 1.0.0, so no judgement changes. Every uspace system
+  enables it. No vector changed [WP-14 C1]
+- auth/internal/genvectors: `-kind jws_detached` and `-kind jws_compact`
+  write the JWS vector files proposed to uspace-lab (not vendored here)
+  [WP-14 C1]
 - `geodesy/cell`: the `c5` (0.1 degree) and `c3` (1 degree) partition
   cells of spec `05 §3` (M35): `Of`, the names `c5:<lat_idx>:<lon_idx>`
   with a strict `Parse`, `Parent`, `Children`, `Ring1`, `BBox`,

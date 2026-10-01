@@ -10,6 +10,13 @@
 // regenerate vectors/testdata/SHA256SUMS.
 //
 //	go run ./auth/internal/genvectors [-out vectors/testdata/jwt_verify.json]
+//
+// With -kind jws_detached or -kind jws_compact it writes the vector files
+// of the detached and compact JWS helpers (WP-14), which are proposed to
+// uspace-lab and never written under vectors/testdata here (a new file is
+// a major, docs/RELEASING.md section 3.2):
+//
+//	go run ./auth/internal/genvectors -kind jws_detached -out jws_detached.json
 package main
 
 import (
@@ -171,9 +178,21 @@ func compact(header, claims kv, sign signer) (string, error) {
 }
 
 func main() {
-	out := flag.String("out", "vectors/testdata/jwt_verify.json", "output file")
+	kind := flag.String("kind", "jwt", "jwt (vectors/testdata/jwt_verify.json), jws_detached or jws_compact (proposed to uspace-lab)")
+	out := flag.String("out", "", "output file (default: vectors/testdata/jwt_verify.json for jwt, <kind>.json for the others)")
 	flag.Parse()
-	if err := run(*out); err != nil {
+	var err error
+	switch {
+	case *kind == "jwt" && *out == "":
+		err = run("vectors/testdata/jwt_verify.json")
+	case *kind == "jwt":
+		err = run(*out)
+	case *out == "":
+		err = runJWS(*kind, *kind+".json")
+	default:
+		err = runJWS(*kind, *out)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "genvectors:", err)
 		os.Exit(1) //nolint:forbidigo // a command reports failure by its exit status
 	}
