@@ -25,9 +25,16 @@
 // transmitter, two identities" (address_conflicts, I-04). The caller logs
 // it, rate-limited per address; the tracker only counts.
 //
-// A Location without a fresh identity is held for IdentifyWithinS (4 s)
-// after the address lost or never had one; a Basic ID arriving in that
-// time publishes it, placed by the frame that carried the Location. After
+// A Location without a fresh identity is held for IdentifyWithinS (4 s),
+// counted from when the receiver's own view of the address lost its own
+// identity (TTL expiry) or first heard the address without one. An
+// identity borrowed from another receiver does not move that start: when
+// the lent identity expires, a receiver that never had its own publishes
+// unidentified at once (rid_identity.json
+// #borrowed-identity-must-be-fresh-too). A Basic ID arriving while the
+// Location is held publishes it, placed by the frame that carried the
+// Location; a held Location replaced by a newer one is counted
+// (held_replaced). After
 // that it is published unidentified: DroneID is UnidentifiedID(address),
 // Label the address, UAID empty and IDType 0 (unidentified). It is never
 // attached to an earlier serial, and when the serial then arrives the
