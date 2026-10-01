@@ -28,7 +28,8 @@
 //     bounds; a missing limit is unbounded; a lower AGL limit at or below
 //     0 needs no DEM; a judged limit that excludes decides. Severity per
 //     type (Z-10): PROHIBITED critical, REQ_AUTHORISATION warning,
-//     CONDITIONAL as Policy.ConditionalSeverity, NO_RESTRICTION nothing.
+//     CONDITIONAL as Policy.ConditionalSeverity, USPACE info (so that
+//     presence in U-space airspace is visible), NO_RESTRICTION nothing.
 //     A PROHIBITED or REQ_AUTHORISATION zone whose only unjudged limit is
 //     AGL warns with limit_not_judged (Z-09); any other unjudged limit
 //     leaves the zone not evaluated. A pressure altitude is widened by

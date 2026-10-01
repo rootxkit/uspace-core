@@ -74,7 +74,8 @@ func TestSeverity(t *testing.T) {
 		{core.ZoneConditional, "loud", core.SeverityWarning, true},
 		{core.ZoneConditional, "", core.SeverityWarning, true},
 		{core.ZoneNoRestriction, core.SeverityWarning, "", false},
-		{core.ZoneUSpace, core.SeverityWarning, "", false},
+		{core.ZoneUSpace, core.SeverityWarning, core.SeverityInfo, true},
+		{core.ZoneUSpace, core.SeverityCritical, core.SeverityInfo, true},
 		{"", core.SeverityWarning, core.SeverityCritical, true},
 		{"FORBIDDEN", core.SeverityWarning, core.SeverityCritical, true},
 	}
@@ -412,4 +413,22 @@ func TestWGS84WithoutGeoidIsNotEvaluatedNotClear(t *testing.T) {
 	if len(c.Names()) != 0 {
 		t.Errorf("with geoid: counted %v", c.Snapshot())
 	}
+}
+
+// USPACE raises info so that presence in U-space airspace is visible
+// (owner decision, PR #12); the pair is NO_RESTRICTION, which raises
+// nothing for the same aircraft.
+func TestUSpaceRaisesInfo(t *testing.T) {
+	pol := DefaultPolicy()
+	u := &Zone{Identifier: "U", Type: core.ZoneUSpace, Upper: limit(120, core.RefAMSL)}
+	d := raised(t, "inside U-space", JudgeVertical(u, geodetic(100), noTerrain, pol), core.SeverityInfo).Detail
+	if d.Identifier != "U" || d.VerticalKnown != nil {
+		t.Errorf("detail %+v", d)
+	}
+	isClear(t, "above U-space", JudgeVertical(u, geodetic(130), noTerrain, pol))
+	// Widened: possibly inside stays at info, never above it.
+	raised(t, "U-space, widened", JudgeVertical(u, pressure(300), noTerrain, pol), core.SeverityInfo)
+
+	n := &Zone{Identifier: "N", Type: core.ZoneNoRestriction, Upper: limit(120, core.RefAMSL)}
+	isClear(t, "inside NO_RESTRICTION", JudgeVertical(n, geodetic(100), noTerrain, pol))
 }

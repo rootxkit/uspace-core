@@ -176,10 +176,12 @@ func (r Result) Count(c *core.Counters) {
 
 // Severity is what being inside a zone of type t raises (Z-10):
 // PROHIBITED critical, REQ_AUTHORIZATION warning, CONDITIONAL
-// pol.ConditionalSeverity; false for NO_RESTRICTION and USPACE, which
-// raise no zone alert (U-space airspace is judged by the authorisation
-// check, not here). A type that is not a core.ZoneType is critical:
-// an unknown restriction fails towards enforcing it.
+// pol.ConditionalSeverity, USPACE info, and false for NO_RESTRICTION,
+// which raises nothing. USPACE is at the lowest severity so that being
+// in U-space airspace is visible (owner decision, PR #12); whether the
+// flight there is authorised is judged by the authorisation check, not
+// here. A type that is not a core.ZoneType is critical: an unknown
+// restriction fails towards enforcing it.
 //
 // Lifting REQ_AUTHORIZATION for an aircraft authorised there at that time
 // is the caller's concern (U-05); nothing lifts PROHIBITED.
@@ -195,7 +197,9 @@ func Severity(t core.ZoneType, pol Policy) (core.Severity, bool) {
 			return pol.ConditionalSeverity, true
 		}
 		return core.SeverityWarning, true
-	case core.ZoneNoRestriction, core.ZoneUSpace:
+	case core.ZoneUSpace:
+		return core.SeverityInfo, true
+	case core.ZoneNoRestriction:
 		return "", false
 	}
 	return core.SeverityCritical, true
