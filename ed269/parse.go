@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/rootxkit/uspace-core/core"
 )
 
 // Field lists, from InterUSS uas_standards eurocae_ed269.py.
@@ -399,6 +402,10 @@ func (p *parser) volume(v *value, where string) (Volume, bool) {
 	if p.ps.count() > before || !okProj {
 		return Volume{}, false
 	}
+	if why := longitudeSpan(proj, Uom(uom)); why != "" {
+		p.ps.add(join(where, "horizontalProjection"), why)
+		return Volume{}, false
+	}
 	if lower != nil && upper != nil && lowerRef == upperRef && *lower >= *upper {
 		p.ps.add(join(where, "upperLimit"), "is not above lowerLimit")
 		return Volume{}, false
@@ -535,6 +542,42 @@ func (p *parser) ring(v *value, where string) ([]Position, bool) {
 		return nil, false
 	}
 	return points, true
+}
+
+// longitudeSpan refuses a shape that spans more than 180 degrees of
+// longitude or crosses the antimeridian: geodesy's polygon containment
+// would judge it wrongly without an error. A circle's span is its
+// radius over the parallel's radius at its centre (a sphere is close
+// enough to decide this). It returns the reason, or "" when the shape is
+// fine.
+func longitudeSpan(hp HorizontalProjection, uom Uom) string {
+	const why = "longitude span exceeds 180° or crosses the antimeridian; not supported"
+	switch hp.Type {
+	case ShapePolygon:
+		lo, hi := math.Inf(1), math.Inf(-1)
+		for _, r := range hp.Rings {
+			for _, pt := range r {
+				lo, hi = math.Min(lo, pt.LonDeg), math.Max(hi, pt.LonDeg)
+			}
+		}
+		if hi-lo > 180 {
+			return fmt.Sprintf("%s (the rings span %g°)", why, hi-lo)
+		}
+	case ShapeCircle:
+		radiusM := *hp.Radius
+		if uom == UomFeet {
+			radiusM *= core.FeetToMetres
+		}
+		parallelM := core.MeanEarthRadiusM * math.Cos(hp.Center.LatDeg*math.Pi/180)
+		if parallelM <= 0 {
+			return why + " (the circle is centred on a pole)"
+		}
+		halfDeg := radiusM / parallelM * 180 / math.Pi
+		if 2*halfDeg > 180 || hp.Center.LonDeg-halfDeg < -180 || hp.Center.LonDeg+halfDeg > 180 {
+			return why + " (the circle reaches past ±180° longitude)"
+		}
+	}
+	return ""
 }
 
 // distinctAtLeast counts distinct positions, stopping at n.

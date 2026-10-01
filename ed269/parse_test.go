@@ -152,6 +152,14 @@ func TestRefusals(t *testing.T) {
 		{"minus zero is zero", nil, map[string]any{"horizontalProjection": poly([]any{[]any{0, 0}, []any{raw("-0"), 0}, []any{1, 1}, []any{0, 0}})}, hp + ".coordinates[0]", "three distinct"},
 		{"circle without center", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "radius": 5}}, hp + ".center", "[longitude, latitude]"},
 		{"circle radius zero", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "radius": 0, "center": []any{1, 2}}}, hp + ".radius", "above 0"},
+		{"polygon spans more than 180 degrees", nil, map[string]any{"horizontalProjection": poly([]any{[]any{-90.5, 0}, []any{90.5, 0}, []any{90.5, 1}, []any{-90.5, 0}})}, hp, "longitude span exceeds 180°"},
+		{"polygon across the antimeridian", nil, map[string]any{"horizontalProjection": poly([]any{[]any{179.9, 0}, []any{-179.9, 0}, []any{-179.9, 1}, []any{179.9, 0}})}, hp, "crosses the antimeridian"},
+		{"a hole decides the span too", nil, map[string]any{"horizontalProjection": poly(ring(5), []any{[]any{-170, 0}, []any{-169, 0}, []any{-169, 1}, []any{-170, 0}})}, hp, "longitude span exceeds 180°"},
+		{"circle past 180 east", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "center": []any{179.999, 41.7}, "radius": 1000}}, hp, "reaches past ±180°"},
+		{"circle past 180 west", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "center": []any{-179.999, 41.7}, "radius": 1000}}, hp, "crosses the antimeridian"},
+		{"circle radius in metres crosses", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "center": []any{179.985, 41.7}, "radius": 3000}}, hp, "crosses the antimeridian"},
+		{"circle wider than half the parallel", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "center": []any{0, 89.999}, "radius": 1000}}, hp, "longitude span exceeds 180°"},
+		{"circle on a pole", nil, map[string]any{"horizontalProjection": map[string]any{"type": "Circle", "center": []any{0, 90}, "radius": 1}}, hp, "longitude span exceeds 180°"},
 		{"conditions number", map[string]any{"restrictionConditions": 5}, nil, f0 + ".restrictionConditions", "string or a list of strings"},
 		{"conditions mixed", map[string]any{"restrictionConditions": []any{"a", 5}}, nil, f0 + ".restrictionConditions", "string or a list of strings"},
 		{"region fraction", map[string]any{"region": 7.5}, nil, f0 + ".region", "must be an integer, not 7.5"},
@@ -168,6 +176,18 @@ func TestRefusals(t *testing.T) {
 			if doc != nil || !hasProblem(probs, tc.field, tc.reason) {
 				t.Fatalf("want %s: %q; got %v", tc.field, tc.reason, probs)
 			}
+		})
+	}
+	// The accepted twins of the longitude span refusals.
+	for name, vol := range map[string]map[string]any{
+		"polygon spanning exactly 180 degrees": {"horizontalProjection": poly([]any{[]any{-90, 0}, []any{90, 0}, []any{90, 1}, []any{-90, 0}})},
+		"polygon next to the antimeridian":     {"horizontalProjection": poly([]any{[]any{179.9, 0}, []any{180, 0}, []any{180, 1}, []any{179.9, 0}})},
+		"circle next to the antimeridian":      {"horizontalProjection": map[string]any{"type": "Circle", "center": []any{179.9, 41.7}, "radius": 1000}},
+		"circle radius in feet stays inside": {"uomDimensions": "FT", "lowerLimit": 0, "upperLimit": 400,
+			"horizontalProjection": map[string]any{"type": "Circle", "center": []any{179.985, 41.7}, "radius": 3000}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mustParse(t, docOf(t, feature(t, nil, vol)))
 		})
 	}
 	t.Run("ring of 5000 accepted", func(t *testing.T) {
