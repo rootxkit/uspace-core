@@ -25,6 +25,11 @@ for a behaviour change the line sits under the heading of the next major
   `conflict_checks_skipped`: a monitor whose owner discards conflict
   alerts skips the neighbour grid and `cpa.Evaluate` and still judges
   zones, the height limit and identification (Q-A9). [WP-16 C1]
+- `geodesy/cell`: the `c5` (0.1 degree) and `c3` (1 degree) partition
+  cells of spec `05 §3` (M35): `Of`, the names `c5:<lat_idx>:<lon_idx>`
+  with a strict `Parse`, `Parent`, `Children`, `Ring1`, `BBox`,
+  `Centre` and a bounded `Cover` (`MaxCoverDefault`). No vector file
+  changes; the cell cases are proposed to the lab. [WP-15 C1]
 
 ## [1.0.0] (G-M3)
 
