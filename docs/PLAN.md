@@ -11,7 +11,8 @@ vectors are vendored at `uspace-lab@c6b7f33` (generated from
 Sections: 1 scope and decisions; 2 module layout and dependency graph;
 3 public API per package; 4 third-party dependencies; 5 vectors and
 lessons per package; 6 vector harness; 7 work packages; 8 engineering
-standards; 9 CI; 10 versioning; 11 spec gaps and decisions for the owner.
+standards; 9 CI; 10 versioning; 11 spec gaps and decisions for the owner;
+12 the `v1.1.0` additive release (C1).
 
 ---
 
@@ -553,6 +554,9 @@ package `doc.go` rewritten to describe what was built; CHANGELOG entry.
 | WP-11 | `auth` | `auth/` | `rid_receiver_auth.json`; adds `jwt_verify.json` | WP-0 | G-M1 (receiver), G-M3 (JWT vector) |
 | WP-12 | `standards-types` | `ed318/`, `f3411/`, `f3548/` | ED-318 round-trip vector (new); `uas_standards` examples | WP-5, WP-8 | G-M2 |
 | WP-13 | `release-policy` | `CHANGELOG.md`, `scripts/semver-gate.sh`, CI gate, tags | all | WP-1..WP-12 | G-M3 |
+| WP-14 | `v1.1-additive` (JWS helpers, the `v1.1.0` release PR) | `auth/` | none (no vector changes in C1) | `v1.0.0`; release after WP-15, WP-16 | C1 (`v1.1.0`) |
+| WP-15 | `geodesy-cell` | `geodesy/cell/` (new) | none | `v1.0.0` | C1 |
+| WP-16 | `basis-skip-conflicts` | one constant in `core/ident.go`; `alerting.Config.SkipConflicts` | none | `v1.0.0` | C1 |
 
 Waves (what can run in parallel):
 
@@ -563,6 +567,7 @@ wave 3 (after 8, 9, 4):   WP-10
 tag v0.1.0 = G-M1 when wave 3 merges and every manifest file is covered
 wave 4:                   WP-12 (G-M2)
 wave 5:                   WP-13 (G-M3, v1.0.0)
+wave 6 (C1, 3 agents):    WP-14  WP-15  WP-16, then the v1.1.0 release PR (WP-14)
 ```
 
 WP-1 is on the critical path and small (17 vectors): it goes first and is
@@ -734,7 +739,7 @@ Branch protection on `main` requires jobs 1-4 and 6 and `semver-gate`
 |---|---|---|---|
 | 1 | `00 §6.3` lists the alert lifecycle under `cpa` and `pressure_altitude` under `zones`; `fleet_match` under `regnum`/`serial`; `rid_receiver_auth` under both `odid` and `auth`; `rid_identity` under `odid`. | Packages `alerting` and `rid` added; `fleet_match` in `identify`; receiver auth in `auth` only; `rid_identity` and `pressure_altitude` in `rid`. Import paths the spec names still exist. **Resolved:** the spec table matches this split since `uspace-lab@aa5187e` (lab PR #3). | None. |
 | 2 | `00 §6.3` names `terrain` readers for "Copernicus GLO-30 / SRTM tiles". The vector pins the predecessor's PGM tile format (Offset -500, Scale 0.2, 1x1 degree cells), not GeoTIFF. | Core reads the PGM tiles; GeoTIFF conversion stays a lab tool (as in utm `tools/terrain_fetch.py`). | Confirm, or fund a stdlib GeoTIFF reader as a later WP. |
-| 3 | `geodesy` is to hold "H3 helpers". The maintained Go binding (`uber/h3-go/v4`) is cgo; the partition key (`05 §3`) never crosses an external interface. | H3 is not in core at `v0.x`. Each system computes `cell5`/`cell3` in its ingest with the binding it chooses, behind an interface the system owns. Revisit for `v1` if two systems end up with two implementations (T12 risk). | Decide: accept, or accept cgo in core. |
+| 3 | `geodesy` is to hold "H3 helpers". The maintained Go binding (`uber/h3-go/v4`) is cgo; the partition key (`05 §3`) never crosses an external interface. | H3 is not in core at `v0.x`. Each system computes `cell5`/`cell3` in its ingest with the binding it chooses, behind an interface the system owns. Revisit for `v1` if two systems end up with two implementations (T12 risk). **Resolved (C1):** two systems did (authority `internal/cell`, USSP `c3:<row>:<col>`); the reconciliation (M35) replaces H3 with one pure-Go lat-lon grid in core, `geodesy/cell` (WP-15, `v1.1.0`); spec `05 §3` is amended by lab WP-L4. | None. |
 | 4 | `alert_lifecycle.json#disarming-clears-as-stale` records the old behaviour that C-14 says the new system should improve (`landed`). `04 §3.3` lists `flight_ended` as a clear reason. | **Resolved:** the owner decided `landed` (C-14). The lab vector is now `disarming-clears-as-landed` (`uspace-lab@aa5187e`), and `alerting` passes it as written, with no override. `Monitor.Drop` still takes a reason the caller chooses (`flight_ended`). | None. |
 | 5 | `identification_status.json` names the authenticated-session reason `session_binding` only through the `bound` kind, and `04 §3.2` lists `registry_unavailable` with no vector. | `identify.Unavailable` implemented from the spec text and unit-tested; a vector is proposed to the lab. The vector now uses the spec's codes (`matched`, `session_binding`) since `uspace-lab@aa5187e`, so the test maps nothing. | Lab to add the `registry_unavailable` case. |
 | 6 | ED-269 refusals: the vectors list every problem the old reader found but bind only `must_include`. | `ed269` must produce `must_include`; the full list is compared and logged as a diff, not failed (§6). A stricter or looser reader is visible in CI logs. | Decide whether the full list becomes binding at `v1`. |
@@ -744,3 +749,58 @@ Branch protection on `main` requires jobs 1-4 and 6 and `semver-gate`
 | 10 | `source_control.json` has no version/epoch cases; B-09 specifies them. | `sources.Follower.Apply` implemented from B-09 with unit tests; a vector proposed. | Lab to add cases. |
 | 11 | `05 §1` gives no per-call budgets; §8.6 derives them. | Targets are design budgets, reported not gated; the lab's load tests (L-M2) are the proof. | None. |
 | 12 | The spec says systems' CI "runs the vectors against the packages in every image" (`05 §7`). | Documented in §6: `go test -run Vectors github.com/rootxkit/uspace-core/...` plus `RunOwned` for adapters. WP-13 verifies it from a scratch module. | None. |
+
+---
+
+## 12. The `v1.1.0` additive release (C1)
+
+Source: the cross-plan reconciliation of 2026-10-02 (`cross-plan-decisions.md`
+§3 row C1, M27, M35, authority Q-A8 and Q-A9, cisp Q20), accepted by the
+coordinator. Core's milestone id for it is **C1**; commit suffixes are
+`[WP-<k> C1]`. Briefs: `docs/WORKPACKAGES/WP-14.md` (`auth` JWS helpers
+and the release), `WP-15.md` (`geodesy/cell`), `WP-16.md`
+(`core.BasisProvider`, `alerting.Config.SkipConflicts`). The sibling
+plans say "core WP-14" for all of it; WP-15 and WP-16 are its parallel
+parts.
+
+### 12.1 What ships
+
+| Item | Package | Decision | Consumers |
+|---|---|---|---|
+| `KeyRing`, `SignDetached`, `DetachedVerifier` (`X-JWS-Signature`: RFC 7515 App. F, RFC 7797 `b64:false`, `crit:["b64"]`, `alg RS256`, `kid`, `iat` <= 5 min), `SignCompact`, `CompactVerifier` (`application/jose`; `iss`, `aud` = callback host, `sub`, `iat`, `jti`, `body`) | `auth` (on the existing `jwx/v3`; no new dependency) | M26, M27, M19 | cisp WP-2 (may land first on `internal/jws` and switch), ansp WP-8, authority WP-6, every `/v1/cis/notifications` receiver |
+| `Config.Audiences []string`, `Claims.Roles`, `Claims.Realm` | `auth` | M18, M20; **proposed beside C1, flagged** in WP-14 part 4 for the coordinator to keep or strike | every verifier (`*_AUDIENCES`) |
+| `geodesy/cell`: `c5` = 0.1°, `c3` = 1°, `c5:<lat_idx>:<lon_idx>`, parent, ring-1, bbox cover | `geodesy/cell` (new) | M35, §11 gap 3 resolved | authority WP-10, ussp WP-6/WP-11 |
+| `core.BasisProvider = "provider"` | `core` | Q-A8 | authority WP-14; `uspace-ui` `IdentBasis` |
+| `alerting.Config.SkipConflicts` (+ `conflict_checks_skipped`) | `alerting` | Q-A9 | authority WP-12 |
+
+### 12.2 The semver rule for this release
+
+Everything above is additive under `docs/RELEASING.md` §1 and §10 of this
+plan: new identifiers and optional fields whose zero value means "as
+before"; no change to what any judgement returns; no file under
+`vectors/testdata/` added, edited or removed, so the semver gate reports
+"nothing to gate" on every C1 pull request and `uspace-lab@6b5b286`
+stays the pin. The tag is `v1.1.0`, a minor: the module path keeps no
+`/vN`, no `release/v1` branch is cut, and the `[1.1.0]` CHANGELOG section
+declares the new identifiers stable. A new vector *file* for the JWS
+helpers or the cells would be a major under `RELEASING.md` §3.2, so none
+is written; WP-14 and WP-15 propose their cases to the lab instead (as a
+new file to be synced at the next major, or as additive cases of
+`geodesy.json`), and their unit tests are the pin until then.
+
+§3 of this plan is the contract: each C1 pull request extends the
+relevant §3 subsection (3.1, 3.3, 3.12, 3.13) with its signatures, and
+§2 gains `geodesy/cell` (deps: `core`, `geodesy`).
+
+### 12.3 Open questions (owner-only, from reconciliation §2.1; not decided here)
+
+Core does not decide any of these. Each is recorded with the demo
+default the reconciliation proposes; the code is written so that the
+answer is a caller's configuration, never a constant here.
+
+| Q | Question | Demo default until answered | Touches |
+|---|---|---|---|
+| cisp Q16 | Signing-key custody (06 T4: HSM/KMS, 90-day rotation). | File-mounted PEM on the droplet, two-key JWKS overlap; the state's custody in production. | `auth.KeyRing` holds keys the caller loaded and supports a retired key; it never reads a path. |
+| authority Q-A10 | Registration-number format and whether the secret part is on air (spec Q5). | `regnum` pattern from `authority_policy`; compare on the public part. | Unchanged in C1 (`regnum` stays configurable, §11 gap 9). |
+| ussp Q6 | Deviation and CPA threshold defaults (Art. 10(2)(d), spec Q17). | The demo policy (CPA 60 s / 60 m / 20 m / 800 m) shown with `policy_version`. | Unchanged in C1: `cpa.DefaultPolicy` and `alerting.DefaultConfig` keep the vector-pinned values; `SkipConflicts` defaults to false. |
+| (new, owner) | Whether `RELEASING.md` §3.2 should let a new vector file that pins only new API (no existing judgement) count as additive. | As written: a new file is a major; C1 ships without vector files for the new API. | WP-14, WP-15 lab proposals. |
