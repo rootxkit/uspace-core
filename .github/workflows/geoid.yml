@@ -1,0 +1,80 @@
+name: geoid
+
+# The GeographicLib reference cases in terrain_geoid.json need the real
+# EGM96 and EGM2008 grids (77 MB). ci.yml skips them; this workflow runs
+# them, and fails if any is still skipped.
+#
+# Limits it respects:
+# - The grids are cached (key = their pinned hashes), so SourceForge is
+#   asked only on a cache miss, and a hit makes no network request.
+# - It runs only when code or data the grids judge can have changed, and
+#   on release tags (path filters do not apply to tags), never on a
+#   schedule.
+# - One run per ref; a newer push cancels the older run. Hard timeout.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "geoid/**"
+      - "terrain/**"
+      - "internal/pgm/**"
+      - "vectors/**"
+      - "scripts/fetch-geoid.sh"
+      - ".github/workflows/geoid.yml"
+      - "go.mod"
+      - "go.sum"
+  pull_request:
+    paths:
+      - "geoid/**"
+      - "terrain/**"
+      - "internal/pgm/**"
+      - "vectors/**"
+      - "scripts/fetch-geoid.sh"
+      - ".github/workflows/geoid.yml"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoid-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=mod
+  GOTOOLCHAIN: local
+
+jobs:
+  reference:
+    name: geoid reference cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: restore the grids
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/geoid
+          key: geoid-${{ hashFiles('scripts/fetch-geoid.sh') }}
+      - name: fetch on a miss, verify on a hit
+        run: scripts/fetch-geoid.sh "$RUNNER_TEMP/geoid"
+      - name: reference cases, none skipped
+        env:
+          USPACE_GEOID_DIR: ${{ runner.temp }}/geoid
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./geoid/ ./terrain/ 2>&1 | tee geoid.log
+          if grep -E -- '--- SKIP' geoid.log; then
+            echo "a reference case was skipped with the grids present"; exit 1
+          fi
+          passed="$(grep -cE -- '--- PASS: TestVectorsTerrainGeoid/' geoid.log || true)"
+          echo "terrain_geoid cases passed: $passed" >> "$GITHUB_STEP_SUMMARY"
+          [ "$passed" -gt 0 ] || { echo "no terrain_geoid case ran"; exit 1; }

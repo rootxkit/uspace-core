@@ -17,7 +17,7 @@ GITLEAKS_VERSION      ?= v8.24.3
 GOVULNCHECK_VERSION   ?= v1.8.0
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
-        check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck ci clean
+        check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck geoid ci clean
 
 all: ci
 
@@ -84,6 +84,14 @@ check-vectors:
 # Refresh the vendored copy from a clean uspace-lab checkout ($(LAB)).
 sync-vectors:
 	scripts/sync-vectors.sh $(LAB)
+
+# The GeographicLib reference cases against the real EGM96/EGM2008 grids
+# (77 MB, fetched once into GEOID_DIR and checked by SHA-256). CI runs the
+# same in .github/workflows/geoid.yml.
+GEOID_DIR ?= ../_geoids
+geoid:
+	scripts/fetch-geoid.sh $(GEOID_DIR)
+	USPACE_GEOID_DIR=$(GEOID_DIR) $(GO) test -count=1 -v ./geoid/ ./terrain/
 
 fuzz-smoke:
 	FUZZTIME=$(FUZZTIME) GO=$(GO) scripts/fuzz-smoke.sh
