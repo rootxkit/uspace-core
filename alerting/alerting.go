@@ -31,9 +31,6 @@ const (
 	// ClearFlightEnded: the caller ended the flight with Drop (spec 04
 	// §3.3).
 	ClearFlightEnded ClearReason = "flight_ended"
-	// ClearEvicted: the aircraft was evicted to keep the monitor within
-	// Config.MaxAircraft (E-10). Counted as aircraft_evicted.
-	ClearEvicted ClearReason = "evicted"
 )
 
 // Alert kinds.
@@ -86,8 +83,13 @@ const (
 	// unknown (Track.Flying nil): not flying (C-05), but no evidence of a
 	// landing either, so active alerts are held until they go stale.
 	CounterFlyingUnknown = "flying_unknown"
-	// CounterAircraftEvicted counts aircraft evicted past MaxAircraft.
+	// CounterAircraftEvicted counts aircraft without an active alert
+	// evicted past MaxAircraft.
 	CounterAircraftEvicted = "aircraft_evicted"
+	// CounterRejectedCapacity counts samples of a new id refused because
+	// every aircraft in MaxAircraft holds an active alert (see
+	// Monitor.CapacityExceeded).
+	CounterRejectedCapacity = "rejected_capacity"
 	// CounterSourceOrderEvicted counts per-source ordering entries evicted
 	// past MaxSourcesPerAircraft.
 	CounterSourceOrderEvicted = "source_order_evicted"
@@ -133,8 +135,10 @@ type Config struct {
 	// GridCellM is the neighbour grid's cell side; raised to
 	// Policy.NeighbourRadiusM when smaller (C-15).
 	GridCellM float64
-	// MaxAircraft bounds the aircraft held (E-10); the least recently
-	// heard is evicted, its alerts cleared as evicted and counted.
+	// MaxAircraft bounds the aircraft held (E-10). Past it, an aircraft
+	// without an active alert is evicted (not flying first, then
+	// unidentified, then the least recently heard); with none, the new id
+	// is refused. An alert is never cleared to make room.
 	MaxAircraft int
 	// MaxSourcesPerAircraft bounds the per-source ordering entries of one
 	// aircraft (T-03); the least recently updated is evicted and counted.
@@ -247,8 +251,8 @@ type Cleared struct {
 	// clearing_vertical_separation_known and clearing_at_s (the placed
 	// time of that judgement). Nil for every other clear: a zone, height
 	// or identification alert is cleared by a judgement with no numbers
-	// of its own, and stale, landed, source_disabled, the Drop reason and
-	// evicted rest on no judgement at all.
+	// of its own, and stale, landed, source_disabled and the Drop reason
+	// rest on no judgement at all.
 	ClearingDetail map[string]any
 }
 

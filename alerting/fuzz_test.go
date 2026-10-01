@@ -119,8 +119,8 @@ func activeKeys(m *Monitor) map[string]Alert {
 //   - every clear has a reason the call may give: resolved only with an
 //     alert shown false for more than the hysteresis; stale only when an
 //     aircraft of the alert is no longer tracked for it; landed only from
-//     an observation; source_disabled only from a switch; evicted only
-//     from an observation; the Drop reason only from Drop;
+//     an observation; source_disabled only from a switch; the Drop
+//     reason only from Drop; nothing is ever cleared to make room;
 //   - an observation or tick at a non-finite wall time changes nothing
 //     (a switch or a drop is the caller's explicit act and still
 //     applies), and an observation whose position is not valid resolves
@@ -150,7 +150,7 @@ func FuzzMonitor(f *testing.F) {
 			case 0, 1:
 				tr = fuzzTrack(r, wallS)
 				ev = m.Observe(tr, wallS)
-				allowed[ClearLanded], allowed[ClearEvicted] = true, true
+				allowed[ClearLanded] = true
 			case 2:
 				ev = m.Tick(wallS)
 			case 3:
@@ -180,8 +180,24 @@ func FuzzMonitor(f *testing.F) {
 
 func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64, before map[string]Alert, ev Events, allowed map[ClearReason]bool) {
 	t.Helper()
-	if m.Tracked() > fuzzMaxAircraft || m.lru.Len() != m.Tracked() {
-		t.Fatalf("%d aircraft held, %d in the LRU", m.Tracked(), m.lru.Len())
+	if m.Tracked() > fuzzMaxAircraft {
+		t.Fatalf("%d aircraft held", m.Tracked())
+	}
+	pooled := 0
+	for _, p := range m.pools {
+		pooled += p.Len()
+	}
+	held := 0
+	for _, ac := range m.aircraft {
+		if (len(ac.alerts) == 0) != (ac.elem != nil) || ac.pool != poolOf(ac) {
+			t.Fatalf("%s in pool %d with %d alerts", ac.id, ac.pool, len(ac.alerts))
+		}
+		if ac.elem != nil {
+			held++
+		}
+	}
+	if pooled != held {
+		t.Fatalf("%d pooled, %d aircraft without alerts", pooled, held)
 	}
 	// Conflicts among the held aircraft, plus per aircraft two zone
 	// alerts, two identification alerts, height and mismatch.
@@ -231,7 +247,7 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64,
 			if !gone {
 				t.Fatalf("stale clear of %s with every aircraft still tracked", c.Key)
 			}
-		case ClearSourceDisabled, ClearLanded, ClearFlightEnded, ClearEvicted:
+		case ClearSourceDisabled, ClearLanded, ClearFlightEnded:
 			// Allowed by the call (checked above); no state to check.
 		}
 	}

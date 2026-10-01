@@ -110,8 +110,9 @@ Each entry names the work package and the vectors it affects.
   sample. Raise once, refresh silently, a severity change raised again;
   clears are `resolved` (hysteresis, only on a judgement), `stale`,
   `source_disabled` (through a `sources.Follower`, by version and epoch),
-  `landed`, `flight_ended` (`Drop`) and `evicted` (bounded aircraft and
-  per-source ordering); a resolved conflict carries the clearing
+  `landed` and `flight_ended` (`Drop`); the aircraft cap evicts only
+  aircraft without an active alert and otherwise refuses new ids
+  (`rejected_capacity`, `CapacityExceeded`); a resolved conflict carries the clearing
   judgement's separation in `Cleared.ClearingDetail` beside the last
   in-conflict detail (C-14). Zone alerts are keyed by country and
   identifier, with a counted fallback for a true duplicate. Nothing unjudged, missing or non-finite clears an

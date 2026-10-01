@@ -10,7 +10,7 @@ import (
 // B-11, C-09), counts each refusal under its own name, and on admission returns
 // the aircraft record with tr's source ordering and source noted. A
 // refused sample judges nothing and therefore clears nothing.
-func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) {
+func (m *Monitor) admit(tr *Track, wallS float64) (*aircraft, bool) {
 	if tr.ID == "" || !core.IsFinite(tr.CapturedAtS) || !core.IsFinite(tr.RxAtS) ||
 		(tr.SourceTS != nil && !core.IsFinite(*tr.SourceTS)) {
 		m.counters.Inc(CounterRejectedInvalid)
@@ -47,7 +47,9 @@ func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) 
 		m.counters.Inc(CounterRejectedOlderPlacement)
 		return nil, false
 	}
-	ac = m.record(tr.ID, ev)
+	if ac = m.record(tr.ID); ac == nil {
+		return nil, false
+	}
 	ac.src = src
 	ac.placedS = tr.CapturedAtS
 	ac.heardS = math.Max(ac.heardS, math.Min(tr.CapturedAtS, wallS))

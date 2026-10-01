@@ -65,6 +65,7 @@ func (m *Monitor) judgeFlying(ac *aircraft, tr *Track, wallS float64, ev *Events
 	}
 	ac.hasTrack = true
 	ac.seenS = seenS
+	m.reclass(ac, false)
 	m.noteSeen(ac.seenS)
 	m.grid.Upsert(ac.id, tr.Pos)
 	m.judgeConflicts(ac, atS, ev)

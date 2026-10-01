@@ -65,7 +65,35 @@ type aircraft struct {
 	order   []orderEntry
 	// alerts holds the keys of the active alerts this aircraft is part of.
 	alerts map[string]struct{}
-	elem   *list.Element
+	// identUnidentified: the last identification heard said unidentified.
+	identUnidentified bool
+	// pool is the eviction pool ac is in (poolNone while it holds an
+	// alert: it is never evicted), elem its place there.
+	pool int
+	elem *list.Element
+}
+
+// Eviction pools, in the order victim takes from them (owner decision on
+// PR #15): only aircraft without an active alert are ever evicted.
+const (
+	poolNone         = -1
+	poolNotFlying    = 0 // no track: on the ground, flying unknown, or none yet
+	poolUnidentified = 1 // flying, unidentified (I-02) or last said unidentified
+	poolFlying       = 2 // flying and identified
+	poolCount        = 3
+)
+
+// poolOf is the eviction pool ac belongs in now.
+func poolOf(ac *aircraft) int {
+	switch {
+	case len(ac.alerts) > 0:
+		return poolNone
+	case !ac.hasTrack:
+		return poolNotFlying
+	case ac.unidentified || ac.identUnidentified:
+		return poolUnidentified
+	}
+	return poolFlying
 }
 
 // Monitor is the alert state machine for one set of tracks (one cell set,
@@ -78,7 +106,9 @@ type Monitor struct {
 	zoneKey  map[*zones.Zone]zoneKey
 	follower *sources.Follower
 	aircraft map[string]*aircraft
-	lru      *list.List
+	// pools hold the aircraft without an active alert, each least recently
+	// heard first (E-10).
+	pools    [poolCount]*list.List
 	active   map[string]*alertState
 	counters core.Counters
 	// nextSweepS is the earliest wall time at which an aircraft or an
@@ -98,9 +128,11 @@ func NewMonitor(c Config) *Monitor {
 	m := &Monitor{
 		follower:   sources.NewFollower(),
 		aircraft:   make(map[string]*aircraft),
-		lru:        list.New(),
 		active:     make(map[string]*alertState),
 		nextSweepS: math.Inf(1),
+	}
+	for i := range m.pools {
+		m.pools[i] = list.New()
 	}
 	m.cfg = sanitise(c, &m.counters)
 	m.grid = cpa.NewGrid(m.cfg.GridCellM)
@@ -147,7 +179,7 @@ func (m *Monitor) Observe(tr Track, wallS float64) Events {
 		m.counters.Inc(CounterRejectedInvalid)
 		return ev
 	}
-	if ac, ok := m.admit(&tr, wallS, &ev); ok {
+	if ac, ok := m.admit(&tr, wallS); ok {
 		m.judge(ac, &tr, wallS, &ev)
 	}
 	m.sweep(wallS, &ev)
@@ -256,31 +288,91 @@ func severityRank(s core.Severity) int {
 	return 3
 }
 
-// record returns the aircraft id, creating it (and evicting the least
-// recently heard past MaxAircraft) when new, and marks it heard.
-func (m *Monitor) record(id string, ev *Events) *aircraft {
+// CapacityExceeded reports whether the monitor is at Config.MaxAircraft
+// with every aircraft holding an active alert, so that a new id is
+// refused (rejected_capacity). A caller alerts on it: aircraft are going
+// unjudged.
+func (m *Monitor) CapacityExceeded() bool {
+	if len(m.aircraft) < m.cfg.MaxAircraft {
+		return false
+	}
+	for _, p := range m.pools {
+		if p.Len() > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// record returns the aircraft id and marks it heard. A new id past
+// MaxAircraft evicts one aircraft without an active alert (not flying
+// first, then unidentified, then the least recently heard), counted as
+// aircraft_evicted; when every aircraft holds an alert the new id is
+// refused, counted as rejected_capacity, and record returns nil. An
+// alert is never cleared to make room (owner decision on PR #15: a flood
+// of spoofed ids must not clear a real conflict).
+func (m *Monitor) record(id string) *aircraft {
 	if ac, ok := m.aircraft[id]; ok {
-		m.lru.MoveToBack(ac.elem)
+		m.reclass(ac, true)
 		return ac
 	}
-	for len(m.aircraft) >= m.cfg.MaxAircraft {
-		oldest := m.lru.Front().Value.(*aircraft)
+	if len(m.aircraft) >= m.cfg.MaxAircraft {
+		victim := m.victim()
+		if victim == nil {
+			m.counters.Inc(CounterRejectedCapacity)
+			return nil
+		}
 		m.counters.Inc(CounterAircraftEvicted)
-		m.dropAircraft(oldest, ClearEvicted, ev)
+		m.forget(victim)
 	}
-	ac := &aircraft{id: id, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1)}
-	ac.elem = m.lru.PushBack(ac)
+	ac := &aircraft{id: id, alerts: make(map[string]struct{}), placedS: math.Inf(-1), heardS: math.Inf(-1), pool: poolNone}
 	m.aircraft[id] = ac
+	m.reclass(ac, true)
 	return ac
 }
 
-// dropAircraft forgets ac and clears every alert it is part of with
-// reason.
+// victim is the aircraft to evict, or nil when every one holds an alert.
+func (m *Monitor) victim() *aircraft {
+	for _, p := range m.pools {
+		if e := p.Front(); e != nil {
+			return e.Value.(*aircraft)
+		}
+	}
+	return nil
+}
+
+// reclass moves ac into the pool it belongs in now; touch also marks it
+// the most recently heard of its pool.
+func (m *Monitor) reclass(ac *aircraft, touch bool) {
+	p := poolOf(ac)
+	if p == ac.pool && !touch {
+		return
+	}
+	if ac.elem != nil {
+		m.pools[ac.pool].Remove(ac.elem)
+		ac.elem = nil
+	}
+	ac.pool = p
+	if p != poolNone {
+		ac.elem = m.pools[p].PushBack(ac)
+	}
+}
+
+// forget removes ac, which holds no alert, from every structure.
+func (m *Monitor) forget(ac *aircraft) {
+	m.grid.Remove(ac.id)
+	if ac.elem != nil {
+		m.pools[ac.pool].Remove(ac.elem)
+		ac.elem = nil
+	}
+	delete(m.aircraft, ac.id)
+}
+
+// dropAircraft clears every alert ac is part of with reason and forgets
+// it.
 func (m *Monitor) dropAircraft(ac *aircraft, reason ClearReason, ev *Events) {
 	m.clearAll(ac, reason, func(string) bool { return true }, ev)
-	m.grid.Remove(ac.id)
-	m.lru.Remove(ac.elem)
-	delete(m.aircraft, ac.id)
+	m.forget(ac)
 }
 
 // stopTrack takes ac out of the grid. Its alerts are cleared by the
@@ -288,6 +380,7 @@ func (m *Monitor) dropAircraft(ac *aircraft, reason ClearReason, ev *Events) {
 func (m *Monitor) stopTrack(ac *aircraft) {
 	ac.hasTrack = false
 	m.grid.Remove(ac.id)
+	m.reclass(ac, false)
 }
 
 // noteSeen lowers the next sweep time to when t + StaleAfterS passes.
@@ -344,8 +437,7 @@ func (m *Monitor) sweep(wallS float64, ev *Events) {
 	}
 	for _, ac := range forget {
 		if len(ac.alerts) == 0 {
-			m.lru.Remove(ac.elem)
-			delete(m.aircraft, ac.id)
+			m.forget(ac)
 		}
 	}
 }

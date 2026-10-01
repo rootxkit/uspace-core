@@ -89,7 +89,9 @@ func (m *Monitor) refresh(r raise, atS float64, ev *Events) {
 		}, losStartS: r.losStartS}
 		m.active[r.key] = s
 		for _, id := range r.aircraft {
-			m.aircraft[id].alerts[r.key] = struct{}{}
+			ac := m.aircraft[id]
+			ac.alerts[r.key] = struct{}{}
+			m.reclass(ac, false)
 		}
 		ev.Raised = append(ev.Raised, s.snapshot())
 		return
@@ -137,6 +139,7 @@ func (m *Monitor) clear(s *alertState, reason ClearReason, ev *Events) {
 	for _, id := range s.Aircraft {
 		if ac, ok := m.aircraft[id]; ok {
 			delete(ac.alerts, s.Key)
+			m.reclass(ac, false)
 		}
 	}
 	c := Cleared{Alert: s.snapshot(), Reason: reason}

@@ -207,6 +207,8 @@ func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Even
 	}
 	ac.hasIdentity = true
 	ac.identitySeenS = seenS
+	ac.identUnidentified = ident.Status == core.IdentUnidentified
+	m.reclass(ac, false)
 	m.noteSeen(ac.identitySeenS)
 	key := keyOf(KindIdentificationMismatch, ac.id)
 	if !ident.Mismatch {

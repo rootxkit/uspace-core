@@ -32,9 +32,11 @@
 //   - source_disabled: SwitchSource took a state that disables the source
 //     of the aircraft's last sample (B-11).
 //   - flight_ended (or any reason the caller names): Drop.
-//   - evicted: the aircraft was evicted past Config.MaxAircraft (E-10).
 //
-// Nothing missing, stale, NaN or unjudged clears an alert by itself.
+// Nothing missing, stale, NaN or unjudged clears an alert by itself, and
+// neither does the aircraft cap (E-10): past Config.MaxAircraft only an
+// aircraft without an active alert is evicted, and when every one holds
+// an alert a new id is refused (rejected_capacity, CapacityExceeded).
 //
 // # Admission
 //

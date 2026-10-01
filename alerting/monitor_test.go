@@ -660,14 +660,85 @@ func TestMaxAircraftEvicts(t *testing.T) {
 	if _, ok := m.aircraft["U00000"]; ok {
 		t.Fatal("the oldest was not the one evicted")
 	}
+	if m.CapacityExceeded() {
+		t.Fatal("capacity exceeded with evictable aircraft held")
+	}
 }
 
-func TestEvictionClearsWithReason(t *testing.T) {
+func TestEvictionSparesAlertHolders(t *testing.T) {
+	// Every aircraft in the cap holds an alert: the new id is refused and
+	// counted, the condition is exposed, and nothing is cleared.
 	cfg := DefaultConfig()
 	cfg.MaxAircraft = 2
 	m := headOn(t, cfg)
-	ev := m.Observe(at("C", 9000, 0, 0), 0)
-	wantEvents(t, "evict A", ev, nil, []string{"conflict:A:B=evicted"})
+	wantEvents(t, "C refused", m.Observe(at("C", 9000, 0, 0), 0), nil, nil)
+	if got := m.Counters().Get(CounterRejectedCapacity); got != 1 {
+		t.Fatalf("rejected_capacity = %d", got)
+	}
+	if !m.CapacityExceeded() || m.Tracked() != 2 || len(m.Active()) != 1 {
+		t.Fatalf("exceeded %v tracked %d active %d", m.CapacityExceeded(), m.Tracked(), len(m.Active()))
+	}
+	// Twin: an aircraft without an alert is evicted instead, silently.
+	cfg.MaxAircraft = 3
+	m = headOn(t, cfg)
+	m.Observe(at("C", 9000, 0, 0), 0)
+	wantEvents(t, "D evicts C", m.Observe(at("D", 12000, 0, 0), 0), nil, nil)
+	if _, ok := m.aircraft["C"]; ok || m.Counters().Get(CounterAircraftEvicted) != 1 || m.CapacityExceeded() {
+		t.Fatal("C was not the one evicted")
+	}
+	if len(m.Active()) != 1 {
+		t.Fatal("the conflict was lost")
+	}
+}
+
+func TestEvictionPrefersGroundThenUnidentified(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MaxAircraft = 5
+	m := headOn(t, cfg)
+	m.Observe(at("C", 9000, 0, 0), 0) // flying, identified, oldest
+	d := at("D", 12000, 0, 0)
+	d.Identified = ptr(false) // flying, unidentified
+	m.Observe(d, 0)
+	e := at("E", 15000, 0, 0)
+	e.Flying = nil // unknown flying: no track
+	m.Observe(e, 0)
+	evicts := func(id, want string) {
+		t.Helper()
+		m.Observe(at(id, 30000+float64(len(id))*100, 0, 0), 0)
+		if _, ok := m.aircraft[want]; ok {
+			t.Fatalf("%s arrived and %s was not evicted", id, want)
+		}
+	}
+	evicts("F", "E")   // not flying first
+	evicts("GG", "D")  // then unidentified
+	evicts("HHH", "C") // then least recently heard
+	if len(m.Active()) != 1 {
+		t.Fatal("the conflict was lost")
+	}
+}
+
+func TestSpoofedFloodNeverClearsARealConflict(t *testing.T) {
+	// Review probe: 50 000 spoofed ids after a real conflict. The old
+	// least-recently-used eviction cleared it as evicted.
+	m := headOn(t, DefaultConfig())
+	for i := range 50_000 {
+		tr := at(fmt.Sprintf("S%05d", i), 20000, 0, 0.5)
+		tr.Flying = ptr(false)
+		if ev := m.Observe(tr, 0.5); len(ev.Cleared) > 0 {
+			t.Fatalf("spoof %d cleared %v", i, ev.Cleared)
+		}
+	}
+	if len(m.Active()) != 1 || m.Tracked() != 50_000 {
+		t.Fatalf("active %d tracked %d", len(m.Active()), m.Tracked())
+	}
+	if got := m.Counters().Get(CounterAircraftEvicted); got != 2 {
+		t.Fatalf("aircraft_evicted = %d, want 2", got)
+	}
+	// The pair is still judged: A and B report on and the alert refreshes.
+	m.Observe(at("A", 10, 10, 1), 1)
+	if a := m.Active(); len(a) != 1 || a[0].LastTrueS != 1 {
+		t.Fatalf("active %+v", a)
+	}
 }
 
 func TestTwoMonitorsShareNothing(t *testing.T) {
