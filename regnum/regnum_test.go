@@ -87,7 +87,7 @@ func TestPublicPart(t *testing.T) {
 		{" fin87astrdge12k8-XY1", "fin87astrdge12k8", "FIN87ASTRDGE12K8"},
 		// Only ASCII letters are folded: U+017F upper-cases to S but is no
 		// registration character.
-		{"GEOſbcd1234efgh-x9z", "GEOſbcd1234efgh-x9z", "GEOSBCD1234EFGH-X9Z"},
+		{"GEOſbcd1234efgh-x9z", "GEOſbcd1234efgh-x9z", "GEOſBCD1234EFGH-X9Z"},
 		// Case-folding does not loosen G-04: "geo-op" is no number either.
 		{"geo-op-abc", "geo-op-abc", "GEO-OP-ABC"},
 		{"fin87astrdge12k8", "fin87astrdge12k8", "FIN87ASTRDGE12K8"},
@@ -99,7 +99,7 @@ func TestPublicPart(t *testing.T) {
 		{"FIN87astrdge12k8-x!z", "FIN87astrdge12k8-x!z", "FIN87ASTRDGE12K8-X!Z"},
 		{"FIN87astrdge12k8-xy", "FIN87astrdge12k8-xy", "FIN87ASTRDGE12K8-XY"},
 		{"FIN87astrdge12k8-wxyz", "FIN87astrdge12k8-wxyz", "FIN87ASTRDGE12K8-WXYZ"},
-		{"FIN87astrdge12k8-xé", "FIN87astrdge12k8-xé", "FIN87ASTRDGE12K8-XÉ"},
+		{"FIN87astrdge12k8-xé", "FIN87astrdge12k8-xé", "FIN87ASTRDGE12K8-Xé"}, // only ASCII folds
 		// Stripped once only.
 		{"FIN87astrdge12k8-abc-xyz", "FIN87astrdge12k8-abc-xyz", "FIN87ASTRDGE12K8-ABC-XYZ"},
 		{"", "", ""},
@@ -175,7 +175,7 @@ func FuzzPublicPart(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		p, k := Public(s)
-		upper := strings.ToUpper(p)
+		upper := asciiUpper(p)
 		if p != PublicPart(s) || k != CompareKey(s) || k != upper {
 			t.Fatalf("Public(%q) = %q, %q disagrees", s, p, k)
 		}
@@ -194,7 +194,7 @@ func FuzzPublicPart(f *testing.F) {
 			if !errors.As(err, &fe) || fe.Field != Field {
 				t.Fatalf("error without the field: %v", err)
 			}
-		} else if CompareKey(s) != strings.ToUpper(strings.TrimSpace(s)) {
+		} else if CompareKey(s) != asciiUpper(strings.TrimSpace(s)) {
 			t.Fatalf("a valid number %q changed under CompareKey", s)
 		}
 	})
@@ -205,5 +205,23 @@ func BenchmarkCompareKey(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; b.Loop(); i++ {
 		_ = CompareKey(in[i%len(in)])
+	}
+}
+
+// TestCompareKeyFoldsOnlyASCII: a look-alike never compares equal to the
+// ASCII number; the lower-case ASCII spelling does.
+func TestCompareKeyFoldsOnlyASCII(t *testing.T) {
+	owner := CompareKey("GEOSBCD1234EFGH")
+	if CompareKey("GEOſbcd1234efgh") == owner {
+		t.Error("U+017F compares equal to S")
+	}
+	if CompareKey("GEOſbcd1234efgh-x9z") == owner {
+		t.Error("U+017F with a secret compares equal to S")
+	}
+	if CompareKey("geosbcd1234efgh") != owner || CompareKey("geosbcd1234efgh-x9z") != owner {
+		t.Error("the lower-case ASCII spelling does not compare equal")
+	}
+	if _, k := Public("GEOıBCD1234EFGH"); k == CompareKey("GEOIBCD1234EFGH") {
+		t.Error("U+0131 compares equal to I")
 	}
 }

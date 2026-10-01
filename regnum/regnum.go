@@ -134,15 +134,16 @@ func asciiUpper(s string) string {
 }
 
 // CompareKey is what identification compares (spec 06 §5): the public
-// part, upper-cased. The secret part never takes part in a comparison.
+// part with its ASCII letters upper-cased. Only ASCII is folded, so a
+// look-alike such as U+017F (long s) never compares equal to S. The secret part never takes part in a comparison.
 func (v *Validator) CompareKey(value string) string {
-	return strings.ToUpper(v.PublicPart(value))
+	return asciiUpper(v.PublicPart(value))
 }
 
 // Public returns PublicPart and CompareKey in one call.
 func (v *Validator) Public(value string) (public, compareKey string) {
 	public = v.PublicPart(value)
-	return public, strings.ToUpper(public)
+	return public, asciiUpper(public)
 }
 
 // splitSecret splits value into the part before a trailing secret part
