@@ -70,8 +70,12 @@ type Limits struct {
 	// document nests 9 levels down to a position.
 	MaxDepth int
 	// MaxBytes is the largest input read; a larger one is refused before
-	// it is parsed. The parsed tree costs up to about 40 bytes of memory
-	// per input byte in the worst case (a list of one-digit numbers).
+	// it is parsed. The costliest input per byte is a list of one-digit
+	// numbers: it allocates about 80 bytes per input byte (pinned by
+	// TestMemoryPerInputByte) and was measured at about 250 bytes of
+	// process memory per input byte (1 MiB took 150 ms). The 4 MiB
+	// default therefore bounds a hostile file at about 1 GB; raise it
+	// only with that cost in mind.
 	MaxBytes int
 }
 
@@ -88,7 +92,7 @@ var DefaultLimits = Limits{
 	MaxRingVertices:  5000,
 	MaxProblems:      100,
 	MaxDepth:         32,
-	MaxBytes:         16 << 20,
+	MaxBytes:         4 << 20,
 }
 
 // withDefaults fills every zero or negative field from DefaultLimits.
