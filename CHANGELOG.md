@@ -123,6 +123,25 @@ Each entry names the work package and the vectors it affects.
   `disarming-clears-as-stale` clears as `landed` (owner decision, plan
   §11 gap 4). [WP-10]
 
+### Changed
+
+- Vectors re-vendored from `uspace-lab@aa5187e` (17 files, 660 cases),
+  which records the wave 1-3 decisions in the vectors themselves: spec
+  04 §3.2 reason codes, the G-04 strip and ASCII-only folding (G-12),
+  thresholds that withhold (E-15), the ED-269 type enumeration, every
+  missing zone reason, the widened band capped at the zone's severity,
+  U-space at info, `landed` on disarm, placements behind or ahead
+  refused (T-13), the aircraft cap and source share (C-18), and loss of
+  separation over the half-open window (C-19). `jwt_verify.json` now
+  comes from the lab and leaves `local_files`. Every override, rename
+  and known deviation in the vector tests is removed; each test passes
+  its file as written. [WP-0]
+- `zones`: a PROHIBITED or REQ_AUTHORISATION zone with a WGS84 limit and
+  no geoid now warns with `limit_not_judged`, as for an AGL limit with
+  no DEM, and keeps the `no_geoid` reason (S-37, owner decision; LESSONS
+  Z-09). A CONDITIONAL zone stays not evaluated. Behaviour change to a
+  judgement at `v0.x`, pinned by `zones_vertical.json`. [WP-8]
+
 ## [0.1.0] - unreleased (G-M1)
 
 Tagged when every file in `vectors/testdata/` passes against its package:

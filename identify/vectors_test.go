@@ -73,19 +73,6 @@ type vecIdentExpected struct {
 	DroneID               *string `json:"drone_id"`
 }
 
-// reasonRenames are the predecessor's reason codes that spec 04 section
-// 3.2 renamed. The vector file is generated from the predecessor and is
-// never edited; the test maps the old code onto the spec's and counts
-// every mapping, so a regenerated file with the new codes shows up here.
-var reasonRenames = map[string]core.IdentReason{
-	// Our own fleet: the spec's reason list has no "fleet"; the aircraft
-	// is registered on its serial alone, reason matched (WP-7 brief).
-	"fleet": core.ReasonMatched,
-	// The predecessor's relay binding is the spec's authenticated session
-	// binding (04 section 3.2, PLAN section 11 gap 5).
-	"relay_binding": core.ReasonSessionBinding,
-}
-
 func TestVectorsIdentificationStatus(t *testing.T) {
 	f := vectors.Load(t, "identification_status.json")
 	var fx struct {
@@ -106,7 +93,6 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 	}
 
 	ran := map[string]int{}
-	renamed := map[string]int{}
 	f.Run(t, func(t *testing.T, c vectors.Case) {
 		var in vecIdentInput
 		var exp vecIdentExpected
@@ -145,11 +131,6 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 		ran[in.Kind]++
 
 		wantReason := core.IdentReason(exp.Reason)
-		if to, ok := reasonRenames[exp.Reason]; ok {
-			renamed[exp.Reason]++
-			t.Logf("reason %q is the spec's %q (04 section 3.2)", exp.Reason, to)
-			wantReason = to
-		}
 		if got.Status != core.IdentStatus(exp.Status) {
 			t.Errorf("status %q, want %q", got.Status, exp.Status)
 		}
@@ -167,18 +148,13 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 			t.Errorf("basis %q, want %q", got.Basis, wantBasis)
 		}
 	})
-	want := map[string]int{"broadcast": 24, "remote_id_block": 6, "bound": 6, "serial_conflict": 1}
+	want := map[string]int{"broadcast": 29, "remote_id_block": 6, "bound": 7, "serial_conflict": 1}
 	for k, n := range want {
 		if ran[k] != n {
 			t.Errorf("kind %s: ran %d cases, want %d", k, ran[k], n)
 		}
 	}
-	for code := range reasonRenames {
-		if renamed[code] == 0 {
-			t.Errorf("rename of %q declared but no case uses it", code)
-		}
-	}
-	t.Logf("ran %v; reasons renamed %v", ran, renamed)
+	t.Logf("ran %v", ran)
 }
 
 type vecRelayRow struct {
@@ -223,6 +199,8 @@ type vecFleetExpected struct {
 	Verdict            string   `json:"verdict"`
 	ApartM             *float64 `json:"apart_m"`
 	IgnoredHistoryRows int      `json:"ignored_history_rows"`
+	// Problem names the threshold the guard refused (E-15); nil otherwise.
+	Problem *string `json:"problem"`
 }
 
 // tolApartM mirrors the file's tolerance header for apart_m.
@@ -234,6 +212,7 @@ func TestVectorsFleetMatch(t *testing.T) {
 		t.Fatalf("apart_m tolerance is %v (%v), the test applies %v", tol, ok, tolApartM)
 	}
 	verdicts := map[string]int{}
+	problems := 0
 	f.Run(t, func(t *testing.T, c vectors.Case) {
 		var in vecFleetInput
 		var exp vecFleetExpected
@@ -246,6 +225,15 @@ func TestVectorsFleetMatch(t *testing.T) {
 		if got.IgnoredHistoryRows != exp.IgnoredHistoryRows {
 			t.Errorf("ignored_history_rows %d, want %d", got.IgnoredHistoryRows, exp.IgnoredHistoryRows)
 		}
+		switch {
+		case exp.Problem == nil && got.Problem != nil:
+			t.Errorf("problem %v, want none", got.Problem)
+		case exp.Problem != nil && (got.Problem == nil || got.Problem.Field != *exp.Problem):
+			t.Errorf("problem %v, want one naming %q", got.Problem, *exp.Problem)
+		}
+		if exp.Problem != nil {
+			problems++
+		}
 		verdicts[exp.Verdict]++
 	})
 	// Every verdict is exercised by at least one case (E-01).
@@ -254,7 +242,11 @@ func TestVectorsFleetMatch(t *testing.T) {
 			t.Errorf("no case expects verdict %q", v)
 		}
 	}
-	t.Logf("verdicts %v", verdicts)
+	// A refused threshold and an accepted one (E-01).
+	if problems == 0 || problems == len(f.Cases) {
+		t.Errorf("%d of %d cases name a problem; want some, not all", problems, len(f.Cases))
+	}
+	t.Logf("verdicts %v, %d refused thresholds", verdicts, problems)
 }
 
 // vectorInputs returns the raw inputs of a vector file, for fuzz seeds.

@@ -17,7 +17,7 @@ import (
 const tolDetailM = 0.1
 
 // vectorCases is the number of cases in zones_vertical.json.
-const vectorCases = 38
+const vectorCases = 49
 
 type vectorAircraft struct {
 	AltAMSLM  *float64 `json:"alt_amsl_m"`
@@ -31,6 +31,11 @@ type vectorInput struct {
 	GeoidUndulationM     *float64        `json:"geoid_undulation_m"`
 	MaxHeightAGLM        *float64        `json:"max_height_agl_m"`
 	PressureUncertaintyM float64         `json:"pressure_uncertainty_m"`
+	ConditionalSeverity  string          `json:"conditional_severity"`
+	// ZoneType, when present, replaces the type the ED-269 restriction
+	// maps to: USPACE, which ED-269 cannot express. The feature's
+	// restriction is then a placeholder and the zone has none.
+	ZoneType *string `json:"zone_type"`
 }
 
 type vectorRaise struct {
@@ -43,6 +48,8 @@ type vectorRaise struct {
 type vectorExpected struct {
 	Raised   []vectorRaise     `json:"raised"`
 	Counters map[string]uint64 `json:"counters"`
+	// Reasons is the set of what was missing (order not significant).
+	Reasons []string `json:"reasons"`
 }
 
 // envOf maps the vector's `terrain` ("none", "unknown here" or
@@ -92,6 +99,7 @@ func TestVectorsZonesVertical(t *testing.T) {
 		pol := DefaultPolicy()
 		pol.PressureUncertaintyM = in.PressureUncertaintyM
 		pol.MaxHeightAGLM = in.MaxHeightAGLM
+		pol.ConditionalSeverity = core.Severity(in.ConditionalSeverity)
 		ac := Aircraft{AltAMSLM: in.Aircraft.AltAMSLM, AltSource: core.AltSource(in.Aircraft.AltSource)}
 
 		var res Result
@@ -106,6 +114,10 @@ func TestVectorsZonesVertical(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FromED269: %v", err)
 			}
+			if in.ZoneType != nil {
+				z.Type = core.ZoneType(*in.ZoneType)
+				z.Restriction = ""
+			}
 			// The header: the aircraft is inside horizontally and the zone
 			// applies. Check that the fixture agrees rather than assume it.
 			inside, err := z.ContainsHorizontally(core.LatLon{LatDeg: 41.7151, LonDeg: 44.8271})
@@ -116,6 +128,19 @@ func TestVectorsZonesVertical(t *testing.T) {
 		}
 		if (res.NotEvaluated || res.LimitNotJudged) && res.Reasons == 0 {
 			t.Errorf("not evaluated or not judged without a reason: %+v", res)
+		}
+		if exp.Reasons == nil {
+			t.Fatal("expected.reasons missing")
+		}
+		var gotReasons []string
+		for _, r := range res.Reasons.List() {
+			gotReasons = append(gotReasons, string(r))
+		}
+		wantReasons := slices.Clone(exp.Reasons)
+		slices.Sort(gotReasons)
+		slices.Sort(wantReasons)
+		if !slices.Equal(gotReasons, wantReasons) {
+			t.Errorf("reasons %v, want %v", gotReasons, exp.Reasons)
 		}
 		var counters core.Counters
 		res.Count(&counters)
