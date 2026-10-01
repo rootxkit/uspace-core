@@ -77,6 +77,11 @@
 // The comparison is in UTC and never consults time.Local; evaluate at the
 // aircraft's placed time, not its arrival time.
 //
+// Offsets are fixed, as written in the file: ED-269 times carry a UTC
+// offset, not a time zone, so a schedule written 08:00+04:00 stays at
+// 04:00Z all year and does not follow daylight saving time. An authority
+// whose rules follow local summer time publishes a period per season.
+//
 // Vectors: vectors/testdata/ed269_parse.json (52 cases) and
 // zones_applicability.json (32). Consumers: zones, alerting, ed318 and
 // the CISP's import. Owned by WP-5.
