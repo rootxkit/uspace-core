@@ -563,3 +563,29 @@ func hasProblemSuffix(probs *ed269.Problems, field, reason string) bool {
 	}
 	return false
 }
+
+// A circle radius is metres whatever the layer's uom: accepted up to
+// MaxCircleRadiusM under a feet layer; refused when negative, zero or
+// above the cap.
+func TestCircleRadius(t *testing.T) {
+	for _, c := range []struct {
+		radius any
+		ok     bool
+	}{{1500, true}, {float64(MaxCircleRadiusM), true}, {float64(MaxCircleRadiusM) + 1, false}, {-5, false}, {0, false}, {"1500", false}} {
+		d := baseDocument(t)
+		geom(t, d, 1)["extent"].(map[string]any)["radius"] = c.radius
+		raw, _ := json.Marshal(d)
+		fc, probs := Parse(raw, Limits{})
+		if c.ok {
+			if probs != nil {
+				t.Errorf("radius %v under a feet layer refused: %v", c.radius, probs)
+			} else if fc.Features[1].Geometry.Layer.Uom == nil || *fc.Features[1].Geometry.Layer.Uom != UomFeet {
+				t.Error("the base TSD001 layer is not in feet")
+			}
+			continue
+		}
+		if !hasProblemSuffix(probs, "extent.radius", "") {
+			t.Errorf("radius %v: %v", c.radius, probs)
+		}
+	}
+}

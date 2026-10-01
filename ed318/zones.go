@@ -132,8 +132,8 @@ func partZone(props *UASZone, g Geometry, path string) (*zones.Zone, error) {
 		if g.Center == nil || !g.Center.Valid() {
 			return nil, core.Fieldf(path+".coordinates", "is missing or not a valid WGS84 position")
 		}
-		if g.RadiusM == nil || !core.IsFinite(*g.RadiusM) || *g.RadiusM <= 0 {
-			return nil, core.Fieldf(path+".extent.radius", "must be finite and positive")
+		if g.RadiusM == nil || !core.IsFinite(*g.RadiusM) || *g.RadiusM <= 0 || *g.RadiusM > MaxCircleRadiusM {
+			return nil, core.Fieldf(path+".extent.radius", "must be finite, positive and at most %v m", float64(MaxCircleRadiusM))
 		}
 		z.Circle = &geodesy.Circle{Center: *g.Center, RadiusM: *g.RadiusM}
 		z.BBox = z.Circle.BBox()

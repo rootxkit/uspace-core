@@ -59,9 +59,13 @@
 //   - UNVERIFIED: the unit of a circle's radius. A circle is a GeoJSON
 //     Point with an `extent` of subType Circle and a `radius`; neither the
 //     schema (Schema_GeoJSONGeometries.json, where radius is a bare
-//     number) nor uas_standards (ExtentCircle) states its unit, and the
-//     layer's uom is described for upper and lower only. This package
-//     reads the radius as metres.
+//     number) nor uas_standards (ExtentCircle) states its unit. The radius
+//     is always in metres (owner decision on PR #16), following GeoJSON,
+//     whose distances are metres, and InterUSS practice (F3411 and F3548
+//     radii are metres, and the schema's own circle example is 3500 with a
+//     metres layer). The layer's uom governs the vertical limits only, so
+//     a circle is accepted whatever it says. A radius that is not finite,
+//     not above 0, or above MaxCircleRadiusM (1000 km) is refused.
 //
 // Free-text members the schema leaves unbounded are bounded at
 // MaxFreeTextChars characters.

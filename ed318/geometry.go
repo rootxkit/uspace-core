@@ -109,8 +109,18 @@ func (p *parser) circle(v *value, where string, g *Geometry) {
 		p.ps.add(join(where, "extent.radius"), "must be a number above 0")
 		return
 	}
+	if r > MaxCircleRadiusM {
+		p.ps.add(join(where, "extent.radius"), fmt.Sprintf("%v m is above %v m, too large for a UAS zone", r, float64(MaxCircleRadiusM)))
+		return
+	}
 	g.RadiusM = &r
 }
+
+// MaxCircleRadiusM caps a circle's radius (1000 km): a larger one is not
+// a plausible UAS zone and is refused rather than judged. The radius is
+// always in metres, whatever the layer's uom (which governs the vertical
+// limits only); see doc.go, UNVERIFIED.
+const MaxCircleRadiusM = 1_000_000
 
 // position reads a GeoJSON [longitude, latitude]. A third member
 // (an altitude) is refused: a zone's vertical extent is its layer.

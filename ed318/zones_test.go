@@ -263,3 +263,20 @@ func TestToZonesLayerIdentifiers(t *testing.T) {
 		t.Error("PartIdentifier")
 	}
 }
+
+// A circle built in code with a NaN, negative or oversized radius is not
+// judged; a radius in range is (E-01).
+func TestToZonesCircleRadius(t *testing.T) {
+	for _, c := range []struct {
+		r  float64
+		ok bool
+	}{{1500, true}, {math.NaN(), false}, {-1, false}, {math.Inf(1), false}, {MaxCircleRadiusM + 1, false}} {
+		fc := baseCollection(t)
+		r := c.r
+		fc.Features[1].Geometry.RadiusM = &r
+		_, err := ToZones(fc, NOAADaylight{})
+		if (err == nil) != c.ok {
+			t.Errorf("radius %v: %v", c.r, err)
+		}
+	}
+}
