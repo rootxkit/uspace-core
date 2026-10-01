@@ -50,6 +50,9 @@ func (m *Monitor) admit(tr *Track, wallS float64) (*aircraft, bool) {
 	if ac = m.record(tr.ID); ac == nil {
 		return nil, false
 	}
+	if tr.RxAtS-tr.CapturedAtS > m.cfg.StaleAfterS {
+		m.counters.Inc(CounterPlacementBehindStale)
+	}
 	ac.src = src
 	ac.placedS = tr.CapturedAtS
 	ac.heardS = math.Max(ac.heardS, math.Min(tr.CapturedAtS, wallS))

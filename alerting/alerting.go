@@ -106,6 +106,12 @@ const (
 	// named resolved or stale, which only the monitor's own judgement
 	// gives.
 	CounterDropRefusedReason = "drop_refused_reason"
+	// CounterPlacementBehindStale counts admitted samples placed more than
+	// StaleAfterS before their RxAtS: live by the ingest's verdict, but
+	// stale by their placement, so the sweep drops them at once. A
+	// placement anomaly of the ingest (T-02 clamps a batch's spread at
+	// 120 s), never silent.
+	CounterPlacementBehindStale = "placement_behind_stale"
 	// CounterConfigInvalid counts configuration values NewMonitor replaced
 	// with their default (a NaN, infinite or negative time, an unknown
 	// severity) or found unusable (a cpa.Policy Evaluate refuses).

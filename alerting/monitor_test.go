@@ -1123,3 +1123,26 @@ func TestSwitchDropsByLastSourceAndOtherSourceReRaises(t *testing.T) {
 	rid.Source, rid.Station = "remote_id", "rx-1"
 	wantEvents(t, "remote id re-raises", m.Observe(rid, 1), []string{"conflict:A:B"}, nil)
 }
+
+func TestPlacementBehindStaleIsCounted(t *testing.T) {
+	// Placed more than StaleAfterS behind a fresh RxAtS: admitted, then
+	// stale at once by its placement. Counted, not silent.
+	m := NewMonitor(DefaultConfig())
+	tr := at("A", 0, 0, 4)
+	tr.RxAtS = 20
+	m.Observe(tr, 20)
+	if got := m.Counters().Get(CounterPlacementBehindStale); got != 1 {
+		t.Fatalf("placement_behind_stale = %d", got)
+	}
+	if m.Tracked() != 0 {
+		t.Fatalf("%d tracked", m.Tracked())
+	}
+	// Twin: exactly StaleAfterS behind is not an anomaly.
+	m = NewMonitor(DefaultConfig())
+	tr = at("A", 0, 0, 5)
+	tr.RxAtS = 20
+	m.Observe(tr, 20)
+	if got := m.Counters().Get(CounterPlacementBehindStale); got != 0 || m.Tracked() != 1 {
+		t.Fatalf("placement_behind_stale = %d, tracked %d", got, m.Tracked())
+	}
+}
