@@ -12,9 +12,13 @@ useDefault = true
 # reads the key name as a credential. These values are public by design
 # and the files may only change through scripts/sync-vectors.sh, so the
 # allowlist is limited to that key in those files.
+#
+# jwt_verify.json (WP-11) carries test JWTs under "token": signed by a key
+# generated at run time by auth/internal/genvectors and discarded, so they
+# grant nothing anywhere; only the public JWKS is kept (spec 06 section 4).
 [allowlist]
-description = "public operator numbers in the vendored vectors"
+description = "public operator numbers and discarded-key test tokens in the vectors"
 condition = "AND"
 paths = ['''^vectors/testdata/[^/]+\.json$''']
 regexTarget = "line"
-regexes = ['''"compare_key"\s*:''']
+regexes = ['''"compare_key"\s*:''', '''"token"\s*:\s*"ey''']

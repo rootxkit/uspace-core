@@ -1,11 +1,16 @@
 package auth
 
 import (
+	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/lestrrat-go/jwx/v3/jwk"
 
 	"github.com/rootxkit/uspace-core/vectors"
 )
@@ -97,4 +102,92 @@ func TestVectorsRIDReceiverAuth(t *testing.T) {
 			}
 		}
 	})
+}
+
+type jwtFixtures struct {
+	Issuer   string          `json:"issuer"`
+	Audience string          `json:"audience"`
+	MaxSkewS float64         `json:"max_skew_s"`
+	JWKS     json.RawMessage `json:"jwks"`
+}
+
+type jwtInput struct {
+	Token        string `json:"token"`
+	NowS         int64  `json:"now_s"`
+	RequireScope string `json:"require_scope"`
+}
+
+type jwtExpected struct {
+	Accepted       bool     `json:"accepted"`
+	Reason         string   `json:"reason"`
+	Claim          string   `json:"claim"`
+	Subject        string   `json:"subject"`
+	Scopes         []string `json:"scopes"`
+	RequireScopeOK *bool    `json:"require_scope_ok"`
+}
+
+func TestVectorsJWTVerify(t *testing.T) {
+	f := vectors.Load(t, "jwt_verify.json")
+	var fx jwtFixtures
+	vectors.Unmarshal(t, f.Fixtures, &fx)
+	set, err := jwk.Parse(fx.JWKS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Run(t, func(t *testing.T, c vectors.Case) {
+		var in jwtInput
+		var exp jwtExpected
+		c.Decode(t, &in, &exp)
+		now := time.Unix(in.NowS, 0).UTC()
+		v, err := NewVerifier(context.Background(), Config{
+			Issuers:  map[string]IssuerConfig{fx.Issuer: {Keys: set}},
+			Audience: fx.Audience,
+			MaxSkew:  time.Duration(fx.MaxSkewS * float64(time.Second)),
+			Now:      func() time.Time { return now },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		claims, err := v.Verify(context.Background(), in.Token)
+		if got := err == nil; got != exp.Accepted {
+			t.Fatalf("accepted %v, want %v (err %v)", got, exp.Accepted, err)
+		}
+		if !exp.Accepted {
+			var te *TokenError
+			if !errors.As(err, &te) {
+				t.Fatalf("error %T is not a *TokenError", err)
+			}
+			if te.Counter != exp.Reason || te.Claim != exp.Claim {
+				t.Errorf("refused %s on %s (%v), want %s on %s", te.Counter, te.Claim, err, exp.Reason, exp.Claim)
+			}
+			if v.Counters().Get(exp.Reason) != 1 {
+				t.Errorf("counter %s not incremented: %v", exp.Reason, v.Counters().Snapshot())
+			}
+			return
+		}
+		if claims.Subject != exp.Subject || !slices.Equal(claims.Scopes, exp.Scopes) {
+			t.Errorf("subject %q scopes %q, want %q %q", claims.Subject, claims.Scopes, exp.Subject, exp.Scopes)
+		}
+		if (in.RequireScope == "") != (exp.RequireScopeOK == nil) {
+			t.Fatal("require_scope and require_scope_ok must come together")
+		}
+		if exp.RequireScopeOK != nil {
+			if got := RequireScope(claims, in.RequireScope) == nil; got != *exp.RequireScopeOK {
+				t.Errorf("RequireScope(%q) ok %v, want %v", in.RequireScope, got, *exp.RequireScopeOK)
+			}
+		}
+	})
+}
+
+// jwtVectorTokens returns the tokens of jwt_verify.json, as fuzz seeds.
+func jwtVectorTokens(t vectors.TB) []string {
+	f := vectors.Load(t, "jwt_verify.json")
+	out := make([]string, 0, len(f.Cases))
+	for _, c := range f.Cases {
+		var in jwtInput
+		if err := vectors.StrictUnmarshal(c.Input, &in); err == nil {
+			out = append(out, in.Token)
+		}
+	}
+	return out
 }

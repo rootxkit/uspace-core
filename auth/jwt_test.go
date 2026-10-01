@@ -731,6 +731,11 @@ func TestVerifyConcurrent(t *testing.T) {
 
 func FuzzVerifyJWT(f *testing.F) {
 	key := testKey()
+	// The vector tokens are signed by another (discarded) key: they reach
+	// the signature check here and every refusal before it.
+	for _, s := range jwtVectorTokens(f) {
+		f.Add(s)
+	}
 	f.Add(compact(goodHeader(), goodClaims(), rs256(key)))
 	f.Add("")
 	f.Add("..")

@@ -33,6 +33,10 @@ Each entry names the work package and the vectors it affects.
   the 14 `rid_receiver_auth.json` cases, and the RS256-only JWT verifier
   with allow-listed issuers, kid-selected cached JWKS with a rate-limited
   refresh, and the token issuer, on `lestrrat-go/jwx/v3`. [WP-11 G-M1]
+- `vectors/testdata/jwt_verify.json` (16 cases, local until the lab merges
+  it): the ecosystem JWT knowledge vector, written by
+  `auth/internal/genvectors` with a discarded key, and run by `auth`.
+  [WP-11 G-M3]
 
 ## [0.1.0] - unreleased (G-M1)
 
