@@ -51,6 +51,14 @@ func TestSnapshotByIDAndOperator(t *testing.T) {
 	if u, ok := s.UASByID("d1"); !ok || u.Serial != "S2" {
 		t.Errorf("by id: %v %v, want the last row", u, ok)
 	}
+	// The replaced row is dropped whole: its serial finds nothing, the
+	// kept row's serial finds the kept row.
+	if _, m := s.UASBySerial("S1"); m != identify.MatchNone {
+		t.Errorf("the replaced row's serial matched %v", m)
+	}
+	if u, m := s.UASBySerial("S2"); m != identify.MatchExact || u.DroneID != "d1" {
+		t.Errorf("the kept row's serial: %v %q", m, u.DroneID)
+	}
 	if _, ok := s.UASByID("d2"); ok {
 		t.Error("an unknown id was found")
 	}

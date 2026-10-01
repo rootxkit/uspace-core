@@ -104,7 +104,8 @@ const ambiguous = -1
 // slices are copied; later changes to them do not reach the snapshot.
 // Serials are normalised (serial.Normalize) before indexing, and an empty
 // serial is not indexed. A repeated drone or operator id keeps the last
-// row, as a projection read keyed by id would.
+// row, as a projection read keyed by id would; the rows it replaces are
+// dropped whole, so their serials find nothing.
 func NewSnapshot(ops []OperatorFacts, uas []UASFacts) *Snapshot {
 	s := &Snapshot{
 		uas:       make([]UASFacts, len(uas)),
@@ -124,7 +125,9 @@ func NewSnapshot(ops []OperatorFacts, uas []UASFacts) *Snapshot {
 		u.Serial = serial.Normalize(u.Serial)
 		s.uas[i] = u
 		s.byID[u.DroneID] = i
-		if u.Serial == "" {
+	}
+	for i, u := range s.uas {
+		if u.Serial == "" || s.byID[u.DroneID] != i {
 			continue
 		}
 		index(s.byExact, u.Serial, i)
