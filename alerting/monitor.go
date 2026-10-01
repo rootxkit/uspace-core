@@ -9,6 +9,7 @@ import (
 	"github.com/rootxkit/uspace-core/core"
 	"github.com/rootxkit/uspace-core/cpa"
 	"github.com/rootxkit/uspace-core/sources"
+	"github.com/rootxkit/uspace-core/zones"
 )
 
 // sourceKey is a (source type, instance) pair as sources.State names it.
@@ -70,6 +71,8 @@ type aircraft struct {
 type Monitor struct {
 	cfg      Config
 	grid     *cpa.Grid
+	zoneIx   *zones.Index
+	zoneKey  map[*zones.Zone]string
 	follower *sources.Follower
 	aircraft map[string]*aircraft
 	lru      *list.List
@@ -80,7 +83,8 @@ type Monitor struct {
 	nextSweepS float64
 	serial     uint64
 
-	idBuf []string
+	idBuf   []string
+	zoneBuf []*zones.Zone
 }
 
 // NewMonitor returns an empty monitor with c. Unusable times and
@@ -97,6 +101,9 @@ func NewMonitor(c Config) *Monitor {
 	}
 	m.cfg = sanitise(c, &m.counters)
 	m.grid = cpa.NewGrid(m.cfg.GridCellM)
+	m.cfg.Zones = slices.Clone(c.Zones)
+	m.zoneIx = zones.NewIndex(m.cfg.Zones)
+	m.zoneKey = zoneKeys(m.cfg.Zones)
 	return m
 }
 

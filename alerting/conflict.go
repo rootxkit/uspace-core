@@ -41,6 +41,7 @@ func (m *Monitor) judge(ac *aircraft, tr *Track, wallS float64, ev *Events) {
 	default:
 		m.judgeFlying(ac, tr, wallS, ev)
 	}
+	m.judgeMismatch(ac, tr, wallS, ev)
 }
 
 // notMismatch selects every alert but identification_mismatch, which is
@@ -63,6 +64,7 @@ func (m *Monitor) judgeFlying(ac *aircraft, tr *Track, wallS float64, ev *Events
 	m.noteSeen(ac.seenS)
 	m.grid.Upsert(ac.id, tr.Pos)
 	m.judgeConflicts(ac, atS, ev)
+	m.judgeZones(ac, tr, atS, ev)
 }
 
 // verticalKnown reports whether tr's altitude is a vertical position
