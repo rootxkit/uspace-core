@@ -49,16 +49,17 @@ func byValue(v any) any {
 // vectors.
 func TestAcceptedVariants(t *testing.T) {
 	cases := map[string]map[string]any{
-		"type CUSTOMIZED":            {"type": "CUSTOMIZED"},
-		"reason absent":              {"reason": nil},
-		"reason empty":               {"reason": []any{}},
-		"conditions as a string":     {"restrictionConditions": "Notify first"},
-		"conditions empty list":      {"restrictionConditions": []any{}},
-		"title on the zone":          {"title": "A title"},
-		"extended properties a list": {"extendedProperties": []any{1.5, "x", nil, true, map[string]any{"a": []any{}}}},
-		"offset without colon":       {"applicability": []any{map[string]any{"permanent": "NO", "schedule": []any{map[string]any{"day": []any{"ANY"}, "startTime": "08:00+0400", "endTime": "09:00:30.5+0400"}}}}},
-		"date without seconds":       {"applicability": []any{map[string]any{"permanent": "NO", "startDateTime": "2026-01-01T00:00Z"}}},
-		"negative offset night":      {"applicability": []any{map[string]any{"permanent": "NO", "schedule": []any{map[string]any{"day": []any{"SUN"}, "startTime": "22:00-03:00", "endTime": "02:00-03:00"}}}}},
+		"type CUSTOMIZED":                   {"type": "CUSTOMIZED"},
+		"reason absent":                     {"reason": nil},
+		"reason empty":                      {"reason": []any{}},
+		"conditions as a string":            {"restrictionConditions": "Notify first"},
+		"conditions empty list":             {"restrictionConditions": []any{}},
+		"title on the zone":                 {"title": "A title"},
+		"extended properties a list":        {"extendedProperties": []any{1.5, "x", nil, true, map[string]any{"a": []any{}}}},
+		"offset without colon":              {"applicability": []any{map[string]any{"permanent": "NO", "schedule": []any{map[string]any{"day": []any{"ANY"}, "startTime": "08:00+0400", "endTime": "09:00:30.5+0400"}}}}},
+		"date with an offset without colon": {"applicability": []any{map[string]any{"permanent": "NO", "startDateTime": "2026-01-01T00:00:00.5+0400", "endDateTime": "2026-01-02T00:00-0130"}}},
+		"date without seconds":              {"applicability": []any{map[string]any{"permanent": "NO", "startDateTime": "2026-01-01T00:00Z"}}},
+		"negative offset night":             {"applicability": []any{map[string]any{"permanent": "NO", "schedule": []any{map[string]any{"day": []any{"SUN"}, "startTime": "22:00-03:00", "endTime": "02:00-03:00"}}}}},
 		"upper below lower in another reference": {"geometry": []any{map[string]any{
 			"uomDimensions": "M", "lowerLimit": 100, "lowerVerticalReference": "AMSL", "upperLimit": 50,
 			"upperVerticalReference": "AGL", "horizontalProjection": map[string]any{"type": "Circle", "center": []any{44.8, 41.7}, "radius": 100},

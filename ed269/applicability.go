@@ -214,9 +214,13 @@ type instantValue struct {
 	text string
 }
 
-// instantLayouts are the date-time forms accepted, each with an offset.
+// instantLayouts are the date-time forms accepted, each with an offset
+// written Z, +hh:mm or +hhmm: the same offset rule as a clock time.
 // time.Parse also accepts a fractional second after the seconds.
-var instantLayouts = []string{time.RFC3339, "2006-01-02T15:04Z07:00"}
+var instantLayouts = []string{
+	time.RFC3339, "2006-01-02T15:04Z07:00",
+	"2006-01-02T15:04:05Z0700", "2006-01-02T15:04Z0700",
+}
 
 // naiveLayouts are date-times without an offset: refused by name.
 var naiveLayouts = []string{"2006-01-02T15:04:05", "2006-01-02T15:04", "2006-01-02"}
