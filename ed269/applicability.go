@@ -330,6 +330,12 @@ func (p *parser) days(v *value, where string) ([]time.Weekday, []string, bool) {
 	for i, d := range v.arr {
 		here := index(where, i)
 		if d.kind == kindString && d.s == anyDay {
+			// ANY is every day, so with any other entry some day is
+			// listed twice, whichever comes first.
+			if i > 0 {
+				p.ps.add(here, "ANY is listed twice or with a day it already covers")
+				return nil, nil, false
+			}
 			for k := range set {
 				set[k] = true
 			}
@@ -342,6 +348,10 @@ func (p *parser) days(v *value, where string) ([]time.Weekday, []string, bool) {
 			return nil, nil, false
 		}
 		if set[wd] {
+			if text[0] == anyDay {
+				p.ps.add(here, d.s+" is listed twice: ANY already covers it")
+				return nil, nil, false
+			}
 			p.ps.add(here, d.s+" is listed twice")
 			return nil, nil, false
 		}
