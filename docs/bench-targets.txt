@@ -1,6 +1,7 @@
 # Benchmark name prefix, target ns/op. Derived in docs/PLAN.md section 8.6
 # from the 1000-5000 drone load model of spec 05 section 1. Reported by
-# scripts/bench-report.sh, not gated.
+# scripts/bench-report.sh, not gated. Matched by the first prefix that
+# fits, so a longer name goes above its shorter prefix.
 BenchmarkDecodeMessage      1000
 BenchmarkDecodePack         3000
 BenchmarkEncodeMessage      1000
@@ -17,6 +18,7 @@ BenchmarkTrackerTake        3000
 BenchmarkSelectAltitude     200
 BenchmarkApplies            1000
 BenchmarkParseDocument      2000000
+BenchmarkJudgeZoneCandidates 1000
 BenchmarkJudgeZone          5000
 BenchmarkJudgeHeight        500
 BenchmarkEvaluate           2000
