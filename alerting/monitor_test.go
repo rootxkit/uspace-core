@@ -1306,3 +1306,22 @@ func TestRefusalEventsAreRateLimited(t *testing.T) {
 		t.Fatalf("capacity refusal %+v", ev.Refused)
 	}
 }
+
+func TestOutOfOrderOlderPlacementCountsBoth(t *testing.T) {
+	// Review should-fix: an older placement with a SourceTS is caught by
+	// the T-03 order first; it is a T-06 rejection too and counted so.
+	m := NewMonitor(DefaultConfig())
+	m.Observe(at("A", 0, 10, 2), 2)
+	m.Observe(at("A", -10, 10, 1), 2)
+	if o, h := m.Counters().Get(CounterRejectedOutOfOrder), m.Counters().Get(CounterRejectedOlderPlacement); o != 1 || h != 1 {
+		t.Fatalf("rejected_out_of_order = %d, rejected_older_than_held = %d", o, h)
+	}
+	// Twin: older on the source clock but placed later is out of order
+	// only by T-03's rule, not older than held: admitted, counted nowhere.
+	later := at("A", 10, 10, 3)
+	later.SourceTS = ptr(1.5)
+	m.Observe(later, 3)
+	if o, h := m.Counters().Get(CounterRejectedOutOfOrder), m.Counters().Get(CounterRejectedOlderPlacement); o != 1 || h != 1 {
+		t.Fatalf("after a later placement: %d, %d", o, h)
+	}
+}

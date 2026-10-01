@@ -46,6 +46,11 @@ func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) 
 	if known && tr.SourceTS != nil {
 		if e := ac.orderOf(src); e != nil && *tr.SourceTS < e.sourceTS && tr.CapturedAtS <= e.capturedAtS {
 			m.counters.Inc(CounterRejectedOutOfOrder)
+			if tr.CapturedAtS < ac.placedS {
+				// Also older than held (T-06): counted there too, so that
+				// counter covers every T-06 rejection.
+				m.counters.Inc(CounterRejectedOlderPlacement)
+			}
 			return nil, false
 		}
 	}
