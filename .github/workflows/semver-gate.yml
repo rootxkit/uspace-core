@@ -1,0 +1,47 @@
+name: semver-gate
+
+# The semver gate of spec 00 §6.3 (docs/RELEASING.md): a pull request that
+# changes vectors/testdata/*.json needs a CHANGELOG line with the clause,
+# a new lab pin and, for a behaviour change, a new major heading and the
+# label behaviour-change.
+#
+# Its own workflow, not a job of ci.yml, because the label is read from
+# github.event.pull_request.labels: adding or removing a label must start
+# a fresh run with a fresh event (a re-run replays the old labels), and in
+# ci.yml the labeled/unlabeled events would rerun every job. Pull requests
+# only, no path filter (a required check must always report), no schedule;
+# about ten seconds.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semver-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  semver-gate:
+    name: semver-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The merge base with the target branch and the release tags.
+          fetch-depth: 0
+      - name: the gate's own fixture tests (both ways)
+        run: scripts/test-release-gates.sh
+      - name: gate this pull request
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          rc=0
+          scripts/semver-gate.sh "$BASE_REF" > gate.txt 2>&1 || rc=$?
+          cat gate.txt
+          { echo '```'; cat gate.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
