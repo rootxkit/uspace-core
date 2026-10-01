@@ -117,7 +117,7 @@ Each entry names the work package and the vectors it affects.
   alert. `Active` ranks by severity and `LoSStartS`. Passes
   `alert_lifecycle.json` 28/28 with one counted override:
   `disarming-clears-as-stale` clears as `landed` (owner decision, plan
-  ง11 gap 4). [WP-10]
+  ยง11 gap 4). [WP-10]
 
 ## [0.1.0] - unreleased (G-M1)
 
