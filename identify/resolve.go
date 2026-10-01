@@ -130,7 +130,9 @@ func ResolveRemoteID(reg Lookup, id RemoteIDIdentity) core.Identification {
 // projection does not hold yet is registered (the read may predate the
 // registration); one the projection marks as not in the registry is
 // unknown_operator / not_in_registry; a suspended or revoked UAS or owner
-// is suspended. Serial and operator number are the registry's. An empty
+// is suspended; a UAS whose owner the projection does not hold is
+// unknown_operator / owner_unknown, as for a broadcast (no vector pins a
+// bound aircraft with a missing owner). Serial and operator number are the registry's. An empty
 // drone id names no aircraft and is unknown_operator / not_in_registry.
 //
 // A nil reg is unknown_operator / registry_unavailable, not registered:
@@ -168,11 +170,16 @@ func ResolveBound(reg Lookup, droneID string) core.Identification {
 			id.OperatorReg = nonEmpty(regnum.PublicPart(o.RegistrationNumber))
 		}
 	}
-	if status, reason, bad := notInGoodStanding(uas, owner); bad {
+	switch status, reason, bad := notInGoodStanding(uas, owner); {
+	case bad:
 		id.Status, id.Reason = status, reason
-		return id
+	case uas.OperatorID != nil && owner == nil:
+		// The binding proves which aircraft this is, not that its owner
+		// is in good standing: as for a broadcast.
+		id.Status, id.Reason = core.IdentUnknownOperator, core.ReasonOwnerUnknown
+	default:
+		id.Status, id.Reason = core.IdentRegistered, core.ReasonSessionBinding
 	}
-	id.Status, id.Reason = core.IdentRegistered, core.ReasonSessionBinding
 	return id
 }
 

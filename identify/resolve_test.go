@@ -241,8 +241,10 @@ func TestResolveBound(t *testing.T) {
 			wantIdent{core.IdentRegistered, core.ReasonSessionBinding, ptr("SN-A"), ptr(regActive), nil, false, ptr("d-active"), au}},
 		{"fleet", reg, "d-fleet",
 			wantIdent{core.IdentRegistered, core.ReasonSessionBinding, ptr("SN-F"), nil, nil, false, ptr("d-fleet"), au}},
-		{"owner-unknown-binding-is-the-proof", reg, "d-owner-missing",
-			wantIdent{core.IdentRegistered, core.ReasonSessionBinding, ptr("SN-OM"), nil, nil, false, ptr("d-owner-missing"), au}},
+		// The binding proves identity, not the owner's standing. Its twin
+		// is "registered" above: an owner the projection holds.
+		{"owner-unknown", reg, "d-owner-missing",
+			wantIdent{core.IdentUnknownOperator, core.ReasonOwnerUnknown, ptr("SN-OM"), nil, nil, false, ptr("d-owner-missing"), au}},
 		{"not-yet-projected", reg, "d-new",
 			wantIdent{core.IdentRegistered, core.ReasonSessionBinding, nil, nil, nil, false, ptr("d-new"), au}},
 		{"not-in-registry", reg, "d-orphan",
