@@ -120,39 +120,73 @@ func FuzzResolveRemoteID(f *testing.F) {
 	})
 }
 
-// FuzzJudgeFleet: any times, positions and thresholds, seeded from the
-// vectors, give a verdict without a panic, and never a conflict without a
-// finite distance beyond the threshold.
+// maxFuzzRows bounds the rows one fuzz input builds.
+const maxFuzzRows = 16
+
+// fuzzRows builds a mix of rows from one byte each: the low two bits pick
+// live, backlog, captured too long before receipt, or broadcast; bit 2
+// drops the position; the high bits move the heard time back in 0.5 s
+// steps, so some rows fall out of the live window.
+func fuzzRows(kinds []byte, pos core.LatLon, liveForS, nowS float64) []identify.AuthRow {
+	if len(kinds) > maxFuzzRows {
+		kinds = kinds[:maxFuzzRows]
+	}
+	rows := make([]identify.AuthRow, 0, len(kinds))
+	for _, k := range kinds {
+		p := pos
+		r := identify.AuthRow{HeardAtS: nowS - float64(k>>3)/2, Pos: &p}
+		switch k & 3 {
+		case 1:
+			r.Backlog = true
+		case 2:
+			r.BehindS = liveForS + 1
+		case 3:
+			r.Source = "network_remote_id"
+		}
+		if k&4 != 0 {
+			r.Pos = nil
+		}
+		rows = append(rows, r)
+	}
+	return rows
+}
+
+// FuzzJudgeFleet: any mix of live, history and broadcast rows, times,
+// positions and thresholds, seeded from the vectors, gives a verdict
+// without a panic. History is counted exactly, a quiet link is as_ours,
+// and a conflict always has a finite distance beyond the threshold.
 func FuzzJudgeFleet(f *testing.F) {
 	for _, raw := range vectorInputs(f, "fleet_match.json") {
 		var in vecFleetInput
 		if json.Unmarshal(raw, &in) != nil {
 			continue
 		}
-		var row vecRelayRow
-		if len(in.RelayRows) > 0 {
-			row = in.RelayRows[0]
-		}
 		var lat, lon float64
-		hasPos := row.LatDeg != nil && row.LonDeg != nil
-		if hasPos {
-			lat, lon = *row.LatDeg, *row.LonDeg
+		kinds := make([]byte, 0, len(in.RelayRows))
+		for _, r := range in.RelayRows {
+			var k byte
+			switch {
+			case r.Source != "":
+				k = 3
+			case r.Backlog:
+				k = 1
+			case r.BehindS > in.LiveForS:
+				k = 2
+			}
+			if r.LatDeg == nil || r.LonDeg == nil {
+				k |= 4
+			} else {
+				lat, lon = *r.LatDeg, *r.LonDeg
+			}
+			kinds = append(kinds, k)
 		}
-		f.Add(in.SerialIsOurs, row.HeardAtS, lat, lon, hasPos, row.Backlog, row.BehindS, row.Source != "",
-			in.BroadcastPosition[0], in.BroadcastPosition[1], in.NowS, in.LiveForS, in.SpoofDistanceM)
+		f.Add(in.SerialIsOurs, kinds, lat, lon, in.BroadcastPosition[0], in.BroadcastPosition[1],
+			in.NowS, in.LiveForS, in.SpoofDistanceM)
 	}
-	f.Fuzz(func(t *testing.T, ours bool, heardS, lat, lon float64, hasPos, backlog bool, behindS float64, broadcastRow bool,
-		bLat, bLon, nowS, liveForS, spoofM float64,
-	) {
-		row := identify.AuthRow{HeardAtS: heardS, Backlog: backlog, BehindS: behindS}
-		if hasPos {
-			row.Pos = &core.LatLon{LatDeg: lat, LonDeg: lon}
-		}
-		if broadcastRow {
-			row.Source = "remote_id"
-		}
+	f.Add(true, []byte{0, 1, 2, 3, 4, 5, 6, 7, 0x50, 0x08}, 41.7151, 44.8271, 41.7196, 44.8271, 1.0, 5.0, 300.0)
+	f.Fuzz(func(t *testing.T, ours bool, kinds []byte, lat, lon, bLat, bLon, nowS, liveForS, spoofM float64) {
 		in := identify.FleetInput{
-			SerialIsOurs: ours, Rows: []identify.AuthRow{row, row},
+			SerialIsOurs: ours, Rows: fuzzRows(kinds, core.LatLon{LatDeg: lat, LonDeg: lon}, liveForS, nowS),
 			Broadcast: core.LatLon{LatDeg: bLat, LonDeg: bLon}, NowS: nowS, LiveForS: liveForS, SpoofDistanceM: spoofM,
 		}
 		got := identify.JudgeFleet(in)
@@ -165,11 +199,33 @@ func FuzzJudgeFleet(f *testing.F) {
 		default:
 			t.Fatalf("verdict %q", got.Verdict)
 		}
-		if got.IgnoredHistoryRows < 0 || got.IgnoredHistoryRows > len(in.Rows) {
-			t.Fatalf("ignored %d of %d rows", got.IgnoredHistoryRows, len(in.Rows))
+		if !ours {
+			if got.Verdict != identify.VerdictStranger {
+				t.Fatalf("not ours but %q", got.Verdict)
+			}
+			return
 		}
-		if !ours && got.Verdict != identify.VerdictStranger {
-			t.Fatalf("not ours but %q", got.Verdict)
+		if got.Problem != nil {
+			if got.Verdict != identify.VerdictWithhold {
+				t.Fatalf("a problem with verdict %q", got.Verdict)
+			}
+			return
+		}
+		history, live := 0, false
+		for _, r := range in.Rows {
+			switch {
+			case r.Source != "":
+			case r.Backlog || !(r.BehindS <= liveForS):
+				history++
+			case nowS-r.HeardAtS <= liveForS:
+				live = true
+			}
+		}
+		if got.IgnoredHistoryRows != history {
+			t.Fatalf("ignored %d history rows, counted %d", got.IgnoredHistoryRows, history)
+		}
+		if live == (got.Verdict == identify.VerdictAsOurs) {
+			t.Fatalf("live %v but verdict %q", live, got.Verdict)
 		}
 	})
 }
