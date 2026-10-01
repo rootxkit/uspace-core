@@ -406,6 +406,10 @@ func TestNewIssuerAndIssueRefusals(t *testing.T) {
 		{"no ttl", "op", testAud, nil, 0, "ttl"},
 		{"empty scope", "op", testAud, []string{""}, time.Minute, "scope"},
 		{"scope with a space", "op", testAud, []string{"a b"}, time.Minute, "scope"},
+		{"scope with a tab", "op", testAud, []string{"a\tb"}, time.Minute, "scope"},
+		{"scope with a no-break space", "op", testAud, []string{"rid.read\u00a0uss.admin"}, time.Minute, "scope"},
+		{"scope with an em space", "op", testAud, []string{"rid.read\u2003uss.admin"}, time.Minute, "scope"},
+		{"scope with a next-line", "op", testAud, []string{"rid.read\u0085uss.admin"}, time.Minute, "scope"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := is.Issue(tc.sub, tc.aud, tc.scopes, tc.ttl, testNow)
@@ -414,6 +418,32 @@ func TestNewIssuerAndIssueRefusals(t *testing.T) {
 				t.Fatalf("got %v, want a FieldError on %s", err, tc.field)
 			}
 		})
+	}
+}
+
+// The accepted twin of the white-space refusals: a scope with non-ASCII
+// letters but no white space is issued and arrives as one scope.
+func TestIssueScopeWithoutWhiteSpaceRoundTrips(t *testing.T) {
+	is, err := NewIssuer(testIss, testKey(), testKID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopes := []string{"rid.read", "zones.\u10e0\u10d4\u10d3"} // Georgian letters
+	tok, err := is.Issue("op", testAud, scopes, time.Minute, testNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := staticVerifier(t, is.JWKS(), func() time.Time { return testNow }).Verify(context.Background(), tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Scopes) != 2 || c.Scopes[0] != scopes[0] || c.Scopes[1] != scopes[1] {
+		t.Errorf("scopes %q, want %q", c.Scopes, scopes)
+	}
+	// The same scope joined by a no-break space, which the verifier would
+	// split on, never reaches a token.
+	if _, err := is.Issue("op", testAud, []string{"rid.read\u00a0uss.admin"}, time.Minute, testNow); err == nil {
+		t.Error("a scope with a no-break space was issued")
 	}
 }
 

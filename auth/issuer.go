@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -79,7 +80,9 @@ func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now 
 		return "", core.Fieldf("ttl", "%s is shorter than one second", ttl)
 	}
 	for _, s := range scopes {
-		if s == "" || strings.ContainsAny(s, " \t\r\n") {
+		// The verifier splits scope with strings.Fields (unicode.IsSpace),
+		// so any rune it splits on would turn one scope into two.
+		if s == "" || strings.IndexFunc(s, unicode.IsSpace) >= 0 {
 			return "", core.Fieldf("scope", "%s is empty or contains white space", quoteShort(s))
 		}
 	}
