@@ -580,10 +580,24 @@ func TestCoverAntimeridian(t *testing.T) {
 }
 
 func TestCoverEdges(t *testing.T) {
-	// MaxLon == 180 includes the last column once, and not the first.
+	// MaxLon == 180 includes the last column once and column 0, where Of
+	// places a position on the 180 meridian.
 	got, err := Cover(geodesy.BBox{MinLat: 0.05, MinLon: 179.95, MaxLat: 0.05, MaxLon: 180}, Level5, MaxCoverDefault)
+	if err != nil || len(got) != 2 || got[0].String() != "c5:900:0" || got[1].String() != "c5:900:3599" {
+		t.Fatalf("Cover(179.95..180) = %v, %v; want c5:900:0 and c5:900:3599", got, err)
+	}
+	// Its twin: a box stopping short of 180 does not take column 0.
+	got, err = Cover(geodesy.BBox{MinLat: 0.05, MinLon: 179.95, MaxLat: 0.05, MaxLon: 179.99}, Level5, MaxCoverDefault)
 	if err != nil || len(got) != 1 || got[0].String() != "c5:900:3599" {
-		t.Fatalf("Cover(179.95..180) = %v, %v; want only c5:900:3599", got, err)
+		t.Fatalf("Cover(179.95..179.99) = %v, %v; want only c5:900:3599", got, err)
+	}
+	// The coordinator's case: Of(41.7, 180) is c5:1317:0 and is covered.
+	if c := mustOf(t, ll(41.7, 180), Level5); c.String() != "c5:1317:0" {
+		t.Fatalf("Of(41.7, 180) = %s", c)
+	}
+	got, err = Cover(geodesy.BBox{MinLat: 41.7, MinLon: 179.9, MaxLat: 41.7, MaxLon: 180}, Level5, 2)
+	if err != nil || !containsID(got, ID{Level5, 1317, 0}) {
+		t.Fatalf("Cover(41.7, 179.9..180) = %v, %v; want c5:1317:0 in it", got, err)
 	}
 	// The whole globe at c3: every cell once, 90 in the last row.
 	got, err = Cover(geodesy.BBox{MinLat: -90, MinLon: -180, MaxLat: 90, MaxLon: 180}, Level3, 180*360)
@@ -693,5 +707,79 @@ func TestFloorCorrection(t *testing.T) {
 	// the exported API, answer as documented.
 	if clamp(-1, 9) != 0 || clamp(10, 9) != 9 || clamp(4, 9) != 4 || Level(4).prefix() != "" {
 		t.Fatal("clamp or prefix misbehaves")
+	}
+}
+
+func containsID(ids []ID, c ID) bool {
+	for _, x := range ids {
+		if x == c {
+			return true
+		}
+	}
+	return false
+}
+
+// The invariant: every position p inside a box has Of(p) in Cover(box),
+// for boxes on the meridians -180, 0 and 180, across the antimeridian,
+// and at random; the points include every corner and both meridian
+// spellings of 180.
+func TestCoverHoldsEveryCellOfItsPositions(t *testing.T) {
+	rng := rand.New(rand.NewPCG(7, 11))
+	boxes := []geodesy.BBox{
+		{MinLat: 41.7, MinLon: 179.9, MaxLat: 41.8, MaxLon: 180},
+		{MinLat: 41.7, MinLon: -180, MaxLat: 41.8, MaxLon: -179.9},
+		{MinLat: -90, MinLon: 179, MaxLat: 90, MaxLon: 180},
+		{MinLat: 0, MinLon: 180, MaxLat: 1, MaxLon: 180},
+		{MinLat: 0, MinLon: 179.95, MaxLat: 0.3, MaxLon: -179.95},
+		{MinLat: 0, MinLon: 180, MaxLat: 0.3, MaxLon: -180},
+		{MinLat: 89.9, MinLon: -0.1, MaxLat: 90, MaxLon: 0.1},
+		{MinLat: 41, MinLon: 40, MaxLat: 43.6, MaxLon: 46.7},
+	}
+	for range 300 {
+		// Boxes up to 10 degrees a side, so that a c5 cover stays small;
+		// one in four reaches 180, and those that pass it cross.
+		s := rng.Float64()*170 - 90
+		n := math.Min(90, s+rng.Float64()*10)
+		w := rng.Float64()*360 - 180
+		e := w + rng.Float64()*10
+		switch {
+		case rng.IntN(4) == 0:
+			w, e = 180-rng.Float64()*10, 180
+		case e > 180:
+			e -= 360
+		}
+		boxes = append(boxes, geodesy.BBox{MinLat: s, MinLon: w, MaxLat: n, MaxLon: e})
+	}
+	for _, b := range boxes {
+		lons := []float64{b.MinLon, b.MaxLon}
+		lats := []float64{b.MinLat, b.MaxLat, (b.MinLat + b.MaxLat) / 2}
+		for range 20 {
+			if b.MinLon <= b.MaxLon {
+				lons = append(lons, b.MinLon+rng.Float64()*(b.MaxLon-b.MinLon))
+			} else {
+				lons = append(lons, b.MinLon+rng.Float64()*(180-b.MinLon), -180+rng.Float64()*(b.MaxLon+180))
+			}
+		}
+		if b.MaxLon == 180 || b.MinLon > b.MaxLon {
+			lons = append(lons, 180, -180)
+		}
+		for _, l := range []Level{Level5, Level3} {
+			cover, err := Cover(b, l, 1_000_000)
+			if err != nil {
+				t.Fatalf("Cover(%+v, %d): %v", b, l, err)
+			}
+			got := make(map[ID]bool, len(cover))
+			for _, c := range cover {
+				got[c] = true
+			}
+			for _, lat := range lats {
+				for _, lon := range lons {
+					c := mustOf(t, ll(lat, lon), l)
+					if !got[c] {
+						t.Fatalf("Of(%v, %v) = %s is not in Cover(%+v)", lat, lon, c, b)
+					}
+				}
+			}
+		}
 	}
 }

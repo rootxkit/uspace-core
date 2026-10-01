@@ -48,7 +48,9 @@
 // and not in latitude (the first and last rows have five). Cover gives
 // every cell a geodesy.BBox intersects, with a box crossing the
 // antimeridian (MinLon > MaxLon) split in two and a hard bound on the
-// count checked before anything is allocated (E-10).
+// count checked before anything is allocated (E-10). Every position
+// inside a box has its cell in the cover: a box reaching MaxLon == 180
+// also holds column 0, where Of places the 180 meridian.
 //
 // No I/O, no goroutines, no state; nothing here panics on any input.
 // Invalid positions, levels, names and boxes are refused with a

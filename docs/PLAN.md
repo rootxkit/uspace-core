@@ -189,7 +189,7 @@ func (c ID) Children() []ID                          // c3 -> its 100 c5 in row-
 func (c ID) Ring1() []ID                             // up to 8 neighbours, longitude wrapped, 5 on the polar rows, sorted
 func (c ID) BBox() geodesy.BBox                      // [south, north) x [west, east); east 180 for the last column
 func (c ID) Centre() core.LatLon
-func Cover(b geodesy.BBox, l Level, maxCells int) ([]ID, error) // sorted; antimeridian split; > maxCells -> *core.FieldError "bbox", nil
+func Cover(b geodesy.BBox, l Level, maxCells int) ([]ID, error) // sorted; antimeridian split; MaxLon 180 adds column 0; > maxCells -> *core.FieldError "bbox", nil
 const MaxCoverDefault = 10_000
 ```
 

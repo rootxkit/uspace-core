@@ -328,9 +328,10 @@ type colRange struct{ lo, hi int }
 
 // Cover returns every cell of level l that intersects b (edges
 // included), sorted by (LatIdx, LonIdx). A box with MinLon > MaxLon
-// crosses the antimeridian and is covered as two longitude ranges; a
-// box reaching MaxLon == 180 includes the last column once (not the
-// first). The box must have finite edges, latitudes in [-90, 90] with
+// crosses the antimeridian and is covered as two longitude ranges. A
+// box reaching MaxLon == 180 includes the last column once and also
+// column 0, because Of places a position on the 180 meridian in column
+// 0 (180 is -180): every position p inside b has Of(p) in Cover(b). The box must have finite edges, latitudes in [-90, 90] with
 // MinLat <= MaxLat, and longitudes in [-180, 180].
 //
 // The count is computed before anything is allocated: more than
@@ -359,8 +360,15 @@ func Cover(b geodesy.BBox, l Level, maxCells int) ([]ID, error) {
 	var ranges [2]colRange
 	var nr int
 	if b.MinLon <= b.MaxLon {
-		ranges[0] = colRange{l.coverLonIndex(b.MinLon), l.coverLonIndex(b.MaxLon)}
+		main := colRange{l.coverLonIndex(b.MinLon), l.coverLonIndex(b.MaxLon)}
 		nr = 1
+		ranges[0] = main
+		if b.MaxLon == 180 && main.lo > 0 {
+			// Of maps longitude 180 to -180, column 0: a box that reaches
+			// the meridian holds positions of that column too.
+			ranges[0], ranges[1] = colRange{0, 0}, main
+			nr = 2
+		}
 	} else {
 		// Crossing the antimeridian: [-180, MaxLon] then [MinLon, 180].
 		west, east := l.coverLonIndex(b.MaxLon), l.coverLonIndex(b.MinLon)
