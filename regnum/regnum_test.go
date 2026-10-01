@@ -81,6 +81,15 @@ func TestPublicPart(t *testing.T) {
 		{" FIN87astrdge12k8-XY1 ", "FIN87astrdge12k8", "FIN87ASTRDGE12K8"},
 		{"GEOabcd1234efgh-x9z", "GEOabcd1234efgh", "GEOABCD1234EFGH"},
 		{"FIN87astrdge12k8", "FIN87astrdge12k8", "FIN87ASTRDGE12K8"},
+		// The head is matched ignoring its case: a lower-case prefix
+		// before the secret is still a registration number.
+		{"geoabcd1234efgh-x9z", "geoabcd1234efgh", "GEOABCD1234EFGH"},
+		{" fin87astrdge12k8-XY1", "fin87astrdge12k8", "FIN87ASTRDGE12K8"},
+		// Only ASCII letters are folded: U+017F upper-cases to S but is no
+		// registration character.
+		{"GEOſbcd1234efgh-x9z", "GEOſbcd1234efgh-x9z", "GEOSBCD1234EFGH-X9Z"},
+		// Case-folding does not loosen G-04: "geo-op" is no number either.
+		{"geo-op-abc", "geo-op-abc", "GEO-OP-ABC"},
 		{"fin87astrdge12k8", "fin87astrdge12k8", "FIN87ASTRDGE12K8"},
 		{"GEO-OP-SITL", "GEO-OP-SITL", "GEO-OP-SITL"},
 		// G-04 pitfall corrected: "GEO-OP" is no registration number.
@@ -160,6 +169,7 @@ func FuzzPublicPart(f *testing.F) {
 	for _, s := range []string{
 		"FIN87astrdge12k8-xyz", " FIN87astrdge12k8-XY1 ", "FIN87astrdge12k8", "GEO-OP-SITL",
 		"GEO-OP-ABC", "FIN87astrdge12k8-", "-xyz", "FIN87astrdge12k8-x!z", "fin87astrdge12k8", "FIN87", "",
+		"geoabcd1234efgh-x9z", "geo-op-abc",
 	} {
 		f.Add(s)
 	}
@@ -173,8 +183,9 @@ func FuzzPublicPart(f *testing.F) {
 			t.Fatalf("not idempotent: %q -> %q -> %q", s, p, PublicPart(p))
 		}
 		if p != strings.TrimSpace(s) {
-			// Something was stripped: the rest is a valid registration number.
-			if err := defaultValidator.Validate(p); err != nil {
+			// Something was stripped: the rest is a valid registration
+			// number, ignoring the case of its ASCII letters.
+			if err := defaultValidator.Validate(asciiUpper(p)); err != nil {
 				t.Fatalf("stripped %q to %q, which is invalid: %v", s, p, err)
 			}
 		}

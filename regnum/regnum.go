@@ -94,11 +94,14 @@ func (v *Validator) Validate(value string) error {
 // value trimmed, without the EU secret part. The secret part is a hyphen
 // and exactly three ASCII letters or digits at the end, and it is
 // stripped only when what stands before the hyphen is itself a
-// registration number under the configured pattern. Anything else is
-// returned trimmed and otherwise unchanged:
+// registration number under the configured pattern, as given or with its
+// ASCII letters upper-cased (a broadcast's case is not significant: the
+// compare key is upper case anyway). Anything else is returned trimmed
+// and otherwise unchanged:
 //
 //	"FIN87astrdge12k8-xyz"   -> "FIN87astrdge12k8"
 //	" FIN87astrdge12k8-XY1 " -> "FIN87astrdge12k8"
+//	"geoabcd1234efgh-x9z"    -> "geoabcd1234efgh" (compares as GEOABCD1234EFGH)
 //	"FIN87astrdge12k8-x!z"   -> unchanged (not alphanumeric)
 //	"GEO-OP-SITL", "-xyz"    -> unchanged
 //	"GEO-OP-ABC"             -> unchanged ("GEO-OP" is no registration number)
@@ -111,10 +114,23 @@ func (v *Validator) Validate(value string) error {
 func (v *Validator) PublicPart(value string) string {
 	value = strings.TrimSpace(value)
 	head, ok := splitSecret(value)
-	if !ok || len(head) > MaxLen || !v.re.MatchString(head) {
+	if !ok || len(head) > MaxLen || !v.re.MatchString(head) && !v.re.MatchString(asciiUpper(head)) {
 		return value
 	}
 	return head
+}
+
+// asciiUpper upper-cases ASCII letters only. strings.ToUpper would also
+// map letters such as U+017F (long s) onto ASCII ones, letting a
+// non-ASCII head pass an ASCII pattern.
+func asciiUpper(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'a' && c <= 'z' {
+			b[i] = c - ('a' - 'A')
+		}
+	}
+	return string(b)
 }
 
 // CompareKey is what identification compares (spec 06 §5): the public
