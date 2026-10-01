@@ -1,0 +1,32 @@
+# Benchmark name prefix, target ns/op. Derived in docs/PLAN.md section 8.6
+# from the 1000-5000 drone load model of spec 05 section 1. Reported by
+# scripts/bench-report.sh, not gated.
+BenchmarkDecodeMessage      1000
+BenchmarkDecodePack         3000
+BenchmarkEncodeMessage      1000
+BenchmarkVincentyInverse    2000
+BenchmarkHaversine          200
+BenchmarkLocalOffset        200
+BenchmarkInPolygon100       2000
+BenchmarkInCircle           2000
+BenchmarkTileElevation      300
+BenchmarkUndulation         300
+BenchmarkPlaceBroadcast     500
+BenchmarkPlaceNetwork       500
+BenchmarkTrackerTake        3000
+BenchmarkSelectAltitude     200
+BenchmarkApplies            1000
+BenchmarkParseDocument      2000000
+BenchmarkJudgeZone          5000
+BenchmarkJudgeHeight        500
+BenchmarkEvaluate           2000
+BenchmarkGridNeighbours     20000
+BenchmarkMonitorObserve     50000
+BenchmarkResolveBroadcast   2000
+BenchmarkResolveRemoteID    2000
+BenchmarkJudgeFleet         2000
+BenchmarkCompareKey         300
+BenchmarkValidateCTA        300
+BenchmarkQuery              300
+BenchmarkVerifyReceiver     5000
+BenchmarkVerifyJWT          200000

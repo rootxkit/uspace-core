@@ -1,0 +1,20 @@
+# gitleaks configuration for uspace-core: the default rules plus one
+# narrow allowlist. Read by gitleaks (and gitleaks-action) from the
+# repository root.
+title = "uspace-core"
+
+[extend]
+useDefault = true
+
+# The vendored knowledge vectors carry EU operator registration numbers in
+# their public form ("compare_key": the number with the three secret
+# characters already stripped, LESSONS G-05). The generic-api-key rule
+# reads the key name as a credential. These values are public by design
+# and the files may only change through scripts/sync-vectors.sh, so the
+# allowlist is limited to that key in those files.
+[allowlist]
+description = "public operator numbers in the vendored vectors"
+condition = "AND"
+paths = ['''^vectors/testdata/[^/]+\.json$''']
+regexTarget = "line"
+regexes = ['''"compare_key"\s*:''']
