@@ -206,6 +206,10 @@ type Raise struct {
 // raised, and an active alert must be neither refreshed nor cleared,
 // Z-09, C-09); or neither, which is "judged and clear". A Result is
 // never clear because something was unknown.
+//
+// The zero Result{} is "judged and clear". Code that builds a Result
+// (a wrapper, a cache, an error path) must therefore never return the
+// zero value for "could not judge": set NotEvaluated and its Reasons.
 type Result struct {
 	Raise          *Raise
 	NotEvaluated   bool

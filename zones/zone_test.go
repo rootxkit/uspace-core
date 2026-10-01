@@ -137,6 +137,15 @@ func TestFromED269Refusals(t *testing.T) {
 			gz.Geometry[0].UpperLimit = f64(100)
 			gz.Geometry[0].UpperRef = "QNH"
 		}, "geometry[0].upperLimit"},
+		{"lower equal to upper, same reference", func(gz *ed269.GeoZone) {
+			gz.Geometry[0].LowerLimit = f64(500)
+			gz.Geometry[0].UpperLimit = f64(500)
+		}, "geometry[0].upperLimit"},
+		{"lower above upper, same reference", func(gz *ed269.GeoZone) {
+			gz.Geometry[0].LowerLimit = f64(700)
+			gz.Geometry[0].UpperLimit = f64(500)
+		}, "geometry[0].upperLimit"},
+		{"upper 0 with no lower", func(gz *ed269.GeoZone) { gz.Geometry[0].UpperLimit = f64(0) }, "geometry[0].upperLimit"},
 		{"open ring", func(gz *ed269.GeoZone) {
 			r := gz.Geometry[0].Projection.Rings[0]
 			gz.Geometry[0].Projection.Rings[0] = r[:len(r)-1]
@@ -393,4 +402,21 @@ func TestNeedsTerrainAndGeoid(t *testing.T) {
 			t.Errorf("%s: NeedsGeoid %v, want %v", tc.name, got, tc.geoid)
 		}
 	}
+}
+
+// The pair of the limit-order refusals: a lower limit below the upper one
+// in the same reference, or above it in another reference, is accepted
+// (an AGL floor and an AMSL ceiling are not comparable without terrain).
+func TestFromED269AcceptsOrderedLimits(t *testing.T) {
+	gz := geoZone()
+	gz.Geometry[0].LowerLimit = f64(500)
+	gz.Geometry[0].UpperLimit = f64(500.1)
+	mustZone(t, gz)
+	gz.Geometry[0].LowerRef = core.RefAGL
+	gz.Geometry[0].LowerLimit = f64(700)
+	mustZone(t, gz)
+	gz = geoZone()
+	gz.Geometry[0].LowerLimit = f64(0)
+	gz.Geometry[0].UpperLimit = f64(0.5)
+	mustZone(t, gz)
 }

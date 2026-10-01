@@ -55,7 +55,8 @@ var maxRingVertices = ed269.DefaultLimits.MaxRingVertices
 // circle's radius. A zone it cannot judge safely is refused with a
 // *core.FieldError naming the field: a missing or unknown restriction,
 // a limit that is not finite or whose reference is not AGL, AMSL or
-// WGS84, a ring that ValidRing refuses, a circle without a valid centre
+// WGS84, a lower limit not below an upper one in the same reference or
+// an upper limit of 0 with no lower one (as ed269.ParseZone refuses), a ring that ValidRing refuses, a circle without a valid centre
 // or a finite positive radius, and an empty applicability list.
 func FromED269(z *ed269.GeoZone) (*Zone, error) {
 	if z == nil {
@@ -85,6 +86,12 @@ func FromED269(z *ed269.GeoZone) (*Zone, error) {
 	}
 	if out.Upper, err = limitOf(vol.UpperM(), vol.UpperRef, "geometry[0].upperLimit"); err != nil {
 		return nil, err
+	}
+	if out.Lower != nil && out.Upper != nil && out.Lower.Ref == out.Upper.Ref && out.Lower.ValueM >= out.Upper.ValueM {
+		return nil, core.Fieldf("geometry[0].upperLimit", "is not above lowerLimit")
+	}
+	if out.Lower == nil && out.Upper != nil && out.Upper.ValueM == 0 {
+		return nil, core.Fieldf("geometry[0].upperLimit", "is 0 with no lowerLimit; a volume from the surface to 0 is empty")
 	}
 	proj := vol.Projection
 	switch proj.Type {
