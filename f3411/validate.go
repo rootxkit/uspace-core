@@ -24,7 +24,10 @@ import (
 //     SpecialTrackDirection; vertical_speed, when given, within
 //     MaxAbsVerticalSpeed of 0 or SpecialVerticalSpeed.
 //   - RIDAircraftPosition: lat, when given, -90 to 90; lng, when given,
-//     -180 to 180; accuracy_h and accuracy_v, when given, in their
+//     -180 to 180. Both are optional in the OpenAPI file and stay so here:
+//     a position without them is accepted, and LatLon then returns NaN
+//     for the missing coordinate, so a consumer must check
+//     LatLon().Valid() before using it. accuracy_h and accuracy_v, when given, in their
 //     enumerations; height.reference, when height is given, one of
 //     RIDHeightReference. alt, pressure_altitude and height.distance are
 //     finite by decoding; the OpenAPI file gives them no range.

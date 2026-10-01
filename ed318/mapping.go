@@ -313,14 +313,20 @@ func (r *restorer) texts(member string, s *string) []Text {
 		r.used = map[string]bool{}
 	}
 	r.used[member] = true
+	// The ED-269 string is the zone's text in lang (FromED269's language
+	// for the ED-269 texts): the carried entry in that language must
+	// still be it, or the text was edited since ToED269 carried the list.
 	for _, t := range list {
-		if s != nil && t.Text != nil && *t.Text == *s {
-			return list
+		if strings.EqualFold(t.Lang, r.lang) {
+			if s != nil && t.Text != nil && *t.Text == *s {
+				return list
+			}
+			break
 		}
 	}
 	if r.err == nil {
 		r.err = core.Fieldf(r.path+".extendedProperties."+ED269Key+"."+textsKey+"."+member,
-			"no longer holds the ED-269 text of %s; the text was edited after ToED269 carried the languages", member)
+			"has no entry in %s that is the ED-269 text of %s: the text was edited after ToED269 carried the languages, or FromED269 was not given the language ToED269 wrote", r.lang, member)
 	}
 	return nil
 }
@@ -667,6 +673,15 @@ func toZone(f *Feature, path, lang string) (map[string]any, error) {
 		return nil, err
 	}
 	m["applicability"] = periods
+	if kept != nil {
+		// A carried feet radius belongs to a circle under a feet layer;
+		// anywhere else it is refused, never silently ignored.
+		parts := f.Geometry.parts()
+		g := parts[0]
+		if len(parts) != 1 || g.Type != GeometryPoint || g.Layer == nil || g.Layer.Uom == nil || *g.Layer.Uom != UomFeet {
+			return nil, core.Fieldf(here+".extendedProperties."+ED269Key+".radius", "carries a radius in feet, but the zone is not one circle under a feet layer")
+		}
+	}
 	vol, err := toVolume(f.Geometry, path+".geometry", kept)
 	if err != nil {
 		return nil, err

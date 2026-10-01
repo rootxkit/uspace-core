@@ -406,16 +406,17 @@ func TestFromED269CarriedTextsRefusals(t *testing.T) {
 		ext   string
 		field string
 	}{
-		"edited text":     {`{"ed269":{"texts":{"name":[{"text":"old","lang":"en"},{"text":"ძველი","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
-		"duplicate lang":  {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"EN"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
-		"long lang":       {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"en-GB-x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
-		"long text":       {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"` + strings.Repeat("y", 201) + `","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].text"},
-		"empty list":      {`{"ed269":{"texts":{"name":[]}}}`, "features[0].extendedProperties.ed269.texts.name"},
-		"absent member":   {`{"ed269":{"texts":{"zoneAuthority[3].name":[{"text":"x","lang":"en"}]}}}`, "features[0].extendedProperties.ed269.texts.zoneAuthority[3].name"},
-		"other member":    {`{"ed269":{"names":{}}}`, "features[0].extendedProperties.ed269.names"},
-		"texts not lists": {`{"ed269":{"texts":[]}}`, "features[0].extendedProperties.ed269.texts"},
-		"no lang":         {`{"ed269":{"texts":{"name":[{"text":"x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[0].lang"},
-		"not an object":   {`{"ed269":1}`, "features[0].extendedProperties.ed269"},
+		"edited text":              {`{"ed269":{"texts":{"name":[{"text":"old","lang":"en"},{"text":"ძველი","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"text in another language": {`{"ed269":{"texts":{"name":[{"text":"x","lang":"en"},{"text":"Test prohibited square with a hole","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"duplicate lang":           {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"EN"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
+		"long lang":                {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"y","lang":"en-GB-x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].lang"},
+		"long text":                {`{"ed269":{"texts":{"name":[{"text":"Test prohibited square with a hole","lang":"en"},{"text":"` + strings.Repeat("y", 201) + `","lang":"ka"}]}}}`, "features[0].extendedProperties.ed269.texts.name[1].text"},
+		"empty list":               {`{"ed269":{"texts":{"name":[]}}}`, "features[0].extendedProperties.ed269.texts.name"},
+		"absent member":            {`{"ed269":{"texts":{"zoneAuthority[3].name":[{"text":"x","lang":"en"}]}}}`, "features[0].extendedProperties.ed269.texts.zoneAuthority[3].name"},
+		"other member":             {`{"ed269":{"names":{}}}`, "features[0].extendedProperties.ed269.names"},
+		"texts not lists":          {`{"ed269":{"texts":[]}}`, "features[0].extendedProperties.ed269.texts"},
+		"no lang":                  {`{"ed269":{"texts":{"name":[{"text":"x"}]}}}`, "features[0].extendedProperties.ed269.texts.name[0].lang"},
+		"not an object":            {`{"ed269":1}`, "features[0].extendedProperties.ed269"},
 	}
 	for name, c := range cases {
 		d := *base
@@ -592,4 +593,54 @@ func TestFromED269OutputAlwaysParses(t *testing.T) {
 		t.Errorf("accepted %d, refused %d: the property ran one branch only", accepted, refused)
 	}
 	t.Logf("%d accepted and parsed, %d refused by FromED269", accepted, refused)
+}
+
+// A carried feet radius under a metres layer, or on a polygon, is refused,
+// not ignored; under the feet layer it is used (E-01:
+// TestFTCircleRoundTripsExactly).
+func TestKeptRadiusOnlyUnderFeet(t *testing.T) {
+	carried := json.RawMessage(`{"radius":{"value":1640,"uom":"FT"}}`)
+	for name, mut := range map[string]func(fc *FeatureCollection){
+		"metres layer": func(fc *FeatureCollection) {
+			m := UomMetres
+			fc.Features[0].Geometry.Layer.Uom = &m
+		},
+		"polygon": func(fc *FeatureCollection) {
+			fc.Features[0].Geometry = Geometry{Type: GeometryPolygon, Rings: [][]core.LatLon{{
+				{LatDeg: 41.7, LonDeg: 44.8}, {LatDeg: 41.7, LonDeg: 44.82}, {LatDeg: 41.72, LonDeg: 44.82}, {LatDeg: 41.7, LonDeg: 44.8}}},
+				Layer: fc.Features[0].Geometry.Layer}
+		},
+	} {
+		fc, err := FromED269(only(validED269(t), "TST002"), Metadata{}, "en-GB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fc.Features[0].Properties.ExtendedProperties[ED269Key] = carried
+		mut(fc)
+		_, err = ToED269(fc, "")
+		var fe *core.FieldError
+		if !errors.As(err, &fe) || fe.Field != "features[0].properties.extendedProperties.ed269.radius" {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// The carried entry in FromED269's language must be the ED-269 text: the
+// same text under another language is not a match.
+func TestCarriedTextComparedInItsLanguage(t *testing.T) {
+	fc, err := FromED269(only(validED269(t), "TST001"), Metadata{}, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fc.Features[0].Properties.Name = []Text{txt("Test prohibited square with a hole", "en-GB"), txt("სატესტო", "ka-GE")}
+	doc, err := ToED269(fc, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FromED269(doc, Metadata{}, "en-GB"); err != nil {
+		t.Errorf("read back in the language written: %v", err)
+	}
+	if _, err := FromED269(doc, Metadata{}, "ka-GE"); err == nil {
+		t.Error("read back as Georgian, the English text matched the Georgian entry")
+	}
 }
