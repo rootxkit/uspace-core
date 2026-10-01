@@ -289,14 +289,14 @@
                 "extendedProperties": {
                   "source": "test",
                   "revision": 3,
-                  "ed269": {"restrictionConditions": ["Notify 24 h before"], "uSpaceClass": "EUROCONTROL"}
+                  "ed269": {"restrictionConditions": ["Notify 24 h before"], "uSpaceClass": "EUROCONTROL", "radius": {"value": 1640, "uom": "FT"}}
                 }
               }
             }
           ]
         }
       },
-      "why": "ED-269 to ED-318 (spec 02 F1): restriction REQ_AUTHORISATION becomes type REQ_AUTHORIZATION, type becomes variant, applicability becomes limitedApplicability, texts become one-language lists, FT stays the layer's ft and the circle radius becomes metres (1640 ft = 499.872 m, exactly with 0.3048). The ED-269 fields ED-318 has no member for (uSpaceClass, a list of restrictionConditions) travel in extendedProperties.ed269 and return to ED-269 unchanged."
+      "why": "ED-269 to ED-318 (spec 02 F1): restriction REQ_AUTHORISATION becomes type REQ_AUTHORIZATION, type becomes variant, applicability becomes limitedApplicability, texts become one-language lists, FT stays the layer's ft and the circle radius becomes metres (1640 ft = 499.872 m, exactly with 0.3048). The ED-269 fields ED-318 has no member for (uSpaceClass, a list of restrictionConditions) and the radius as published in feet travel in extendedProperties.ed269 and return to ED-269 unchanged; the ED-318 radius is always metres (owner decision on PR #16)."
     },
     {
       "name": "applies-between-daylight-events",
