@@ -10,4 +10,4 @@ synced_at = 2026-10-01
 # Files written in this repository (WP-11 jwt_verify.json, WP-12
 # ed318_roundtrip.json) until the lab merges them; excluded from the
 # online diff and from the utm_commit check, still in SHA256SUMS.
-local_files =
+local_files = jwt_verify.json
