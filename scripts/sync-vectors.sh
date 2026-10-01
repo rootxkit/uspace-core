@@ -38,13 +38,26 @@ for f in "$src"/*.json; do
 done
 
 local_files="$(sed -n 's/^local_files *= *//p' "$dst/VERSION" 2>/dev/null || true)"
+# A local file the lab now carries is the lab's from here on: it is copied
+# like the others and leaves local_files.
+still_local=""
+for lf in $local_files; do
+  if [[ -e "$src/$lf" ]]; then
+    echo "upstreamed: $lf is now in the lab and leaves local_files"
+  else
+    still_local="${still_local:+$still_local }$lf"
+  fi
+done
+local_files="$still_local"
 for f in "$dst"/*.json; do
   keep=0
   for lf in $local_files; do [[ "$(basename "$f")" == "$lf" ]] && keep=1; done
   [[ "$keep" == "1" ]] || rm -f "$f"
 done
 cp "$src"/*.json "$dst"/
-(cd "$dst" && sha256sum ./*.json | sed 's#\./##' > SHA256SUMS)
+# Text-mode lines ("<hash>  <file>") on every platform: a Windows
+# sha256sum marks binary mode with "*", which would churn the file.
+(cd "$dst" && sha256sum ./*.json | sed -E 's#^([0-9a-f]+) [ *]\./#\1  #' > SHA256SUMS)
 cat > "$dst/VERSION" <<EOF
 # Pinned source of the vendored knowledge vectors. Written by
 # scripts/sync-vectors.sh; never edited by hand. CI compares the files
