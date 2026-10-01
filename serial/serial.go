@@ -139,8 +139,18 @@ func Normalize(serial string) string {
 }
 
 // FoldKey is the case-insensitive lookup key of a serial: Normalize, then
-// upper case. An exact match on Normalize wins; callers accept a match on
-// FoldKey only when exactly one aircraft has it (G-05).
+// its ASCII letters upper-cased. An exact match on Normalize wins; callers
+// accept a match on FoldKey only when exactly one aircraft has it (G-05).
+// Only ASCII is folded: strings.ToUpper maps look-alikes such as U+017F
+// (long s) onto S, which would let a non-ASCII spelling fold onto one of
+// our serials. A non-ASCII character is kept as it is and never meets an
+// ASCII key.
 func FoldKey(serial string) string {
-	return strings.ToUpper(Normalize(serial))
+	b := []byte(Normalize(serial))
+	for i, c := range b {
+		if c >= 'a' && c <= 'z' {
+			b[i] = c - ('a' - 'A')
+		}
+	}
+	return string(b)
 }
