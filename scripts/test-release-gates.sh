@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fixture tests for scripts/semver-gate.sh.
+# Fixture tests for scripts/semver-gate.sh and scripts/release-check.sh.
 # Each case builds a small git repository in a temp dir, makes one change
 # on a branch, runs the gate and checks both the exit status and the
 # reason it prints. Every failing case has a passing twin (LESSONS E-01).
@@ -10,6 +10,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 gate="$here/semver-gate.sh"
+release="$here/release-check.sh"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 passed=0
@@ -220,6 +221,63 @@ echo "not json" > "$repo/vectors/testdata/cpa.json"; pin lab2
 changelog "## [Unreleased]" "" "- vectors: cpa.json (ED-269 §2)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
 commit
 expect fail "cannot compare by case"
+
+echo "== release-check"
+
+# rcheck NAME WANT PHRASE TAG [--notes]: run release-check on the fixture.
+rcheck() {
+  local name="$1" want="$2" phrase="$3" tag="$4" mode="${5:---no-vectors}" out rc=0
+  out="$(cd "$repo" && "$release" "$mode" "$tag" 2>&1)" || rc=$?
+  check "$name" "$want" "$rc" "$phrase" "$out"
+}
+release_repo() { # release_repo NAME MODULE LOCAL_FILES CHANGELOG-LINES...
+  repo="$work/$1"
+  local module="$2" lf="$3"
+  shift 3
+  mkdir -p "$repo/vectors/testdata"
+  git init -q "$repo"
+  printf 'module %s\n\ngo 1.27\n' "$module" > "$repo/go.mod"
+  pin lab1 "$lf"
+  changelog "$@"
+  g add -A
+  g commit -q -m release
+}
+released=("## [Unreleased]" "" "## [1.0.0] (G-M3)" "" "- API declared stable" "" "## [0.2.0] - 2026-10-01" "" "- older")
+
+release_repo top-heading github.com/x/m "" "${released[@]}"
+rcheck top-heading pass "is releasable" v1.0.0
+rcheck top-heading-mismatch fail "top CHANGELOG version heading is [1.0.0], not [1.0.1]" v1.0.1
+rcheck top-heading-notes pass "- API declared stable" v1.0.0 --notes
+
+release_repo heading-unreleased github.com/x/m "" "## [1.0.0] - unreleased" "" "- x"
+rcheck heading-unreleased fail "still says unreleased" v1.0.0
+
+release_repo unreleased-entries github.com/x/m "" "## [Unreleased]" "" "- pending" "" "## [1.0.0]" "" "- x"
+rcheck unreleased-entries fail "entries are left under [Unreleased]" v1.0.0
+
+release_repo empty-section github.com/x/m "" "## [1.0.0]" "" "## [0.2.0]" "" "- x"
+rcheck empty-section fail "the [1.0.0] section is empty" v1.0.0
+
+release_repo local-files-v1 github.com/x/m "ed318_roundtrip.json" "${released[@]}"
+rcheck local-files-v1 fail "from v1 every vector comes from uspace-lab" v1.0.0
+
+release_repo local-files-v0 github.com/x/m "ed318_roundtrip.json" "## [0.3.0]" "" "- x"
+rcheck local-files-v0 pass "allowed before v1" v0.3.0
+
+release_repo v2-without-suffix github.com/x/m "" "## [2.0.0]" "" "- vectors: cpa.json (ED-269 §2)"
+rcheck v2-without-suffix fail "must end in /v2" v2.0.0
+
+release_repo v2-with-suffix github.com/x/m/v2 "" "## [2.0.0]" "" "- vectors: cpa.json (ED-269 §2)"
+rcheck v2-with-suffix pass "ends in /v2" v2.0.0
+
+release_repo v1-with-suffix github.com/x/m/v2 "" "${released[@]}"
+rcheck v1-with-suffix fail "has a major suffix" v1.0.0
+
+# A tag that exists must point at HEAD.
+release_repo tag-not-head github.com/x/m "" "${released[@]}"
+g tag -a v1.0.0 -m v1.0.0
+echo x > "$repo/extra"; g add -A; g commit -q -m later
+rcheck tag-not-head fail "not at HEAD" v1.0.0
 
 echo "== $passed passed, $failed failed"
 [[ "$failed" == 0 ]]

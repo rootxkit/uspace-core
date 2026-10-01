@@ -89,19 +89,11 @@ jobs:
           go test -count=1 -run 'Vector|Manifest|Version' -v ./... 2>&1 | tee vectors.log | grep -E '^(--- (FAIL|SKIP)|FAIL|ok)' || { echo "vector tests failed"; exit 1; }
       - name: every manifest file has a vector test
         # G-M1 done-when: each file in the manifest is loaded by the package
-        # that owns it. Until a work package lands, its file is reported as
-        # a warning; on a release tag a missing file fails the build.
-        run: |
-          missing=0
-          while read -r file pkg; do
-            if ! grep -rq "\"$file\"" "$pkg"/*_test.go 2>/dev/null; then
-              echo "::warning::$file is not yet loaded by a test in $pkg/"
-              missing=1
-            fi
-          done < <(go run ./scripts/manifest-list)
-          if [ "$missing" = "1" ] && [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
-            echo "a release tag needs every vector file covered"; exit 1
-          fi
+        # that owns it. A miss is a warning on branches; on a release tag it
+        # fails the build (the tag job runs the same script strictly).
+        env:
+          STRICT: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+        run: scripts/manifest-coverage.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -176,3 +168,46 @@ jobs:
           # Pinned (and in the Makefile): .gitleaks.toml relies on how this
           # version applies allowlists. Change both together.
           GITLEAKS_VERSION: "8.24.3"
+
+  # Runs only for a v* tag, after every gating job above passed on the
+  # tagged commit (go test -race ./..., the vectors, fuzz, vulnerabilities,
+  # secrets). docs/RELEASING.md says how a release is cut.
+  tag:
+    name: tag
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-vet-lint, test-race, vectors, fuzz-smoke, govulncheck, gitleaks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Branches and tags, so release-check.sh can see that the tag is
+          # on main or release/vN.
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: release gate
+        # The tag matches the top CHANGELOG heading, nothing is left under
+        # Unreleased, the module path fits the major, local_files is empty
+        # from v1, every manifest file has a vector test, and the vendored
+        # vectors match the lab pin.
+        env:
+          LAB_READ_TOKEN: ${{ secrets.LAB_READ_TOKEN }}
+        run: scripts/release-check.sh "$GITHUB_REF_NAME"
+      - name: the published module runs its vectors from a consumer
+        run: scripts/consumer-check.sh "$GITHUB_REF_NAME"
+      - name: GitHub release from the CHANGELOG section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/release-check.sh --notes "$GITHUB_REF_NAME" > notes.md
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists; left unchanged"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
+              --title "uspace-core $GITHUB_REF_NAME" --notes-file notes.md
+          fi

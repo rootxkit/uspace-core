@@ -17,7 +17,8 @@ GITLEAKS_VERSION      ?= v8.24.3
 GOVULNCHECK_VERSION   ?= v1.8.0
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
-        check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck geoid ci clean
+        check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck geoid \
+        semver-gate release-gates consumer-check release-check ci clean
 
 all: ci
 
@@ -93,6 +94,25 @@ geoid:
 	scripts/fetch-geoid.sh $(GEOID_DIR)
 	USPACE_GEOID_DIR=$(GEOID_DIR) $(GO) test -count=1 -v ./geoid/ ./terrain/
 
+# The semver gate of a pull request against BASE (docs/RELEASING.md); CI
+# passes the pull request's labels in PR_LABELS.
+BASE ?= origin/main
+semver-gate:
+	scripts/semver-gate.sh $(BASE)
+
+# The fixture tests of semver-gate.sh and release-check.sh (bash, git, jq).
+release-gates:
+	scripts/test-release-gates.sh
+
+# The vectors run from a scratch consumer module (VERSION= a published tag
+# to fetch it from GitHub instead of replacing it with this checkout).
+consumer-check:
+	GO=$(GO) scripts/consumer-check.sh $(VERSION)
+
+# What the tag job checks before a release: make release-check TAG=v1.0.0
+release-check:
+	GO=$(GO) scripts/release-check.sh $(TAG)
+
 fuzz-smoke:
 	FUZZTIME=$(FUZZTIME) GO=$(GO) scripts/fuzz-smoke.sh
 
@@ -100,7 +120,7 @@ bench:
 	$(GO) test -run '^$$' -bench . -benchmem -count=1 $(PKGS) | tee bench.txt
 	scripts/bench-report.sh bench.txt
 
-ci: build vet lint race vectors check-vectors fuzz-smoke vulncheck
+ci: build vet lint race vectors check-vectors release-gates fuzz-smoke vulncheck
 
 clean:
 	rm -f coverage.out bench.txt
