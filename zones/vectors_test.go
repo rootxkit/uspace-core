@@ -114,6 +114,9 @@ func TestVectorsZonesVertical(t *testing.T) {
 			}
 			res = JudgeVertical(z, ac, env, pol)
 		}
+		if (res.NotEvaluated || res.LimitNotJudged) && res.Reason == "" {
+			t.Errorf("not evaluated or not judged without a reason: %+v", res)
+		}
 		var counters core.Counters
 		res.Count(&counters)
 		for name, want := range exp.Counters {

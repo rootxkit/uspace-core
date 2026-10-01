@@ -378,3 +378,38 @@ func TestResultCount(t *testing.T) {
 		}
 	}
 }
+
+// S-37 is open in the lab: a WGS84 limit without the geoid is not
+// evaluated (prohibited-wgs84-no-geoid-not-evaluated pins raised [] and
+// one zone_checks_not_evaluated), never a warning yet. It must still be
+// distinguishable from clear: NotEvaluated, reason no_geoid, counted.
+func TestWGS84WithoutGeoidIsNotEvaluatedNotClear(t *testing.T) {
+	pol := DefaultPolicy()
+	z := zoneOf(core.ZoneProhibited, nil, limit(600, core.RefWGS84))
+	for name, env := range map[string]Env{
+		"no geoid":       noTerrain,
+		"NaN undulation": {UndulationM: f64(math.NaN())},
+	} {
+		r := JudgeVertical(z, geodetic(550), env, pol)
+		notEvaluated(t, name, r, ReasonNoGeoid)
+		if r.LimitNotJudged {
+			t.Errorf("%s: limit_not_judged is for AGL only (S-37 not built)", name)
+		}
+		var c core.Counters
+		r.Count(&c)
+		if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneLimitNotJudged) != 0 {
+			t.Errorf("%s: counters %v", name, c.Snapshot())
+		}
+	}
+	// The pair: with the geoid the same aircraft is judged, inside and
+	// outside, and neither is counted.
+	geoid := Env{UndulationM: f64(15)}
+	r := JudgeVertical(z, geodetic(550), geoid, pol)
+	raised(t, "with geoid, inside", r, core.SeverityCritical)
+	isClear(t, "with geoid, above", JudgeVertical(z, geodetic(590), geoid, pol))
+	var c core.Counters
+	r.Count(&c)
+	if len(c.Names()) != 0 {
+		t.Errorf("with geoid: counted %v", c.Snapshot())
+	}
+}
