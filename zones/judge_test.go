@@ -2,6 +2,7 @@ package zones
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -193,8 +194,10 @@ func TestNonFiniteEnvironmentIsUnknown(t *testing.T) {
 	}
 
 	wgs := zoneOf(core.ZoneProhibited, nil, limit(600, core.RefWGS84))
+	wgsCond := zoneOf(core.ZoneConditional, nil, limit(600, core.RefWGS84))
 	for _, u := range []float64{math.NaN(), math.Inf(1)} {
-		notEvaluated(t, "non-finite undulation", JudgeVertical(wgs, geodetic(550), Env{UndulationM: f64(u)}, pol), ReasonNoGeoid)
+		limitNotJudged(t, "non-finite undulation", JudgeVertical(wgs, geodetic(550), Env{UndulationM: f64(u)}, pol), []string{"WGS84"}, ReasonNoGeoid)
+		notEvaluated(t, "CONDITIONAL, non-finite undulation", JudgeVertical(wgsCond, geodetic(550), Env{UndulationM: f64(u)}, pol), ReasonNoGeoid)
 	}
 	raised(t, "finite undulation", JudgeVertical(wgs, geodetic(550), Env{UndulationM: f64(15)}, pol), core.SeverityCritical)
 }
@@ -213,19 +216,38 @@ func TestJudgedLimitDecidesOverUnjudged(t *testing.T) {
 	// An AGL limit judged as excluding decides over an unjudged WGS84 one.
 	z2 := zoneOf(core.ZoneProhibited, limit(50, core.RefAGL), limit(600, core.RefWGS84))
 	isClear(t, "below the AGL floor, no geoid", JudgeVertical(z2, geodetic(520), ground500, pol))
-	notEvaluated(t, "above the AGL floor, no geoid", JudgeVertical(z2, geodetic(560), ground500, pol), ReasonNoGeoid)
+	limitNotJudged(t, "above the AGL floor, no geoid", JudgeVertical(z2, geodetic(560), ground500, pol), []string{"WGS84"}, ReasonNoGeoid)
 }
 
-func TestUnjudgedAGLAndWGS84IsNotEvaluated(t *testing.T) {
+// limitNotJudged checks the Z-09 warning: severity warning, the flags,
+// not_judged naming refs, exactly the reasons, and the counter.
+func limitNotJudged(t *testing.T, name string, r Result, refs []string, reasons ...Reason) {
+	t.Helper()
+	if r.Raise == nil || r.NotEvaluated || !r.LimitNotJudged || r.Reasons != ReasonsOf(reasons...) {
+		t.Errorf("%s: got %+v, want a limit_not_judged warning for %v", name, r, ReasonsOf(reasons...))
+		return
+	}
+	d := r.Raise.Detail
+	if r.Raise.Severity != core.SeverityWarning || d.LimitNotJudged == nil || !*d.LimitNotJudged ||
+		d.VerticalKnown == nil || *d.VerticalKnown || !slices.Equal(d.NotJudged, refs) {
+		t.Errorf("%s: raise %+v, want warning not judged %v", name, *r.Raise, refs)
+	}
+	var c core.Counters
+	r.Count(&c)
+	if c.Get(CounterZoneNotEvaluated) != 0 || c.Get(CounterZoneLimitNotJudged) != 1 {
+		t.Errorf("%s: counters %v", name, c.Snapshot())
+	}
+}
+
+// Z-09 with S-37: no terrain and no geoid, a PROHIBITED zone warns and
+// names both references; a CONDITIONAL one is not evaluated.
+func TestUnjudgedAGLAndWGS84Warns(t *testing.T) {
 	pol := DefaultPolicy()
 	z := zoneOf(core.ZoneProhibited, limit(50, core.RefAGL), limit(600, core.RefWGS84))
 	r := JudgeVertical(z, geodetic(560), noTerrain, pol)
-	notEvaluated(t, "AGL and WGS84 both unknown", r, ReasonNoTerrain, ReasonNoGeoid)
-	var c core.Counters
-	r.Count(&c)
-	if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneLimitNotJudged) != 0 {
-		t.Errorf("counters %v", c.Snapshot())
-	}
+	limitNotJudged(t, "AGL and WGS84 both unknown", r, []string{"AGL", "WGS84"}, ReasonNoTerrain, ReasonNoGeoid)
+	cond := zoneOf(core.ZoneConditional, limit(50, core.RefAGL), limit(600, core.RefWGS84))
+	notEvaluated(t, "CONDITIONAL, both unknown", JudgeVertical(cond, geodetic(560), noTerrain, pol), ReasonNoTerrain, ReasonNoGeoid)
 	// The presence pair: with both known it is judged.
 	raised(t, "both known", JudgeVertical(z, geodetic(560), Env{Ground: GroundKnown, GroundM: 500, UndulationM: f64(15)}, pol), core.SeverityCritical)
 }
@@ -380,33 +402,38 @@ func TestResultCount(t *testing.T) {
 	}
 }
 
-// S-37 is open in the lab: a WGS84 limit without the geoid is not
-// evaluated (prohibited-wgs84-no-geoid-not-evaluated pins raised [] and
-// one zone_checks_not_evaluated), never a warning yet. It must still be
-// distinguishable from clear: NotEvaluated, reason no_geoid, counted.
-func TestWGS84WithoutGeoidIsNotEvaluatedNotClear(t *testing.T) {
+// S-37 (owner decision): a WGS84 limit without the geoid is treated as an
+// AGL limit without the DEM. PROHIBITED and REQ_AUTHORIZATION warn with
+// limit_not_judged and reason no_geoid, counted; CONDITIONAL stays not
+// evaluated, since a warning would exceed an info zone's severity. The
+// pair: with the geoid the same aircraft is judged, and nothing counted.
+func TestWGS84WithoutGeoidWarns(t *testing.T) {
 	pol := DefaultPolicy()
-	z := zoneOf(core.ZoneProhibited, nil, limit(600, core.RefWGS84))
-	for name, env := range map[string]Env{
-		"no geoid":       noTerrain,
-		"NaN undulation": {UndulationM: f64(math.NaN())},
-	} {
-		r := JudgeVertical(z, geodetic(550), env, pol)
-		notEvaluated(t, name, r, ReasonNoGeoid)
-		if r.LimitNotJudged {
-			t.Errorf("%s: limit_not_judged is for AGL only (S-37 not built)", name)
-		}
-		var c core.Counters
-		r.Count(&c)
-		if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneLimitNotJudged) != 0 {
-			t.Errorf("%s: counters %v", name, c.Snapshot())
+	for _, typ := range []core.ZoneType{core.ZoneProhibited, core.ZoneReqAuthorization} {
+		z := zoneOf(typ, nil, limit(600, core.RefWGS84))
+		for name, env := range map[string]Env{
+			"no geoid":       noTerrain,
+			"NaN undulation": {UndulationM: f64(math.NaN())},
+		} {
+			limitNotJudged(t, string(typ)+", "+name, JudgeVertical(z, geodetic(550), env, pol), []string{"WGS84"}, ReasonNoGeoid)
 		}
 	}
-	// The pair: with the geoid the same aircraft is judged, inside and
-	// outside, and neither is counted.
+	cond := zoneOf(core.ZoneConditional, nil, limit(600, core.RefWGS84))
+	r := JudgeVertical(cond, geodetic(550), noTerrain, pol)
+	notEvaluated(t, "CONDITIONAL, no geoid", r, ReasonNoGeoid)
+	var cc core.Counters
+	r.Count(&cc)
+	if cc.Get(CounterZoneNotEvaluated) != 1 || cc.Get(CounterZoneLimitNotJudged) != 0 {
+		t.Errorf("CONDITIONAL: counters %v", cc.Snapshot())
+	}
+
+	z := zoneOf(core.ZoneProhibited, nil, limit(600, core.RefWGS84))
 	geoid := Env{UndulationM: f64(15)}
-	r := JudgeVertical(z, geodetic(550), geoid, pol)
-	raised(t, "with geoid, inside", r, core.SeverityCritical)
+	r = JudgeVertical(z, geodetic(550), geoid, pol)
+	d := raised(t, "with geoid, inside", r, core.SeverityCritical).Detail
+	if r.LimitNotJudged || r.Reasons != 0 || d.LimitNotJudged != nil || d.NotJudged != nil || d.AltHAEM == nil {
+		t.Errorf("with geoid: %+v, detail %+v", r, d)
+	}
 	isClear(t, "with geoid, above", JudgeVertical(z, geodetic(590), geoid, pol))
 	var c core.Counters
 	r.Count(&c)
@@ -439,8 +466,8 @@ func TestReasonsCarryEveryMissingReference(t *testing.T) {
 	z := zoneOf(core.ZoneProhibited, limit(50, core.RefAGL), limit(600, core.RefWGS84))
 	r := JudgeVertical(z, geodetic(560), noTerrain, pol)
 	want := ReasonsOf(ReasonNoTerrain, ReasonNoGeoid)
-	if !r.NotEvaluated || r.Reasons != want {
-		t.Fatalf("got %+v, want not evaluated for %v", r, want)
+	if !r.LimitNotJudged || r.Reasons != want {
+		t.Fatalf("got %+v, want limit not judged for %v", r, want)
 	}
 	if !r.Reasons.Has(ReasonNoTerrain) || !r.Reasons.Has(ReasonNoGeoid) || r.Reasons.Has(ReasonGroundUnknown) || r.Reasons.Has("") {
 		t.Errorf("Has: %v", r.Reasons)

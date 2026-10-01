@@ -25,52 +25,7 @@ type vecExpected struct {
 	ProblemContains *string `json:"problem_contains"`
 	Public          *string `json:"public"`
 	CompareKey      *string `json:"compare_key"`
-}
-
-// deviation is a vector case this module deliberately answers differently
-// from the predecessor that generated it. The vector file is unchanged
-// (it is regenerated in uspace-lab, never edited); the test checks that
-// the recorded value is the old rule's and that the module returns the
-// corrected one.
-type deviation struct {
-	lesson, why        string
-	public, compareKey string
-}
-
-var knownDeviations = map[string]deviation{
-	"public-part-GEO-OP-ABC": {
-		lesson: "G-04",
-		why: "the predecessor stripped any three-alphanumeric tail after the last hyphen; " +
-			"the EU secret part follows a public registration number, and GEO-OP is none " +
-			"under the configured pattern, so nothing is stripped",
-		public:     "GEO-OP-ABC",
-		compareKey: "GEO-OP-ABC",
-	},
-}
-
-// legacyPublicPart is the predecessor's rule (utm common/uas_identity.py
-// public_registration_number), kept here only to show that a deviation's
-// recorded value is that rule's output and not a different disagreement.
-func legacyPublicPart(value string) string {
-	s := strings.TrimSpace(value)
-	i := strings.LastIndex(s, "-")
-	if i <= 0 {
-		return s
-	}
-	tail := s[i+1:]
-	if len(tail) != 3 {
-		return s
-	}
-	for _, r := range tail {
-		if !isAlnum(r) {
-			return s
-		}
-	}
-	return s[:i]
-}
-
-func isAlnum(r rune) bool {
-	return r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+	FoldKey         *string `json:"fold_key"`
 }
 
 func str(p *string) string {
@@ -119,7 +74,6 @@ func TestVectorsSerialsAndRegistration(t *testing.T) {
 		t.Fatalf("cta2063_rule changed: %q (MaxLen %d)", rule, serial.MaxLen)
 	}
 	ran := map[string]int{}
-	deviated := 0
 	f.Run(t, func(t *testing.T, c vectors.Case) {
 		var in vecInput
 		var exp vecExpected
@@ -139,39 +93,41 @@ func TestVectorsSerialsAndRegistration(t *testing.T) {
 			if exp.Public == nil || exp.CompareKey == nil {
 				t.Fatal("case lacks public or compare_key")
 			}
-			wantPublic, wantKey := *exp.Public, *exp.CompareKey
-			if d, ok := knownDeviations[c.Name]; ok {
-				deviated++
-				if legacyPublicPart(str(in.Value)) != wantPublic {
-					t.Fatalf("the recorded value %q is not the old rule's output; the deviation needs review", wantPublic)
-				}
-				t.Logf("KNOWN DEVIATION (%s): vector says %q/%q, this module returns %q/%q: %s",
-					d.lesson, wantPublic, wantKey, d.public, d.compareKey, d.why)
-				wantPublic, wantKey = d.public, d.compareKey
+			if in.Pattern == nil {
+				t.Fatal("case lacks pattern: the strip depends on it (G-04)")
 			}
-			public, key := regnum.Public(str(in.Value))
+			v, err := regnum.NewValidator(*in.Pattern)
+			if err != nil {
+				t.Fatalf("pattern %q: %v", *in.Pattern, err)
+			}
+			wantPublic, wantKey := *exp.Public, *exp.CompareKey
+			public, key := v.Public(str(in.Value))
 			if public != wantPublic {
 				t.Errorf("public %q, want %q", public, wantPublic)
 			}
 			if key != wantKey {
 				t.Errorf("compare_key %q, want %q", key, wantKey)
 			}
-			if regnum.CompareKey(str(in.Value)) != key || regnum.PublicPart(str(in.Value)) != public {
+			if v.CompareKey(str(in.Value)) != key || v.PublicPart(str(in.Value)) != public {
 				t.Error("Public disagrees with PublicPart/CompareKey")
+			}
+		case "serial_fold":
+			if exp.FoldKey == nil {
+				t.Fatal("case lacks fold_key")
+			}
+			if got := serial.FoldKey(str(in.Serial)); got != *exp.FoldKey {
+				t.Errorf("fold_key %q, want %q", got, *exp.FoldKey)
 			}
 		default:
 			t.Fatalf("unknown kind %q", in.Kind)
 		}
 		ran[in.Kind]++
 	})
-	want := map[string]int{"cta2063": 12, "serial_for_class": 9, "registration_number": 4, "public_registration_number": 8}
+	want := map[string]int{"cta2063": 12, "serial_for_class": 9, "registration_number": 4, "public_registration_number": 12, "serial_fold": 4}
 	for k, n := range want {
 		if ran[k] != n {
 			t.Errorf("kind %s: ran %d cases, want %d", k, ran[k], n)
 		}
 	}
-	if deviated != len(knownDeviations) {
-		t.Errorf("%d known deviations met, %d declared", deviated, len(knownDeviations))
-	}
-	t.Logf("ran %v; %d known deviation(s)", ran, deviated)
+	t.Logf("ran %v", ran)
 }

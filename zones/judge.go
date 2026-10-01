@@ -82,7 +82,7 @@ const (
 	// altitude or the zone is not usable.
 	CounterZoneNotEvaluated = "zone_checks_not_evaluated"
 	// CounterZoneLimitNotJudged counts zone raises that warn because an
-	// AGL limit could not be judged (Z-09).
+	// AGL or WGS84 limit could not be judged (Z-09, S-37).
 	CounterZoneLimitNotJudged = "zone_limits_not_judged"
 	// CounterHeightNotEvaluated counts height-limit checks not evaluated
 	// (unknown ground, no terrain, no altitude). It is not one of the
@@ -182,8 +182,9 @@ type Detail struct {
 	// includes the aircraft as indicated, false when only the band widened
 	// by the pressure margin does.
 	WithinBand *bool `json:"within_band,omitempty"`
-	// LimitNotJudged and NotJudged: an AGL limit could not be judged and
-	// the zone warns instead (Z-09); NotJudged lists the references.
+	// LimitNotJudged and NotJudged: an AGL or WGS84 limit could not be
+	// judged and the zone warns instead (Z-09); NotJudged lists the
+	// references.
 	LimitNotJudged *bool    `json:"limit_not_judged,omitempty"`
 	NotJudged      []string `json:"not_judged,omitempty"`
 	// HeightAGLM is the height over the ground when an AGL limit (or the
@@ -333,7 +334,7 @@ func atMostWarning(sev core.Severity) core.Severity {
 }
 
 // warnsUnjudged reports whether a zone type warns, rather than stays
-// silent, when only its AGL limit cannot be judged (Z-09).
+// silent, when a limit cannot be judged (Z-09, S-37).
 func warnsUnjudged(t core.ZoneType) bool {
 	return t == core.ZoneProhibited || t == core.ZoneReqAuthorization
 }
@@ -353,11 +354,13 @@ func ptr[T any](v T) *T { return &v }
 // whatever an unjudged one would have said.
 //
 // When a needed height is unknown (Z-09): a PROHIBITED or
-// REQ_AUTHORIZATION zone whose only unjudged references are AGL raises a
-// warning with vertical_known false, limit_not_judged true and
-// not_judged ["AGL"] (LimitNotJudged; a false warning beats a missed
-// critical); any other zone (CONDITIONAL, or a WGS84 limit without the
-// geoid) is NotEvaluated.
+// REQ_AUTHORIZATION zone raises a warning with vertical_known false,
+// limit_not_judged true and not_judged naming each reference it could not
+// judge, AGL without the ground or WGS84 without the geoid (S-37, owner
+// decision: a limit that cannot be judged is never silent there; a false
+// warning beats a missed critical). Reasons says what was missing. A
+// CONDITIONAL zone is NotEvaluated instead: a warning would exceed the
+// zone's own severity when policy puts it at info.
 //
 // On a pressure altitude (R-09) every judged limit is widened by
 // pol.PressureUncertaintyM each way: inside the band as indicated keeps
@@ -457,7 +460,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	if len(notJudged) == 0 {
 		return res
 	}
-	if !warnsUnjudged(z.Type) || len(notJudged) != 1 || notJudged[0] != string(core.RefAGL) {
+	if !warnsUnjudged(z.Type) || reasons.Has(ReasonInvalidZone) {
 		return Result{NotEvaluated: true, Reasons: reasons}
 	}
 	res.LimitNotJudged = true

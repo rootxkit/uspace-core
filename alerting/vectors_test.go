@@ -18,7 +18,7 @@ import (
 )
 
 // alertLifecycleCases is the number of cases in alert_lifecycle.json.
-const alertLifecycleCases = 28
+const alertLifecycleCases = 35
 
 // tolDetail mirrors the header's `tolerance."detail floats"`: the old
 // monitor rounded every detail float to 0.1 and the monitor keeps full
@@ -37,30 +37,6 @@ const (
 var extraDetailKeys = map[string][]string{
 	KindConflict: {"los_start_s"},
 }
-
-// reasonOverride is a step whose expected clear reason the owner decided
-// to change without editing the vector (CLAUDE.md: a vector is law, so
-// the override is named, counted and listed in the PR).
-type reasonOverride struct {
-	caseName string
-	step     int
-	kind     string
-	want     ClearReason // what the vector records
-	got      ClearReason // what the monitor does by decision
-	why      string
-}
-
-// reasonOverrides: plan §11 gap 4 and C-14. The vector records the old
-// monitor clearing a disarm as stale; the owner decided a disarm or
-// landing clears as landed.
-var reasonOverrides = []reasonOverride{{
-	caseName: "disarming-clears-as-stale",
-	step:     2,
-	kind:     KindConflict,
-	want:     ClearStale,
-	got:      ClearLanded,
-	why:      "owner decision (plan §11 gap 4, LESSONS C-14): a disarm clears as landed",
-}}
 
 type vAircraft struct {
 	ID string `json:"id"`
@@ -101,6 +77,8 @@ type vConfig struct {
 	StaleAfterS      *float64          `json:"stale_after_s"`
 	NeighbourMaxAgeS *float64          `json:"neighbour_max_age_s"`
 	LiveMaxAgeS      *float64          `json:"live_max_age_s"`
+	MaxAircraft      *int              `json:"max_aircraft"`
+	MaxSourceShare   *float64          `json:"max_source_share"`
 	Zones            []json.RawMessage `json:"zones"`
 }
 
@@ -215,6 +193,10 @@ func configOf(t *testing.T, pol vPolicy, in vConfig) Config {
 	set(&c.StaleAfterS, in.StaleAfterS)
 	set(&c.LiveMaxAgeS, in.LiveMaxAgeS)
 	set(&c.Policy.NeighbourMaxAgeS, in.NeighbourMaxAgeS)
+	set(&c.MaxSourceShare, in.MaxSourceShare)
+	if in.MaxAircraft != nil {
+		c.MaxAircraft = *in.MaxAircraft
+	}
 	for i, raw := range in.Zones {
 		gz, problems := ed269.ParseZone(raw, ed269.Limits{})
 		if problems != nil {
@@ -393,10 +375,7 @@ func TestVectorsAlertLifecycle(t *testing.T) {
 	}
 	var pol vPolicy
 	f.Header(t, "policy", &pol)
-	overridesUsed := 0
-	ran := 0
 	f.Run(t, func(t *testing.T, c vectors.Case) {
-		ran++
 		var in vInput
 		var exp vExpected
 		c.Decode(t, &in, &exp)
@@ -412,21 +391,8 @@ func TestVectorsAlertLifecycle(t *testing.T) {
 			for _, cl := range ev.Cleared {
 				cleared = append(cleared, normalised(t, cl.Alert, cl.Reason))
 			}
-			want := exp.PerStep[i].Cleared
-			for _, o := range reasonOverrides {
-				if o.caseName != c.Name || o.step != i {
-					continue
-				}
-				for j := range want {
-					if want[j].Kind == o.kind && want[j].Reason == string(o.want) {
-						want[j].Reason = string(o.got)
-						overridesUsed++
-						t.Logf("step %d: expecting %s instead of the vector's %s: %s", i, o.got, o.want, o.why)
-					}
-				}
-			}
 			compareSets(t, fmt.Sprintf("step %d raised", i), raised, exp.PerStep[i].Raised)
-			compareSets(t, fmt.Sprintf("step %d cleared", i), cleared, want)
+			compareSets(t, fmt.Sprintf("step %d cleared", i), cleared, exp.PerStep[i].Cleared)
 		}
 		var active []vAlert
 		for _, a := range m.Active() {
@@ -439,11 +405,6 @@ func TestVectorsAlertLifecycle(t *testing.T) {
 			}
 		}
 	})
-	// With every case run (no -run filter), every override must have
-	// matched exactly once: a vector that changed under one fails here.
-	if ran == alertLifecycleCases && overridesUsed != len(reasonOverrides) {
-		t.Errorf("%d reason overrides applied, want %d: a vector changed under an override", overridesUsed, len(reasonOverrides))
-	}
 }
 
 // TestVectorEpoch derives the clock the generator used for the zone
