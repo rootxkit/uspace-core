@@ -1,0 +1,35 @@
+{
+  "constraint": {
+    "reference": {
+      "id": "2f8343be-6482-4d1b-a474-16847e01af1e",
+      "manager": "uss1",
+      "uss_availability": "Normal",
+      "version": 1,
+      "ovn": "9d158f59-80b7-4c11-9c0c-8a2b4d936b2d",
+      "time_start": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+      "time_end": {"value": "1985-04-13T23:20:50.52Z", "format": "RFC3339"},
+      "uss_base_url": "https://uss.example.com/utm"
+    },
+    "details": {
+      "volumes": [
+        {
+          "volume": {
+            "outline_polygon": {
+              "vertices": [
+                {"lat": 34.123, "lng": -118.456},
+                {"lat": 34.133, "lng": -118.456},
+                {"lat": 34.133, "lng": -118.446},
+                {"lat": 34.123, "lng": -118.446}
+              ]
+            },
+            "altitude_lower": {"value": 0, "reference": "W84", "units": "M"},
+            "altitude_upper": {"value": 500, "reference": "W84", "units": "M"}
+          },
+          "time_start": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+          "time_end": {"value": "1985-04-13T23:20:50.52Z", "format": "RFC3339"}
+        }
+      ],
+      "type": "com.example.non_utm_aircraft_operations"
+    }
+  }
+}

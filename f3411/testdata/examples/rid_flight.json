@@ -1,0 +1,30 @@
+{
+  "id": "uss1.JA6kHYCcByQ-6AfU",
+  "aircraft_type": "Helicopter",
+  "current_state": {
+    "timestamp": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+    "timestamp_accuracy": 0.1,
+    "operational_status": "Airborne",
+    "position": {
+      "lat": 34.123,
+      "lng": -118.456,
+      "alt": 1321.2,
+      "accuracy_h": "HA1m",
+      "accuracy_v": "VA3m",
+      "extrapolated": false,
+      "pressure_altitude": 1300.5,
+      "height": {"distance": 50, "reference": "TakeoffLocation"}
+    },
+    "track": 120,
+    "speed": 1.9,
+    "speed_accuracy": "SA1mps",
+    "vertical_speed": 0.2
+  },
+  "recent_positions": [
+    {
+      "time": {"value": "1985-04-12T23:20:49.52Z", "format": "RFC3339"},
+      "position": {"lat": 34.1229, "lng": -118.4561, "alt": 1321.0}
+    }
+  ],
+  "simulated": false
+}

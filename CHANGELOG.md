@@ -142,6 +142,41 @@ Each entry names the work package and the vectors it affects.
   Z-09). A CONDITIONAL zone stays not evaluated. Behaviour change to a
   judgement at `v0.x`, pinned by `zones_vertical.json`. [WP-8]
 
+## [0.2.0] - unreleased (G-M2)
+
+The standards types: ED-318 zones, F3411-22a network Remote ID and
+F3548-21 strategic coordination. Adds the local knowledge vector
+`ed318_roundtrip.json` (22 cases; 682 in all with the 660 of the lab).
+
+### Added
+
+- `f3411`: the F3411-22a types generated, types only, by oapi-codegen
+  v2.8.0 from uastech/standards `remoteid/updated.yaml` at `dd4016b` (the
+  file uas_standards `6e182f4` generates its v22a module from), with the
+  one-element anyOf wrappers made aliases so the package needs only the
+  standard library; the Net* and data-field constants and the
+  `rid.service_provider` / `rid.display_provider` scopes; special values
+  decoding to nil (speed 255, track 361, vertical speed 63, height, alt
+  and pressure altitude -1000) with `SpeedIsMax` for 254.25; the airborne
+  rule; `LatLon`, `Altitude.HAEM` (W84 and M only),
+  `Volume4DToZonesEnvelope` and a bounded `UnmarshalRIDFlight`. [WP-12]
+- `f3548`: the F3548-21 types generated the same way from
+  interuss/astm-utm-protocol `utm.yaml` at `1d3d8fb`; the five `utm.*`
+  scopes and every uas_standards constant; `DSSStates`;
+  `Altitude.HAEM`, `Volume4DToZonesEnvelope` and a bounded
+  `UnmarshalOperationalIntent`. [WP-12]
+- `ed318`: parse and validate ED-318 FeatureCollections on receipt
+  (never repair) with field names from the ED-318 JSON schema
+  (UASGeoZones/ED-318 `e98b292`) and uas_standards, export equal by value,
+  the ED-269 mapping both ways with what each side cannot hold refused by
+  name, applicability with the daylight events BMCT, SR, SS and EECT
+  (`NOAADaylight`, within 7 s of astropy in the tests; `FixedDaylight`),
+  an unresolvable event reported as not evaluated, and `ToZones`. The
+  geometry's vertical-limit names (`layer`) are taken from both sources
+  and remain unverified against the EUROCAE text. Passes
+  `ed318_roundtrip.json` (22/22), which `ed318/internal/genvectors` writes.
+  [WP-12]
+
 ## [0.1.0] - unreleased (G-M1)
 
 Tagged when every file in `vectors/testdata/` passes against its package:

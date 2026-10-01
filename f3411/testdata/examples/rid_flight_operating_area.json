@@ -1,0 +1,22 @@
+{
+  "id": "uss1.JA6kHYCcByQ-6AfU",
+  "aircraft_type": "HybridLift",
+  "operating_area": {
+    "aircraft_count": 3,
+    "volumes": [
+      {
+        "volume": {
+          "outline_circle": {
+            "center": {"lat": 34.123, "lng": -118.456},
+            "radius": {"value": 300.183, "units": "M"}
+          },
+          "altitude_lower": {"value": 0, "reference": "W84", "units": "M"},
+          "altitude_upper": {"value": 19.5, "reference": "W84", "units": "M"}
+        },
+        "time_start": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+        "time_end": {"value": "1985-04-12T23:50:50.52Z", "format": "RFC3339"}
+      }
+    ]
+  },
+  "simulated": true
+}

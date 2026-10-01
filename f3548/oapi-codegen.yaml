@@ -1,0 +1,19 @@
+# oapi-codegen configuration for the f3548 types (see generate.go and SOURCE).
+# Types only: no server or client scaffolding. The two string formats the
+# file uses beyond date-time map to string, so that the types need nothing
+# outside the standard library (oapi-codegen's defaults would import
+# github.com/oapi-codegen/runtime/types for uuid and duration). Number
+# formats are kept as the standard writes them (float is float32, double
+# is float64).
+package: f3548
+generate:
+  models: true
+output: types.gen.go
+output-options:
+  type-mapping:
+    string:
+      formats:
+        uuid:
+          type: string
+        duration:
+          type: string

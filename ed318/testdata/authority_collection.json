@@ -1,0 +1,499 @@
+{
+  "type": "FeatureCollection",
+  "name": "Test zones around Tbilisi (ED-318)",
+  "metadata": {
+    "validFrom": "2026-10-01T00:00:00Z",
+    "validTo": "2027-10-01T00:00:00+04:00",
+    "issued": "2026-09-30T12:00:00.5Z",
+    "provider": [
+      {
+        "text": "Test authority",
+        "lang": "en-GB"
+      },
+      {
+        "text": "სატესტო უწყება",
+        "lang": "ka-GE"
+      }
+    ],
+    "description": [
+      {
+        "text": "Invented zones around Tbilisi for tests; not real restrictions",
+        "lang": "en-GB"
+      }
+    ],
+    "otherGeoid": "urn:ogc:def:crs:EPSG::3855",
+    "technicalLimitations": [
+      {
+        "text": "Test data with no legal force",
+        "lang": "en-GB"
+      }
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "TSU001",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.7,
+              41.65
+            ],
+            [
+              44.95,
+              41.65
+            ],
+            [
+              44.95,
+              41.8
+            ],
+            [
+              44.7,
+              41.8
+            ],
+            [
+              44.7,
+              41.65
+            ]
+          ]
+        ],
+        "layer": {
+          "upper": 300,
+          "upperReference": "WGS84",
+          "lower": 0,
+          "lowerReference": "AGL",
+          "uom": "m"
+        }
+      },
+      "properties": {
+        "identifier": "TSU001",
+        "country": "GEO",
+        "name": [
+          {
+            "text": "Tbilisi U-space airspace (test)",
+            "lang": "en-GB"
+          },
+          {
+            "text": "თბილისის U-space საჰაერო სივრცე (ტესტი)",
+            "lang": "ka-GE"
+          }
+        ],
+        "type": "USPACE",
+        "variant": "COMMON",
+        "reason": [
+          "AIR_TRAFFIC"
+        ],
+        "message": [
+          {
+            "text": "U-space airspace: network identification, geo-awareness, flight authorisation and traffic information required",
+            "lang": "en-GB"
+          }
+        ],
+        "zoneAuthority": [
+          {
+            "name": [
+              {
+                "text": "Test authority",
+                "lang": "en-GB"
+              }
+            ],
+            "service": [
+              {
+                "text": "U-space designation",
+                "lang": "en-GB"
+              }
+            ],
+            "contactName": [
+              {
+                "text": "Duty officer",
+                "lang": "en-GB"
+              }
+            ],
+            "siteURL": "https://example.invalid/uspace",
+            "email": "uspace@example.invalid",
+            "phone": "+995 32 000 0000",
+            "purpose": "AUTHORIZATION",
+            "intervalBefore": "PT1H"
+          }
+        ],
+        "dataSource": {
+          "creationDateTime": "2026-09-01T00:00:00Z",
+          "updateDateTime": "2026-09-30T12:00:00Z",
+          "originator": {
+            "text": "Test authority",
+            "lang": "en-GB"
+          }
+        },
+        "extendedProperties": {
+          "services_required": [
+            "NID",
+            "GEO",
+            "FA",
+            "TI"
+          ],
+          "uas_requirements": {
+            "network_identification": true,
+            "direct_remote_id": true,
+            "geo_awareness": true
+          },
+          "service_performance": {
+            "nid_update_hz": 1,
+            "ti_update_hz": 1,
+            "cis_latency_s": 5
+          },
+          "operational_conditions": {
+            "min_ussp_count": 1
+          },
+          "airspace_constraints": {
+            "max_height_agl_m": 120
+          },
+          "adjacent": []
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 2,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          44.8271,
+          41.7151
+        ],
+        "extent": {
+          "subType": "Circle",
+          "radius": 1500
+        },
+        "layer": {
+          "upper": 2500,
+          "upperReference": "AMSL",
+          "lower": 0,
+          "lowerReference": "AGL",
+          "uom": "ft"
+        }
+      },
+      "properties": {
+        "identifier": "TSD001",
+        "country": "GEO",
+        "name": [
+          {
+            "text": "Test event restriction",
+            "lang": "en-GB"
+          }
+        ],
+        "type": "PROHIBITED",
+        "variant": "CUSTOMIZED",
+        "restrictionConditions": "Emergency services only",
+        "region": 1,
+        "reason": [
+          "DAR",
+          "EMERGENCY"
+        ],
+        "otherReasonInfo": [
+          {
+            "text": "Dynamic restriction from the ANSP",
+            "lang": "en-GB"
+          }
+        ],
+        "regulationExemption": "NO",
+        "message": [
+          {
+            "text": "Closed from morning to evening civil twilight",
+            "lang": "en-GB"
+          }
+        ],
+        "limitedApplicability": [
+          {
+            "startDateTime": "2026-10-01T00:00:00Z",
+            "endDateTime": "2026-10-08T00:00:00Z",
+            "schedule": [
+              {
+                "day": [
+                  "ANY"
+                ],
+                "startEvent": "BMCT",
+                "endEvent": "EECT"
+              }
+            ]
+          }
+        ],
+        "zoneAuthority": [
+          {
+            "name": [
+              {
+                "text": "Test ANSP",
+                "lang": "en-GB"
+              }
+            ],
+            "purpose": "NOTIFICATION"
+          }
+        ],
+        "dataSource": {
+          "creationDate": "2026-09-30T08:00:00Z"
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.8,
+              41.7
+            ],
+            [
+              44.82,
+              41.7
+            ],
+            [
+              44.82,
+              41.72
+            ],
+            [
+              44.8,
+              41.72
+            ],
+            [
+              44.8,
+              41.7
+            ]
+          ],
+          [
+            [
+              44.805,
+              41.705
+            ],
+            [
+              44.815,
+              41.705
+            ],
+            [
+              44.815,
+              41.715
+            ],
+            [
+              44.805,
+              41.715
+            ],
+            [
+              44.805,
+              41.705
+            ]
+          ]
+        ],
+        "layer": {
+          "upper": 600,
+          "upperReference": "WGS84",
+          "lower": 0,
+          "lowerReference": "AGL",
+          "uom": "m"
+        }
+      },
+      "properties": {
+        "identifier": "TSR001",
+        "country": "GEO",
+        "name": [
+          {
+            "text": "Test authorisation zone",
+            "lang": "en-GB"
+          }
+        ],
+        "type": "REQ_AUTHORIZATION",
+        "variant": "COMMON",
+        "restrictionConditions": "Authorisation by the authority",
+        "reason": [
+          "SENSITIVE",
+          "PRIVACY"
+        ],
+        "message": [
+          {
+            "text": "Authorisation required on weekdays",
+            "lang": "en-GB"
+          }
+        ],
+        "limitedApplicability": [
+          {
+            "startDateTime": "2026-10-01T00:00:00+04:00",
+            "endDateTime": "2027-01-01T00:00:00+04:00",
+            "schedule": [
+              {
+                "day": [
+                  "MON",
+                  "TUE",
+                  "WED",
+                  "THU",
+                  "FRI"
+                ],
+                "startTime": "08:00:00+04:00",
+                "endTime": "18:00:00+04:00"
+              }
+            ]
+          }
+        ],
+        "zoneAuthority": [
+          {
+            "name": [
+              {
+                "text": "Test authority",
+                "lang": "en-GB"
+              }
+            ],
+            "siteURL": "https://example.invalid/zones",
+            "email": "zones@example.invalid",
+            "purpose": "AUTHORIZATION",
+            "intervalBefore": "P2D"
+          }
+        ],
+        "extendedProperties": {
+          "source": "test"
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  44.85,
+                  41.73
+                ],
+                [
+                  44.87,
+                  41.73
+                ],
+                [
+                  44.87,
+                  41.75
+                ],
+                [
+                  44.85,
+                  41.75
+                ],
+                [
+                  44.85,
+                  41.73
+                ]
+              ]
+            ],
+            "layer": {
+              "upper": 50,
+              "upperReference": "AGL",
+              "lower": 0,
+              "lowerReference": "AGL",
+              "uom": "m"
+            }
+          },
+          {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  44.855,
+                  41.735
+                ],
+                [
+                  44.865,
+                  41.735
+                ],
+                [
+                  44.86,
+                  41.745
+                ],
+                [
+                  44.855,
+                  41.735
+                ]
+              ]
+            ],
+            "layer": {
+              "upper": 150,
+              "upperReference": "AGL",
+              "lower": 50,
+              "lowerReference": "AGL",
+              "uom": "m"
+            }
+          }
+        ]
+      },
+      "properties": {
+        "identifier": "TSC001",
+        "country": "GEO",
+        "name": [
+          {
+            "text": "Test two-layer nature zone",
+            "lang": "en-GB"
+          }
+        ],
+        "type": "CONDITIONAL",
+        "variant": "COMMON",
+        "reason": [
+          "NOISE",
+          "NATURE"
+        ],
+        "limitedApplicability": [
+          {
+            "schedule": [
+              {
+                "day": [
+                  "SAT",
+                  "SUN"
+                ],
+                "startTime": "22:00:00Z",
+                "endTime": "02:00:00Z"
+              }
+            ]
+          }
+        ],
+        "zoneAuthority": [
+          {
+            "purpose": "INFORMATION"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          44.9,
+          41.75
+        ],
+        "extent": {
+          "subType": "Circle",
+          "radius": 250.5
+        },
+        "layer": {
+          "upperReference": "AMSL",
+          "lowerReference": "AGL"
+        }
+      },
+      "properties": {
+        "identifier": "TSN001",
+        "country": "GEO",
+        "name": [
+          {
+            "text": "Test information zone",
+            "lang": "en-GB"
+          }
+        ],
+        "type": "NO_RESTRICTION",
+        "variant": "COMMON",
+        "zoneAuthority": [
+          {
+            "purpose": "INFORMATION"
+          }
+        ]
+      }
+    }
+  ]
+}

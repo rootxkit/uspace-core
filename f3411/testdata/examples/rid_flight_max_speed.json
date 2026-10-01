@@ -1,0 +1,14 @@
+{
+  "id": "uss1.JA6kHYCcByQ-6AfU",
+  "aircraft_type": "Aeroplane",
+  "current_state": {
+    "timestamp": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+    "timestamp_accuracy": 0.5,
+    "operational_status": "Emergency",
+    "position": {"lat": 34.123, "lng": -118.456, "alt": 1321.2},
+    "track": 0,
+    "speed": 254.25,
+    "speed_accuracy": "SA10mpsPlus",
+    "vertical_speed": -62
+  }
+}
