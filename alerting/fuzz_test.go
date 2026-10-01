@@ -54,16 +54,18 @@ func fuzzTrack(r *fuzzReader, tS float64) Track {
 	flags := r.byte()
 	id := string(rune('A' + int(r.byte()%6)))
 	tr := Track{
-		ID:          id,
-		Pos:         core.LatLon{LatDeg: originLatDeg + r.num(-0.01, 0.01), LonDeg: originLonDeg + r.num(-0.01, 0.01)},
-		VNMS:        r.num(-30, 30),
-		VEMS:        r.num(-30, 30),
-		CapturedAtS: tS - r.num(0, 20),
-		Source:      []string{"relay", "remote_id"}[flags&1],
-		Station:     []string{"", "s1", "s2"}[int(flags>>1&3)%3],
-		Backlog:     flags&8 != 0 && flags&16 != 0,
+		ID:      id,
+		Pos:     core.LatLon{LatDeg: originLatDeg + r.num(-0.01, 0.01), LonDeg: originLonDeg + r.num(-0.01, 0.01)},
+		VNMS:    r.num(-30, 30),
+		VEMS:    r.num(-30, 30),
+		RxAtS:   tS - r.num(-3, 12),
+		Source:  []string{"relay", "remote_id"}[flags&1],
+		Station: []string{"", "s1", "s2"}[int(flags>>1&3)%3],
+		Backlog: flags&8 != 0 && flags&16 != 0,
 	}
-	tr.RxAtS = tr.CapturedAtS
+	// Placed behind its receipt, or up to 5 s ahead of it: the clock-ahead
+	// rule must refuse what is beyond AheadToleranceS.
+	tr.CapturedAtS = tr.RxAtS - r.num(-5, 20)
 	ts := tr.CapturedAtS + r.num(-5, 5)
 	tr.SourceTS = &ts
 	alt := r.num(300, 900)
@@ -227,6 +229,13 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64,
 		case ClearResolved:
 			if !c.ShownFalse || !(c.LastFalseS-c.LastTrueS > m.cfg.ClearAfterS) {
 				t.Fatalf("resolved without evidence: %+v", c.Alert)
+			}
+			// The false evidence was placed no later than an admitted sample
+			// can be: received at most AheadToleranceS ahead of the wall and
+			// placed at most AheadToleranceS ahead of its receipt. A sample
+			// from a clock ahead cannot buy the hysteresis.
+			if c.LastFalseS > wallS+2*m.cfg.AheadToleranceS {
+				t.Fatalf("resolved by a placement ahead of the wall (%v): %+v", wallS, c.Alert)
 			}
 			if op <= 1 && !tr.Pos.Valid() && c.Kind != KindIdentificationMismatch && slices.Contains(c.Aircraft, tr.ID) {
 				t.Fatalf("an invalid position resolved %s", c.Key)

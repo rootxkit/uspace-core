@@ -158,7 +158,9 @@ func (m *Monitor) Tracked() int { return len(m.aircraft) }
 //  1. Admission: a sample with an empty id or a non-finite time is
 //     rejected_invalid; from a disabled source rejected_source_disabled;
 //     flagged backlog rejected_backlog; with wallS -
-//     RxAtS > LiveMaxAgeS rejected_late; older on its source's clock than
+//     RxAtS > LiveMaxAgeS rejected_late; placed ahead of its receipt, or
+//     received ahead of wallS, by more than AheadToleranceS
+//     rejected_placed_ahead; older on its source's clock than
 //     the one held from that source and not received later
 //     rejected_out_of_order; placed before the latest sample of the same
 //     aircraft from any source rejected_older_than_held (T-06). A

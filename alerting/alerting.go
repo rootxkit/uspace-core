@@ -55,6 +55,12 @@ const (
 	// clock than the one held from that source, and not received later
 	// (T-03).
 	CounterRejectedOutOfOrder = "rejected_out_of_order"
+	// CounterRejectedPlacedAhead counts samples placed ahead of their
+	// receipt (CapturedAtS - RxAtS), or received ahead of the wall time
+	// (RxAtS - wallS), by more than AheadToleranceS: a clock ahead, never
+	// admitted, so it can neither pin the track in the future nor resolve
+	// an alert ahead of time (the clock-ahead rule of timeplace).
+	CounterRejectedPlacedAhead = "rejected_placed_ahead"
 	// CounterRejectedOlderPlacement counts samples placed (CapturedAtS)
 	// before the latest sample admitted for the same aircraft, from any
 	// source: a newer state is never overwritten by an older one (T-06).
@@ -133,6 +139,11 @@ type Config struct {
 	StaleAfterS float64
 	// LiveMaxAgeS bounds wall - RxAtS, the ingest-to-monitor leg (T-05).
 	LiveMaxAgeS float64
+	// AheadToleranceS bounds how far a sample may be placed ahead of its
+	// receipt (CapturedAtS - RxAtS) and received ahead of the wall time
+	// (RxAtS - wallS): beyond it the clock is ahead and the sample is
+	// refused (rejected_placed_ahead), as timeplace's clock-ahead rule.
+	AheadToleranceS float64
 	// Zones are the zones judged; ZonePolicy the zone thresholds (the
 	// pressure margin, the CONDITIONAL severity, the height limit; a nil
 	// MaxHeightAGLM means the height limit is not judged here).
@@ -157,7 +168,7 @@ type Config struct {
 
 // DefaultConfig is the policy alert_lifecycle.json pins: cpa.DefaultPolicy
 // (60 s, 60 m, 20 m, 800 m, 10 s), 3 s hysteresis, 15 s stale, 10 s live
-// age, zones.DefaultPolicy (250 m pressure margin), mismatch warning,
+// age, 1 s ahead tolerance, zones.DefaultPolicy (250 m pressure margin), mismatch warning,
 // identification critical, 1000 m grid cells, 50 000 aircraft, 16 sources
 // per aircraft.
 func DefaultConfig() Config {
@@ -166,6 +177,7 @@ func DefaultConfig() Config {
 		ClearAfterS:            3,
 		StaleAfterS:            15,
 		LiveMaxAgeS:            10,
+		AheadToleranceS:        1,
 		ZonePolicy:             zones.DefaultPolicy(),
 		MismatchSeverity:       core.SeverityWarning,
 		IdentificationSeverity: core.SeverityCritical,
@@ -301,6 +313,7 @@ func sanitise(c Config, counters *core.Counters) Config {
 	fix(&c.ClearAfterS, d.ClearAfterS)
 	fix(&c.StaleAfterS, d.StaleAfterS)
 	fix(&c.LiveMaxAgeS, d.LiveMaxAgeS)
+	fix(&c.AheadToleranceS, d.AheadToleranceS)
 	if !validSeverity(c.MismatchSeverity) {
 		c.MismatchSeverity = d.MismatchSeverity
 		counters.Inc(CounterConfigInvalid)

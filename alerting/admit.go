@@ -33,6 +33,15 @@ func (m *Monitor) admit(tr *Track, wallS float64) (*aircraft, bool) {
 		m.counters.Inc(CounterRejectedLate)
 		return nil, false
 	}
+	// A clock ahead (T-06 and timeplace's clock-ahead rule): a sample
+	// placed ahead of its receipt, or received ahead of our wall time, is
+	// never admitted. Admitted, it would pin the track in the future (every
+	// real sample after it older than held) and its placement would count
+	// as hysteresis time it never earned.
+	if tr.CapturedAtS-tr.RxAtS > m.cfg.AheadToleranceS || tr.RxAtS-wallS > m.cfg.AheadToleranceS {
+		m.counters.Inc(CounterRejectedPlacedAhead)
+		return nil, false
+	}
 	ac, known := m.aircraft[tr.ID]
 	if known && tr.SourceTS != nil {
 		if e := ac.orderOf(src); e != nil && *tr.SourceTS < e.sourceTS && tr.CapturedAtS <= e.capturedAtS {

@@ -759,6 +759,7 @@ func TestSanitiseConfig(t *testing.T) {
 	cfg.ClearAfterS = math.NaN()
 	cfg.StaleAfterS = -1
 	cfg.LiveMaxAgeS = math.Inf(1)
+	cfg.AheadToleranceS = -1
 	cfg.MismatchSeverity = "loud"
 	cfg.IdentificationSeverity = ""
 	cfg.GridCellM = 10
@@ -767,13 +768,13 @@ func TestSanitiseConfig(t *testing.T) {
 	m := NewMonitor(cfg)
 	got := m.Config()
 	d := DefaultConfig()
-	if got.ClearAfterS != d.ClearAfterS || got.StaleAfterS != d.StaleAfterS || got.LiveMaxAgeS != d.LiveMaxAgeS ||
+	if got.ClearAfterS != d.ClearAfterS || got.StaleAfterS != d.StaleAfterS || got.LiveMaxAgeS != d.LiveMaxAgeS || got.AheadToleranceS != d.AheadToleranceS ||
 		got.MismatchSeverity != d.MismatchSeverity || got.IdentificationSeverity != d.IdentificationSeverity ||
 		got.GridCellM != d.GridCellM || got.MaxAircraft != d.MaxAircraft || got.MaxSourcesPerAircraft != d.MaxSourcesPerAircraft {
 		t.Fatalf("config %+v", got)
 	}
-	if n := m.Counters().Get(CounterConfigInvalid); n != 5 {
-		t.Fatalf("config_invalid = %d, want 5", n)
+	if n := m.Counters().Get(CounterConfigInvalid); n != 6 {
+		t.Fatalf("config_invalid = %d, want 6", n)
 	}
 	// An invalid separation policy is kept and counted, and every pair it
 	// refuses is counted: no conflict is ever silently missing.
@@ -1145,4 +1146,63 @@ func TestPlacementBehindStaleIsCounted(t *testing.T) {
 	if got := m.Counters().Get(CounterPlacementBehindStale); got != 0 || m.Tracked() != 1 {
 		t.Fatalf("placement_behind_stale = %d, tracked %d", got, m.Tracked())
 	}
+}
+
+func TestPlacedAheadIsRefused(t *testing.T) {
+	t.Run("far ahead is sticky", func(t *testing.T) {
+		// Review probe: one A sample placed at 1e9, received at 1.
+		m := headOn(t, DefaultConfig())
+		bad := at("A", 10, 10, 1e9)
+		bad.RxAtS = 1
+		m.Observe(bad, 1)
+		for s := 1.0; s <= 17; s++ {
+			m.Observe(at("A", 10*s, 10, s), s)
+			m.Observe(at("B", 500-10*s, -10, s), s)
+		}
+		if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 1 {
+			t.Fatalf("rejected_placed_ahead = %d", got)
+		}
+		if a := m.Active(); len(a) != 1 || a[0].LastTrueS != 17 {
+			t.Fatalf("active %+v", a)
+		}
+	})
+	t.Run("ahead and clear resolves nothing", func(t *testing.T) {
+		// Review probe: one A sample placed 5 s ahead, positioned clear.
+		m := headOn(t, DefaultConfig())
+		bad := at("A", 5000, 10, 5)
+		bad.RxAtS = 0
+		wantEvents(t, "ahead", m.Observe(bad, 0.5), nil, nil)
+		m.Observe(at("A", 10, 10, 1), 1)
+		if a := m.Active(); len(a) != 1 || a[0].ShownFalse || a[0].LastTrueS != 1 {
+			t.Fatalf("active %+v", a)
+		}
+	})
+	t.Run("zone", func(t *testing.T) {
+		m := zoneMonitor(t, polygonZone(t, "Z", "PROHIBITED", ""))
+		m.Observe(at("A", 0, 0, 0), 0)
+		bad := at("A", 5000, 0, 5)
+		bad.RxAtS = 0
+		wantEvents(t, "ahead", m.Observe(bad, 0.5), nil, nil)
+		if a := m.Active(); len(a) != 1 || a[0].ShownFalse {
+			t.Fatalf("active %+v", a)
+		}
+	})
+	t.Run("received ahead of the wall", func(t *testing.T) {
+		m := headOn(t, DefaultConfig())
+		bad := at("A", 5000, 10, 100)
+		wantEvents(t, "rx ahead", m.Observe(bad, 1), nil, nil)
+		if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 1 {
+			t.Fatalf("rejected_placed_ahead = %d", got)
+		}
+	})
+	t.Run("within the tolerance", func(t *testing.T) {
+		// Twin: 1 s ahead (the default tolerance) is admitted.
+		m := headOn(t, DefaultConfig())
+		ok := at("A", 10, 10, 2)
+		ok.RxAtS = 1
+		m.Observe(ok, 1)
+		if got := m.Counters().Get(CounterRejectedPlacedAhead); got != 0 || m.Active()[0].LastTrueS != 2 {
+			t.Fatalf("rejected_placed_ahead = %d, active %+v", got, m.Active())
+		}
+	})
 }
