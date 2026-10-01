@@ -47,6 +47,11 @@ Each entry names the work package and the vectors it affects.
   AMSL altitude selection with the pressure fallback and hold, NED
   velocity and the airborne rule. Vectors `rid_time.json` (25),
   `rid_identity.json` (24), `pressure_altitude.json` (16). [WP-6]
+- `ed269`: strict ED-269 parse and export (both wrappers, UTF-8 BOM,
+  every problem with its JSON path, capped at 100; bounded bytes, depth
+  and ring vertices; shapes past 180 degrees of longitude refused) and
+  zone applicability; passes `ed269_parse.json` (52 cases) and
+  `zones_applicability.json` (32 cases). [WP-5]
 - `identify`: registry `Snapshot` with exact-then-unambiguous-fold serial
   lookup, `ResolveBroadcast`, `ResolveRemoteID`, `ResolveBound`,
   `SerialConflict`, `Unavailable` (no vector yet) and the spoofing guard
