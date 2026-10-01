@@ -1,6 +1,7 @@
 package zones
 
 import (
+	"errors"
 	"math"
 	"math/rand/v2"
 	"slices"
@@ -152,6 +153,34 @@ func TestAppendCandidatesReusesTheSlice(t *testing.T) {
 	}
 }
 
+// shapeContains is the oracle for the index tests: the shape itself, with
+// no bounding box in the way (ContainsHorizontally prefilters with the
+// box, so comparing against it would be circular). -180 and 180 are one
+// meridian for the polygon too.
+func shapeContains(t testing.TB, z *Zone, p core.LatLon) bool {
+	t.Helper()
+	switch {
+	case z.Polygon != nil:
+		if z.Polygon.Contains(p) {
+			return true
+		}
+		return math.Abs(p.LonDeg) == 180 && z.Polygon.Contains(core.LatLon{LatDeg: p.LatDeg, LonDeg: -p.LonDeg})
+	case z.Circle != nil:
+		in, _, err := z.Circle.Contains(p)
+		if errors.Is(err, geodesy.ErrNoConvergence) {
+			// Vincenty fails only for nearly antipodal points, half the
+			// Earth away from any circle the tests build.
+			return false
+		}
+		if err != nil && p.Valid() {
+			t.Fatalf("%s: circle at %+v: %v", z.Identifier, p, err)
+		}
+		return in
+	}
+	t.Fatalf("%s has no shape", z.Identifier)
+	return false
+}
+
 // Completeness: every zone that contains a point is among its candidates.
 // A miss here would be a missed zone, so it is checked over random points
 // concentrated around the zones.
@@ -169,9 +198,11 @@ func TestIndexNeverMissesAContainingZone(t *testing.T) {
 		}
 		cands := ix.Candidates(p)
 		for _, z := range zs {
-			in, err := z.ContainsHorizontally(p)
-			if err != nil {
-				t.Fatalf("%s at %+v: %v", z.Identifier, p, err)
+			in := shapeContains(t, z, p)
+			// The bounding-box prefilter of ContainsHorizontally never
+			// loses a point the shape holds either.
+			if got, err := z.ContainsHorizontally(p); err != nil || got != in {
+				t.Fatalf("%s at %+v: ContainsHorizontally %v %v, shape says %v", z.Identifier, p, got, err, in)
 			}
 			if in {
 				hits++

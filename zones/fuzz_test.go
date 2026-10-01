@@ -232,8 +232,9 @@ func FuzzFromED269(f *testing.F) {
 	})
 }
 
-// FuzzIndex: no panic on any point, and every zone that contains a point
-// is among the index's candidates for it.
+// FuzzIndex: no panic on any point, and every zone whose shape contains a
+// point (the shape itself, not ContainsHorizontally, which prefilters by
+// the same box) is among the index's candidates for it.
 func FuzzIndex(f *testing.F) {
 	f.Add(41.7151, 44.8271)
 	f.Add(-16.5, 180.0)
@@ -250,8 +251,7 @@ func FuzzIndex(f *testing.F) {
 			t.Fatalf("invalid point %+v has candidates", p)
 		}
 		for _, z := range zs {
-			in, err := z.ContainsHorizontally(p)
-			if err != nil || !in {
+			if !p.Valid() || !shapeContains(t, z, p) {
 				continue
 			}
 			found := false
