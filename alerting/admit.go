@@ -1,0 +1,82 @@
+package alerting
+
+import (
+	"math"
+
+	"github.com/rootxkit/uspace-core/core"
+)
+
+// admit decides whether tr is judged at all (T-03, T-04, T-05, B-11,
+// C-09), counts each refusal under its own name, and on admission returns
+// the aircraft record with tr's source ordering and source noted. A
+// refused sample judges nothing and therefore clears nothing.
+func (m *Monitor) admit(tr *Track, wallS float64, ev *Events) (*aircraft, bool) {
+	if tr.ID == "" || !core.IsFinite(tr.CapturedAtS) || !core.IsFinite(tr.RxAtS) ||
+		(tr.SourceTS != nil && !core.IsFinite(*tr.SourceTS)) {
+		m.counters.Inc(CounterRejectedInvalid)
+		return nil, false
+	}
+	src := sourceKey{typ: tr.Source, station: tr.Station}
+	if !m.follower.Query(src.typ, src.instance()).Enabled {
+		// No aircraft is held from a disabled source: SwitchSource dropped
+		// them when it took the state.
+		m.counters.Inc(CounterRejectedSourceDisabled)
+		return nil, false
+	}
+	if tr.Backlog {
+		m.counters.Inc(CounterRejectedBacklog)
+		return nil, false
+	}
+	// The lateness bound is on the leg from the ingest to here only, never
+	// on the source's clock (T-05).
+	if wallS-tr.RxAtS > m.cfg.LiveMaxAgeS {
+		m.counters.Inc(CounterRejectedLate)
+		return nil, false
+	}
+	ac, known := m.aircraft[tr.ID]
+	if known && tr.SourceTS != nil {
+		if e := ac.orderOf(src); e != nil && *tr.SourceTS < e.sourceTS && tr.CapturedAtS <= e.capturedAtS {
+			m.counters.Inc(CounterRejectedOutOfOrder)
+			return nil, false
+		}
+	}
+	ac = m.record(tr.ID, ev)
+	ac.src = src
+	ac.heardS = math.Min(tr.CapturedAtS, wallS)
+	m.noteSeen(ac.heardS)
+	if tr.SourceTS != nil {
+		m.noteOrder(ac, src, *tr.SourceTS, tr.CapturedAtS)
+	}
+	return ac, true
+}
+
+// orderOf returns the ordering entry of src, or nil.
+func (ac *aircraft) orderOf(src sourceKey) *orderEntry {
+	for i := range ac.order {
+		if ac.order[i].src == src {
+			return &ac.order[i]
+		}
+	}
+	return nil
+}
+
+// noteOrder records the latest sample of src for ac, evicting the least
+// recently updated source past MaxSourcesPerAircraft (E-10).
+func (m *Monitor) noteOrder(ac *aircraft, src sourceKey, sourceTS, capturedAtS float64) {
+	m.serial++
+	if e := ac.orderOf(src); e != nil {
+		*e = orderEntry{src: src, sourceTS: sourceTS, capturedAtS: capturedAtS, updateSerial: m.serial}
+		return
+	}
+	if len(ac.order) >= m.cfg.MaxSourcesPerAircraft {
+		oldest := 0
+		for i := range ac.order {
+			if ac.order[i].updateSerial < ac.order[oldest].updateSerial {
+				oldest = i
+			}
+		}
+		ac.order = append(ac.order[:oldest], ac.order[oldest+1:]...)
+		m.counters.Inc(CounterSourceOrderEvicted)
+	}
+	ac.order = append(ac.order, orderEntry{src: src, sourceTS: sourceTS, capturedAtS: capturedAtS, updateSerial: m.serial})
+}
