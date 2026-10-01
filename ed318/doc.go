@@ -89,6 +89,19 @@
 // ed269 -> ED-318 -> ed269 is the identity on the mappable zones of
 // ed269_parse.json's valid file.
 //
+// # The extendedProperties.ed269 carrier
+//
+// The extendedProperties member ED269Key ("ed269") is this project's
+// carrier for what one format has no member for, approved by the owner
+// on PR #16. In an ED-318 zone written by FromED269 it holds the ED-269
+// fields uSpaceClass, the zone-level title and a list-form
+// restrictionConditions; in an ED-269 zone written by ToED269 it holds
+// texts, the ED-318 text lists whose other languages ED-269's single
+// string cannot hold. Each mapping reads back what the other wrote and
+// refuses anything else under the key, so the carrier cannot silently
+// pass unknown content through. An authority publishing ED-318 should not
+// use the key for its own extensions.
+//
 // # Applicability and daylight
 //
 // Applies has ed269's semantics (Z-07, T-09) plus ED-318's events: each
