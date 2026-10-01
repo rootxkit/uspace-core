@@ -148,6 +148,21 @@ jobs:
           name: bench
           path: bench.txt
 
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Pinned like the linters (and GOVULNCHECK_VERSION in the Makefile).
+      # Fails when the code can reach a known vulnerability; findings only
+      # in required modules are printed by -show verbose and do not fail.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -show verbose ./...
+
   gitleaks:
     name: gitleaks
     runs-on: ubuntu-latest

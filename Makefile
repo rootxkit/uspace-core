@@ -13,9 +13,11 @@ STATICCHECK_VERSION   ?= v0.8.1
 # The gitleaks version gitleaks-action runs in CI (GITLEAKS_VERSION there).
 # .gitleaks.toml relies on how this version applies allowlists.
 GITLEAKS_VERSION      ?= v8.24.3
+# govulncheck, pinned like the linters; CI runs the same version.
+GOVULNCHECK_VERSION   ?= v1.8.0
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
-        check-vectors sync-vectors fuzz-smoke bench tidy secrets ci clean
+        check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck ci clean
 
 all: ci
 
@@ -44,6 +46,12 @@ staticcheck:
 lint: fmt-check vet staticcheck
 	@v="v$$(golangci-lint version --short 2>/dev/null)"; 	if [ "$$v" != "$(GOLANGCI_LINT_VERSION)" ]; then 	  echo "golangci-lint $$v found, CI runs $(GOLANGCI_LINT_VERSION): run 'make tools'"; exit 1; fi
 	golangci-lint run $(PKGS)
+
+# Known vulnerabilities in the module graph that the code can reach
+# (symbol level; findings only in required modules are listed with
+# -show verbose and do not fail).
+vulncheck:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) $(PKGS)
 
 # Secret scan of the history and the working tree with .gitleaks.toml.
 secrets:
@@ -84,7 +92,7 @@ bench:
 	$(GO) test -run '^$$' -bench . -benchmem -count=1 $(PKGS) | tee bench.txt
 	scripts/bench-report.sh bench.txt
 
-ci: build vet lint race vectors check-vectors fuzz-smoke
+ci: build vet lint race vectors check-vectors fuzz-smoke vulncheck
 
 clean:
 	rm -f coverage.out bench.txt
