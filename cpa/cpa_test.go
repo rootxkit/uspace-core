@@ -241,6 +241,11 @@ func TestSymmetry(t *testing.T) {
 	if ab, ba := Evaluate(a, b, DefaultPolicy), Evaluate(b, a, DefaultPolicy); ab != ba {
 		t.Fatalf("Evaluate(a, b) = %+v, Evaluate(b, a) = %+v", ab, ba)
 	}
+	// Two samples that differ only in VerticalKnown still have one order.
+	c := at(0, 0, 550)
+	if ab, ba := Evaluate(c, c.pressure(), DefaultPolicy), Evaluate(c.pressure(), c, DefaultPolicy); ab != ba || ab.VerticalKnown {
+		t.Fatalf("Evaluate(c, c') = %+v, Evaluate(c', c) = %+v", ab, ba)
+	}
 }
 
 func TestAntimeridianPair(t *testing.T) {
