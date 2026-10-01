@@ -375,3 +375,37 @@ func TestZeroBroadcastPolicy(t *testing.T) {
 		t.Errorf("at receipt: %+v, want believed", p)
 	}
 }
+
+// FuzzPlaceNetwork: any instants and policy values never panic. A state
+// not shown has no placement; a shown one keeps its own time as TS, a
+// noted one is placed at receipt, and with a response timestamp nothing
+// is placed after receipt.
+func FuzzPlaceNetwork(f *testing.F) {
+	f.Add(rx.UnixMicro(), rx.UnixMicro()+2_000_000, true, rx.UnixMicro(), 60.0, 1.0, 5.0)
+	f.Add(rx.UnixMicro(), int64(0), false, rx.UnixMicro()+3_000_000, 60.0, 1.0, 5.0)
+	f.Add(int64(math.MinInt64), int64(math.MaxInt64), true, int64(0), math.NaN(), math.Inf(1), -1.0)
+	f.Fuzz(func(t *testing.T, stateUS, respUS int64, hasResp bool, rxUS int64, maxAgeS, tolS, latS float64) {
+		state, recv := time.UnixMicro(stateUS), time.UnixMicro(rxUS)
+		var resp *time.Time
+		if hasResp {
+			r := time.UnixMicro(respUS)
+			resp = &r
+		}
+		p, note, shown := PlaceNetwork(state, resp, recv, NetworkPolicy{MaxAgeS: maxAgeS, ToleranceS: tolS, MaxLatencyS: latS})
+		if !shown {
+			if p != (Placement{}) || note != NoteNone {
+				t.Fatalf("not shown but placed: %+v %q", p, note)
+			}
+			return
+		}
+		if !p.TS.Equal(state) {
+			t.Fatalf("ts %s, want the state's %s", p.TS, state)
+		}
+		if note != NoteNone && (p.Source != core.TimeReceiver || !p.CapturedAt.Equal(recv)) {
+			t.Fatalf("noted %q but %+v", note, p)
+		}
+		if resp != nil && p.CapturedAt.After(recv) {
+			t.Fatalf("captured_at %s after receipt %s", p.CapturedAt, recv)
+		}
+	})
+}
