@@ -28,6 +28,11 @@ Each entry names the work package and the vectors it affects.
   with `public-part-GEO-OP-ABC` a known deviation: the EU secret part is
   stripped only after a valid public number, so `GEO-OP-ABC` no longer
   compares as `GEO-OP` (LESSONS G-04). [WP-4]
+- `auth`: Remote ID receiver authentication (HMAC-SHA256 over the exact
+  report bytes, +-30 s window, per-receiver bounded nonce memory) passing
+  the 14 `rid_receiver_auth.json` cases, and the RS256-only JWT verifier
+  with allow-listed issuers, kid-selected cached JWKS with a rate-limited
+  refresh, and the token issuer, on `lestrrat-go/jwx/v3`. [WP-11 G-M1]
 
 ## [0.1.0] - unreleased (G-M1)
 
