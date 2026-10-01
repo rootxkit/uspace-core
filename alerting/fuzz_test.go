@@ -115,6 +115,7 @@ func activeKeys(m *Monitor) map[string]Alert {
 //   - the active set after a call is the set before, plus what it raised,
 //     less what it cleared, and a clear is always of an alert that was
 //     active or raised in the same call;
+//   - an alert's LastTrueS and LastFalseS never go back;
 //   - every clear has a reason the call may give: resolved only with an
 //     alert shown false for more than the hysteresis; stale only when an
 //     aircraft of the alert is no longer tracked for it; landed only from
@@ -241,6 +242,12 @@ func checkInvariants(t *testing.T, m *Monitor, op byte, tr Track, wallS float64,
 	for k := range want {
 		if _, ok := got[k]; !ok {
 			t.Fatalf("%s missing from the active set", k)
+		}
+		if old, ok := before[k]; ok {
+			cur := got[k]
+			if cur.LastTrueS < old.LastTrueS || (old.ShownFalse && cur.LastFalseS < old.LastFalseS) {
+				t.Fatalf("%s went back in time: %+v then %+v", k, old, cur)
+			}
 		}
 		for _, id := range got[k].Aircraft {
 			ac, ok := m.aircraft[id]

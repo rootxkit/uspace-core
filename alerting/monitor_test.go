@@ -984,3 +984,30 @@ func TestOlderPlacementNeverRewindsTheTrack(t *testing.T) {
 		})
 	}
 }
+
+func TestOlderTrueNeverShortensTheHysteresis(t *testing.T) {
+	// Review probe: shown true at 8 (A's sample), then true at 2 (B's
+	// latest sample, placed at 2, judged against A at 8), then false once
+	// at 9. Only 1 s has passed since the last true: no clear.
+	m := headOn(t, DefaultConfig())
+	wantEvents(t, "A true at 8", m.Observe(at("A", 80, 10, 8), 8), nil, nil)
+	b := at("B", 480, -10, 2)
+	b.RxAtS = 8
+	wantEvents(t, "B true at 2", m.Observe(b, 8), nil, nil)
+	if a := m.Active()[0]; a.LastTrueS != 8 {
+		t.Fatalf("LastTrueS went back to %v", a.LastTrueS)
+	}
+	// A turns south, parallel to B and 320 m from it: judged false at 9.
+	wantEvents(t, "A false at 9", m.Observe(at("A", 90, -10, 9), 9), nil, nil)
+	a := m.Active()
+	if len(a) != 1 || !a[0].ShownFalse || a[0].LastFalseS != 9 {
+		t.Fatalf("active %+v", a)
+	}
+	// An older false never moves LastFalseS back either.
+	b = at("B", 470, 10, 3)
+	b.RxAtS = 9
+	m.Observe(b, 9)
+	if a := m.Active(); len(a) == 1 && a[0].LastFalseS != 9 {
+		t.Fatalf("LastFalseS went back to %v", a[0].LastFalseS)
+	}
+}

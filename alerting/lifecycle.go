@@ -70,7 +70,11 @@ type raise struct {
 
 // refresh holds the finding as true at atS. A new key is raised; a known
 // key is refreshed silently with the new detail, and raised again when
-// its severity changed (C-06, C-07).
+// its severity changed (C-06, C-07). LastTrueS and LastFalseS only move
+// forward, so an older judgement never shortens the hysteresis.
+// ShownFalse is never reset by a refresh: once shown false, an alert is
+// resolved by LastFalseS - LastTrueS alone, which a newer true makes
+// negative until a newer false follows.
 func (m *Monitor) refresh(r raise, atS float64, ev *Events) {
 	s, ok := m.active[r.key]
 	if !ok {
@@ -90,6 +94,12 @@ func (m *Monitor) refresh(r raise, atS float64, ev *Events) {
 		ev.Raised = append(ev.Raised, s.snapshot())
 		return
 	}
+	if atS < s.LastTrueS {
+		// Older evidence than the alert holds: it neither moves the times
+		// back (which would shorten the hysteresis) nor replaces newer
+		// numbers.
+		return
+	}
 	s.Detail = r.detail
 	s.LastTrueS = atS
 	s.losStartS = r.losStartS
@@ -107,6 +117,10 @@ func (m *Monitor) refresh(r raise, atS float64, ev *Events) {
 func (m *Monitor) showFalse(key string, atS float64, clearing map[string]any, ev *Events) {
 	s, ok := m.active[key]
 	if !ok {
+		return
+	}
+	if s.ShownFalse && atS < s.LastFalseS {
+		// Older than the false the alert holds: the times never go back.
 		return
 	}
 	s.LastFalseS = atS
