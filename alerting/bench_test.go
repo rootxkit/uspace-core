@@ -113,14 +113,19 @@ func benchObserve(b *testing.B, n int, sideM float64) {
 	b.ReportMetric(float64(len(m.active)), "active-alerts")
 }
 
-// BenchmarkMonitorObserve is plan §8.6's case: one observation with about
-// ten neighbours within the 800 m radius and five zones (1000 aircraft
-// over 14 km x 14 km; target 50 µs).
+// BenchmarkMonitorObserve is plan §8.6's gated case (owner decision on
+// PR #15): one observation in the typical layout, about ten neighbours
+// within the 800 m radius and five zones (1000 aircraft over 14 km x
+// 14 km), against the 50 µs target in docs/bench-targets.txt.
 func BenchmarkMonitorObserve(b *testing.B) { benchObserve(b, 1000, 14_000) }
 
-// BenchmarkDenseMonitorObserve is the brief's literal 1000 aircraft in
-// 10 km^2: about 160 neighbours within the radius, some sixteen times the
-// pair checks of the §8.6 case.
+// BenchmarkDenseMonitorObserve is a recorded, ungated stress case: the
+// brief's literal 1000 aircraft in 10 km^2, about 160 neighbours within
+// the radius. It runs at about three times the per-observe target,
+// because the neighbour count dominates the cost: each neighbour is one
+// cpa.Evaluate, and this layout has some sixteen times the pairs of the
+// §8.6 case. Its name does not share the gated prefix, so the report
+// shows it without a target.
 func BenchmarkDenseMonitorObserve(b *testing.B) { benchObserve(b, 1000, math.Sqrt(10e6)) }
 
 // BenchmarkMonitorTick is a tick with 1000 live aircraft: nothing is
