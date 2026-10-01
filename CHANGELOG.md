@@ -16,6 +16,28 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- auth: `KeyRing` holds a publisher's signing keys (one active, retired
+  keys kept in its JWKS for a two-key overlap; at most `MaxRingKeys`,
+  counted as `key_ring_full`), with `Issuer` sharing the ring's JWKS.
+  No vector changed [WP-14 C1]
+- auth: `SignDetached` and `DetachedVerifier` for `X-JWS-Signature`
+  (RFC 7515 Appendix F, RFC 7797 `b64:false`, `crit:["b64"]`, RS256,
+  `iat` within `DefaultDetachedMaxAge`), `ParseDetachedHeader`, and the
+  counters `rejected_b64`, `rejected_crit`, `rejected_publisher`,
+  `rejected_iat`, `rejected_too_large`. No vector changed [WP-14 C1]
+- auth: `SignCompact` and `CompactVerifier` for the compact delivery JWS
+  (M19: a JWT carrying `iss`, `aud`, `sub`, `iat`, `jti` and the message
+  as `body`, returned byte for byte). No vector changed [WP-14 C1]
+- auth: `Config.Audiences`, `Claims.Roles` and `Claims.Realm` (M18,
+  M20). With `Audiences` empty the verifier behaves as in 1.0.0; a token
+  whose `roles` is not an array of strings, or whose `realm` is not a
+  string, is now `rejected_claims`. No vector changed [WP-14 C1]
+- auth/internal/genvectors: `-kind jws_detached` and `-kind jws_compact`
+  write the JWS vector files proposed to uspace-lab (not vendored here)
+  [WP-14 C1]
+
 ## [1.0.0] (G-M3)
 
 The first stable release. Every vector file comes from `uspace-lab`

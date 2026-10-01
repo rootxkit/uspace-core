@@ -402,6 +402,28 @@ func (c Claims) HasScope(scope string) bool;  func RequireScope(c Claims, scope 
 func (v *Verifier) Counters() *core.Counters                    // rejected_<reason>, jwks_refresh, jwks_refresh_failed
 type Issuer struct{...};  func NewIssuer(iss string, key *rsa.PrivateKey, kid string) *Issuer
 func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now time.Time) (string, error);  func (i *Issuer) JWKS() jwk.Set
+// v1.1.0 (WP-14 C1), additive. Verifier: Config.Audiences []string (aud must contain Audience or one of them; Audience may then be empty);
+// Claims.Roles []string ("roles", an array of strings) and Claims.Realm string ("realm"), read when present, never required.
+type SigningKey struct{ KID string; Key *rsa.PrivateKey }
+type KeyRing struct{...};  func NewKeyRing(active SigningKey, retired ...SigningKey) (*KeyRing, error)   // NewIssuer's key checks; duplicate kid refused; <= MaxRingKeys (16)
+func (r *KeyRing) Rotate(next SigningKey) error;  func (r *KeyRing) Retire(kid string) error           // Rotate past the bound counted key_ring_full; Retire refuses the active key
+func (r *KeyRing) ActiveKID() string;  func (r *KeyRing) KIDs() []string;  func (r *KeyRing) JWKS() jwk.Set;  func (r *KeyRing) Counters() *core.Counters
+func (r *KeyRing) Issuer(iss string) (*Issuer, error)                       // signs with the active key, publishes the ring's JWKS
+// Detached JWS, X-JWS-Signature: <BASE64URL(protected)>..<BASE64URL(sig)> (RFC 7515 App. F, RFC 7797; M26).
+type DetachedHeader struct{ Alg, KID string; IssuedAt time.Time; B64 bool; Crit []string }   // written: alg RS256, kid, iat, b64 false, crit ["b64"]
+func (r *KeyRing) SignDetached(payload []byte, now time.Time) (string, error);  func SignDetached(k SigningKey, payload []byte, now time.Time) (string, error)
+type DetachedConfig struct{ Publishers map[string]IssuerConfig; MaxAge (5 min), MaxSkew (30 s) time.Duration; MaxHeaderBytes int (8 KiB); MaxPayloadBytes int64 (16 MiB); JWKS cache knobs of Config }
+type Signature struct{ Publisher, KID string; IssuedAt time.Time }
+type DetachedVerifier struct{...};  func NewDetachedVerifier(ctx context.Context, c DetachedConfig) (*DetachedVerifier, error)
+func (v *DetachedVerifier) Verify(ctx context.Context, publisher, header string, payload []byte) (Signature, error);  func (v *DetachedVerifier) Counters() *core.Counters
+func ParseDetachedHeader(header string) (DetachedHeader, error)          // form only, not verified
+// Compact delivery JWS (M19): a JWT, payload {"iss","aud","sub","iat","jti","body"}, header alg RS256, kid, typ JWT; no exp, no nonce memory.
+type CompactClaims struct{ Issuer, Audience, Subject, JTI string; IssuedAt time.Time }
+func (r *KeyRing) SignCompact(cl CompactClaims, body json.RawMessage, now time.Time) (string, error);  func SignCompact(k SigningKey, cl CompactClaims, body json.RawMessage, now time.Time) (string, error)
+type CompactConfig struct{ Issuers map[string]IssuerConfig; Audiences []string; MaxAge, MaxSkew time.Duration; MaxTokenBytes int; JWKS cache knobs of Config }
+type CompactVerifier struct{...};  func NewCompactVerifier(ctx context.Context, c CompactConfig) (*CompactVerifier, error)
+func (v *CompactVerifier) Verify(ctx context.Context, token string) (CompactClaims, json.RawMessage, error);  func (v *CompactVerifier) Counters() *core.Counters
+// New counters: rejected_b64, rejected_crit, rejected_publisher, rejected_iat, rejected_too_large, key_ring_full.
 ```
 
 ### 3.14 `ed318`, `f3411`, `f3548` (WP-12, G-M2)
