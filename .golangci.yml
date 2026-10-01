@@ -1,0 +1,106 @@
+# golangci-lint v2 configuration for uspace-core.
+# Rules behind the choices: docs/PLAN.md section 8 (engineering standards).
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - errname # error types end in Error, sentinel errors start with Err
+    - errorlint # wrap and compare errors with errors.Is / errors.As
+    - exhaustive # every switch over an enum lists every value
+    - forbidigo # see settings: no panic on data paths, no fmt.Print
+    - gocritic
+    - gosec
+    - misspell
+    - nolintlint # every nolint names its linter and reason
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - copyloopvar
+    - durationcheck
+    - makezero
+    - nilerr
+    - predeclared
+    - wastedassign
+  settings:
+    staticcheck:
+      checks: ["all", "-ST1000", "-ST1003"] # package comments live in doc.go; names follow E-13 (alt_amsl_m style in JSON, AltAMSLM in Go)
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # readability over packing; hot structs are benchmarked instead
+        - shadow
+    gocritic:
+      enabled-tags: [diagnostic, performance]
+      disabled-checks:
+        - hugeParam # judged per benchmark, not blanket
+    gosec:
+      excludes:
+        - G115 # integer conversions are bounded at the parser boundary and fuzzed
+    revive:
+      rules:
+        - name: exported
+          arguments: ["checkPrivateReceivers", "disableStutteringCheck"]
+        - name: var-naming
+          arguments: [["ID", "UAS", "AMSL", "AGL", "HAE", "WGS84", "ODID", "JWT", "JWKS", "HMAC", "CPA", "DEM"], []]
+        - name: unused-parameter
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # No panics on untrusted input: decoders and judgements return errors.
+        - pattern: '^panic$'
+          msg: "return an error that names the field (core.FieldError); panics are not allowed on data paths"
+        - pattern: '^fmt\.Print(f|ln)?$'
+          msg: "a library does not print; return values or use the caller's logger"
+        - pattern: '^log\.(Print|Fatal|Panic)'
+          msg: "a library does not log or exit; count the event (core.Counters) and return"
+        - pattern: '^os\.Exit$'
+          msg: "a library never exits the process"
+        - pattern: '^math\.MaxFloat64$'
+          msg: "use an explicit unbounded limit type (a nil *Limit) instead of a sentinel value"
+    exhaustive:
+      default-signifies-exhaustive: false
+    misspell:
+      locale: UK
+      ignore-rules: [authorization, authorize, authorized, authorizing, center, meter, meters, color, analyze, organization]
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck, forbidigo, unparam, prealloc]
+      - path: (f3411|f3548)/.*\.gen\.go
+        linters: [revive, gocritic, misspell, exhaustive]
+      # init-time panics on a malformed built-in constant are a programming
+      # error, not untrusted input; they are allowed in the two places below.
+      - path: internal/pgm/
+        text: "panic"
+        linters: [forbidigo]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: [github.com/rootxkit/uspace-core]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
