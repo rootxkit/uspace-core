@@ -93,3 +93,21 @@ func TestAltitudeSelectorOwnsHoldActive(t *testing.T) {
 		t.Errorf("no poor fix yet: %+v, want geodetic", r)
 	}
 }
+
+// E-01 at the hold's end: the hold is in force strictly before
+// PressureHoldS after the last poor fix, and over at exactly that time.
+func TestAltitudeSelectorHoldBoundary(t *testing.T) {
+	poor := AltInput{AltHAEM: f64(520), AltPressureM: f64(507.5), VertAccuracyCode: 1, UndulationM: f64(20)}
+	good := poor
+	good.VertAccuracyCode = 4
+	for _, c := range []struct {
+		nowS float64
+		want core.AltSource
+	}{{9.999999, core.AltPressure}, {10, core.AltGeodetic}} {
+		s := NewAltitudeSelector(DefaultAltPolicy())
+		s.Select(poor, 0)
+		if r := s.Select(good, c.nowS); r.Source != c.want {
+			t.Errorf("good fix at %v s after a poor one at 0 s: %+v, want %s", c.nowS, r, c.want)
+		}
+	}
+}
