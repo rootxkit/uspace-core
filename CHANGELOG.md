@@ -52,6 +52,14 @@ Each entry names the work package and the vectors it affects.
   and ring vertices; shapes past 180 degrees of longitude refused) and
   zone applicability; passes `ed269_parse.json` (52 cases) and
   `zones_applicability.json` (32 cases). [WP-5]
+- `zones`: zones from ED-269 (one volume, feet exact), horizontal
+  containment (bounding box, polygon with holes, circle by geodesic
+  distance, antimeridian), applicability at captured_at, each vertical
+  limit in its own reference with the unjudged-AGL warning and the
+  pressure margin, the height limit over known ground, a bounding-box
+  grid `Index`, and the counters `zone_checks_not_evaluated`,
+  `zone_limits_not_judged`, `height_checks_not_evaluated`; passes
+  `zones_vertical.json` (38 cases). [WP-8]
 
 ## [0.1.0] - unreleased (G-M1)
 
