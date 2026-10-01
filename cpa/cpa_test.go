@@ -54,6 +54,23 @@ func mustNotJudge(t *testing.T, r Result, want Reason) {
 	}
 }
 
+// TestZeroResultIsUnset: the zero Result is not judged and says so with
+// a named reason; Evaluate always names one.
+func TestZeroResultIsUnset(t *testing.T) {
+	var zero Result
+	if zero.Judged || zero.Conflict || zero.NotJudged != ReasonUnset {
+		t.Fatalf("zero Result = %+v, want not judged, ReasonUnset", zero)
+	}
+	if r := Evaluate(at(0, 0, 550), at(100, 0, 550), DefaultPolicy); r.NotJudged != ReasonNone {
+		t.Fatalf("judged Result names %q, want %q", r.NotJudged, ReasonNone)
+	}
+	pol := DefaultPolicy
+	pol.DVerticalMinM = 0
+	if r := Evaluate(at(0, 0, 550), at(100, 0, 550), pol); r.NotJudged == ReasonUnset || r.NotJudged == ReasonNone {
+		t.Fatalf("refused Result names %q", r.NotJudged)
+	}
+}
+
 func TestDefaultPolicyMatchesSpec(t *testing.T) {
 	want := Policy{TCPAMaxS: 60, DHorizontalMinM: 60, DVerticalMinM: 20, NeighbourRadiusM: 800, NeighbourMaxAgeS: 10}
 	if DefaultPolicy != want {

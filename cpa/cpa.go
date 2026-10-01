@@ -135,8 +135,12 @@ type Reason string
 
 // Reasons for Result.NotJudged.
 const (
+	// ReasonUnset is the zero value: a Result that Evaluate did not
+	// produce, such as Result{}. Treat it as not judged; Evaluate never
+	// returns it.
+	ReasonUnset Reason = ""
 	// ReasonNone: the pair was judged.
-	ReasonNone Reason = ""
+	ReasonNone Reason = "none"
 	// ReasonStaleNeighbour: the samples are more than NeighbourMaxAgeS
 	// apart (C-04).
 	ReasonStaleNeighbour Reason = "stale_neighbour"
@@ -166,7 +170,9 @@ const (
 // must test Judged first; NotJudged names the reason.
 type Result struct {
 	Judged bool
-	// NotJudged is ReasonNone when Judged is true.
+	// NotJudged is ReasonNone when Judged is true, and names the reason
+	// otherwise. ReasonUnset (the zero value) means the Result did not
+	// come from Evaluate.
 	NotJudged Reason
 	// TCPAS is the time to the closest approach in seconds, never
 	// negative: a diverging pair, and a pair with no relative motion,
@@ -343,6 +349,7 @@ func Evaluate(a, b State, pol Policy) Result {
 
 	r := Result{
 		Judged:          true,
+		NotJudged:       ReasonNone,
 		TCPAS:           tCPAS,
 		DCPAHorizontalM: math.Sqrt(cpaNorthM*cpaNorthM + cpaEastM*cpaEastM),
 		DHorizontalNowM: math.Sqrt(relNorthM*relNorthM + relEastM*relEastM),

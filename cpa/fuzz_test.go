@@ -57,7 +57,7 @@ func FuzzEvaluate(f *testing.F) {
 			t.Fatalf("unknown-vertical NaN changed the result: %+v, was %+v", rn, r)
 		}
 		if !r.Judged {
-			if r.Conflict || r.NotJudged == ReasonNone {
+			if r.Conflict || r.NotJudged == ReasonNone || r.NotJudged == ReasonUnset {
 				t.Fatalf("not judged but %+v", r)
 			}
 			return
