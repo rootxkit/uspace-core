@@ -111,6 +111,16 @@ func TestSnapshotCopiesInputs(t *testing.T) {
 	if !ok || u.Serial != "S1" || !u.InRegistry || u.OperatorID == nil || *u.OperatorID != "o1" {
 		t.Fatalf("the snapshot changed with its input: %+v", u)
 	}
+	// Nor through what it returns.
+	*u.OperatorID = "changed"
+	byID, _ := s.UASByID("d1")
+	bySerial, _ := s.UASBySerial("S1")
+	folded, _ := s.UASBySerial("s1")
+	for _, got := range []identify.UASFacts{byID, bySerial, folded} {
+		if got.OperatorID == nil || *got.OperatorID != "o1" {
+			t.Fatalf("the snapshot changed through a returned row: %+v", got)
+		}
+	}
 }
 
 func TestMatchString(t *testing.T) {

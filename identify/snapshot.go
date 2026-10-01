@@ -159,7 +159,7 @@ func (s *Snapshot) UASBySerial(sn string) (UASFacts, Match) {
 		if i == ambiguous {
 			return UASFacts{}, MatchAmbiguous
 		}
-		return s.uas[i], MatchExact
+		return s.row(i), MatchExact
 	}
 	i, ok := s.byFolded[serial.FoldKey(sn)]
 	switch {
@@ -168,7 +168,7 @@ func (s *Snapshot) UASBySerial(sn string) (UASFacts, Match) {
 	case i == ambiguous:
 		return UASFacts{}, MatchAmbiguous
 	}
-	return s.uas[i], MatchFolded
+	return s.row(i), MatchFolded
 }
 
 // UASByID implements Lookup.
@@ -180,7 +180,18 @@ func (s *Snapshot) UASByID(droneID string) (UASFacts, bool) {
 	if !ok {
 		return UASFacts{}, false
 	}
-	return s.uas[i], true
+	return s.row(i), true
+}
+
+// row returns a copy of row i whose OperatorID points at a fresh string,
+// so a caller cannot change the snapshot through it.
+func (s *Snapshot) row(i int) UASFacts {
+	u := s.uas[i]
+	if u.OperatorID != nil {
+		id := *u.OperatorID
+		u.OperatorID = &id
+	}
+	return u
 }
 
 // Operator implements Lookup.
