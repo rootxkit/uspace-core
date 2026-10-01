@@ -35,6 +35,14 @@ Each entry names the work package and the vectors it affects.
   once per `RetryAfter`). Vectors: `terrain_geoid.json`, 18 synthetic
   cases pass, 30 GeographicLib cases skip without `USPACE_GEOID_DIR`.
   [WP-2]
+- `cpa`: closest point of approach in the mid-latitude tangent plane
+  with the older sample advanced, `t_cpa` clamped to >= 0, the vertical
+  gap at `t_cpa`, inside the minima now as a conflict and pressure
+  tracks as unknown vertical; non-finite inputs, an invalid policy and
+  overflow are not judged (with a reason), never judged clear; results
+  are identical in either order. Neighbour `Grid` with per-band
+  longitude columns, antimeridian and pole safe, checked against brute
+  force. `cpa.json` 27/27 in both orders. [WP-9]
 
 ## [0.1.0] - unreleased (G-M1)
 
