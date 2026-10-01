@@ -1,0 +1,70 @@
+package cpa
+
+import (
+	"math"
+	"testing"
+
+	"github.com/rootxkit/uspace-core/core"
+)
+
+// FuzzEvaluate feeds arbitrary states (NaN, Inf, out of range and
+// overflowing values included) to Evaluate and Advance. None may panic,
+// and the verdict is fail-safe:
+//   - a non-finite or out-of-range input is never judged;
+//   - a pair not judged is never a conflict and always names a reason;
+//   - a judged result has finite, non-negative numbers, and a pair inside
+//     both minima now is a conflict whatever t_cpa says (C-03);
+//   - the result does not depend on the order of the pair.
+func FuzzEvaluate(f *testing.F) {
+	// Seeds from cpa.json (head-on, hovering with noise, stale, pressure)
+	// and the degenerate inputs.
+	f.Add(41.7151, 44.8271, 550.0, 10.0, 0.0, 0.0, 0.0, true, 41.72410351324941, 44.8271, 550.0, -10.0, 0.0, 0.0, 0.0, true)
+	f.Add(41.7151, 44.8271, 550.0, 0.0, 0.0, 0.0, 0.0, true, 41.71537000, 44.8271, 550.0, -0.01, 0.0, 0.0, 0.0, true)
+	f.Add(41.7151, 44.8271, 550.0, 10.0, 0.0, 0.0, 11.0, true, 41.7196, 44.8271, 550.0, -10.0, 0.0, 0.0, 0.0, true)
+	f.Add(41.7151, 44.8271, 500.0, 10.0, 0.0, 0.0, 0.0, false, 41.7196, 44.8271, 600.0, -10.0, 0.0, 0.0, 0.0, true)
+	f.Add(0.0, 179.999, 100.0, 0.0, 5.0, 0.0, 0.0, true, 0.0, -179.999, 100.0, 0.0, -5.0, 0.0, 0.0, true)
+	f.Add(89.9999, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, true, 89.9999, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, true)
+	f.Add(math.NaN(), math.Inf(1), math.Inf(-1), math.NaN(), 1e308, -1e308, math.NaN(), true, 91.0, 181.0, 1e308, 1e308, 1e308, 1e308, 1e308, false)
+	f.Fuzz(func(t *testing.T,
+		latA, lonA, altA, vnA, veA, vdA, tA float64, vkA bool,
+		latB, lonB, altB, vnB, veB, vdB, tB float64, vkB bool,
+	) {
+		a := State{Pos: core.LatLon{LatDeg: latA, LonDeg: lonA}, AltAMSLM: altA, VerticalKnown: vkA, VNMS: vnA, VEMS: veA, VDMS: vdA, CapturedAtS: tA}
+		b := State{Pos: core.LatLon{LatDeg: latB, LonDeg: lonB}, AltAMSLM: altB, VerticalKnown: vkB, VNMS: vnB, VEMS: veB, VDMS: vdB, CapturedAtS: tB}
+		_ = Advance(a, tB)
+		pol := DefaultPolicy
+		r := Evaluate(a, b, pol)
+		if rev := Evaluate(b, a, pol); rev != r {
+			t.Fatalf("asymmetric: Evaluate(a, b) = %+v, Evaluate(b, a) = %+v", r, rev)
+		}
+		if !a.valid() || !b.valid() {
+			if r.Judged || r.NotJudged != ReasonInvalidInput {
+				t.Fatalf("invalid input judged: %+v", r)
+			}
+		}
+		if !r.Judged {
+			if r.Conflict || r.NotJudged == ReasonNone {
+				t.Fatalf("not judged but %+v", r)
+			}
+			return
+		}
+		if r.NotJudged != ReasonNone {
+			t.Fatalf("judged with a reason: %+v", r)
+		}
+		for _, v := range []float64{r.TCPAS, r.DCPAHorizontalM, r.DAltAtCPAM, r.DHorizontalNowM, r.DAltNowM} {
+			if !core.IsFinite(v) || v < 0 {
+				t.Fatalf("judged with a bad number: %+v", r)
+			}
+		}
+		if r.VerticalKnown != (vkA && vkB) {
+			t.Fatalf("vertical known %v, inputs %v %v", r.VerticalKnown, vkA, vkB)
+		}
+		if !r.VerticalKnown && (r.DAltNowM != 0 || r.DAltAtCPAM != 0) {
+			t.Fatalf("unknown vertical reported as a number: %+v", r)
+		}
+		insideNow := r.DHorizontalNowM < pol.DHorizontalMinM && (!r.VerticalKnown || r.DAltNowM < pol.DVerticalMinM)
+		if insideNow && !r.Conflict {
+			t.Fatalf("inside the minima now but no conflict: %+v", r)
+		}
+	})
+}
