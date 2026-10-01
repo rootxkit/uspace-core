@@ -33,7 +33,7 @@ var Manifest = []Entry{
 	{"zones_vertical.json", "zones", 49},
 }
 
-// TotalCases is the number of cases across every file: 660 at the pinned
-// lab commit (knowledge/README.md), jwt_verify.json included, plus the 22
-// of the local ed318_roundtrip.json (WP-12).
+// TotalCases is the number of cases across every file at the pinned lab
+// commit (knowledge/README.md): 682, jwt_verify.json (WP-11) and
+// ed318_roundtrip.json (WP-12) included. No file is local.
 const TotalCases = 682
