@@ -77,7 +77,7 @@ func Dir() string {
 // file has no cases (E-01: an empty table proves nothing).
 func Load(t TB, name string) *File {
 	t.Helper()
-	f, err := Read(filepath.Join(Dir(), name))
+	f, err := readIn(Dir(), name)
 	if err != nil {
 		t.Fatalf("vectors %s: %v", name, err)
 		return nil
@@ -90,16 +90,37 @@ func Load(t TB, name string) *File {
 }
 
 // Read parses a vector file from disk without a testing.TB, for tools.
+// The path must name a .json file; it is read through an os.Root opened
+// on its directory, so a symlink cannot lead the read out of it.
 func Read(path string) (*File, error) {
-	raw, err := os.ReadFile(path)
+	path = filepath.Clean(path)
+	return readIn(filepath.Dir(path), filepath.Base(path))
+}
+
+// readIn reads and parses the vector file name inside dir. The read goes
+// through an os.Root, so name cannot leave dir: an absolute name, a ".."
+// element or a symlink pointing outside is refused. Only .json files are
+// vector files.
+func readIn(dir, name string) (*File, error) {
+	if filepath.Ext(name) != ".json" {
+		return nil, fmt.Errorf("%s: not a .json vector file", name)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := root.ReadFile(name)
+	if cerr := root.Close(); err == nil {
+		err = cerr
+	}
 	if err != nil {
 		return nil, err
 	}
 	f, err := Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		return nil, fmt.Errorf("%s: %w", filepath.Base(name), err)
 	}
-	f.Name = filepath.Base(path)
+	f.Name = filepath.Base(name)
 	return f, nil
 }
 

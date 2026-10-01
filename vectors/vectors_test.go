@@ -318,6 +318,19 @@ func TestLoadRefusals(t *testing.T) {
 	if !r.fatal {
 		t.Fatal("a missing file must fail")
 	}
+	for _, name := range []string{"../vectors.go", "../testdata/geodesy.json", "VERSION"} {
+		r = &recorder{}
+		Load(r, name)
+		if !r.fatal {
+			t.Fatalf("%s: a name outside testdata or not .json must fail", name)
+		}
+	}
+	if _, err := Read(filepath.Join(Dir(), "SHA256SUMS")); err == nil {
+		t.Fatal("Read of a non-.json file must fail")
+	}
+	if f, err := Read(filepath.Join(Dir(), "geodesy.json")); err != nil || f.Name != "geodesy.json" {
+		t.Fatalf("Read geodesy.json: %v", err)
+	}
 	f := &File{Name: "x", Extra: map[string]json.RawMessage{}}
 	r = &recorder{}
 	var v any
