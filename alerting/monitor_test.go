@@ -1082,3 +1082,21 @@ func TestOlderTrueNeverShortensTheHysteresis(t *testing.T) {
 		t.Fatalf("LastFalseS went back to %v", a[0].LastFalseS)
 	}
 }
+
+func TestDropRefusesEvidenceReasons(t *testing.T) {
+	// resolved and stale are the monitor's own judgements: a caller
+	// cannot claim them.
+	for _, r := range []ClearReason{ClearResolved, ClearStale} {
+		m := headOn(t, DefaultConfig())
+		wantEvents(t, string(r), m.Drop("B", r, 1), nil, nil)
+		if got := m.Counters().Get(CounterDropRefusedReason); got != 1 {
+			t.Fatalf("%s: drop_refused_reason = %d", r, got)
+		}
+		if m.Tracked() != 2 || len(m.Active()) != 1 {
+			t.Fatalf("%s: state changed", r)
+		}
+	}
+	// Twin: a caller's reason is taken.
+	m := headOn(t, DefaultConfig())
+	wantEvents(t, "landed", m.Drop("B", ClearLanded, 1), nil, []string{"conflict:A:B=landed"})
+}

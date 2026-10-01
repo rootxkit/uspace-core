@@ -231,12 +231,19 @@ func (m *Monitor) SwitchSource(st sources.State, wallS float64) Events {
 // Drop removes the aircraft id and clears every alert it is part of with
 // reason, which the caller chooses: flight_ended when its flight ended,
 // landed when it knows the aircraft landed (plan §11 gap 4). An empty
-// reason is refused and counted; an unknown id changes nothing.
+// reason, and resolved or stale (which only the monitor's own judgement
+// gives), are refused and counted; an unknown id changes nothing.
 func (m *Monitor) Drop(id string, reason ClearReason, wallS float64) Events {
 	var ev Events
-	if reason == "" {
+	switch reason {
+	case "":
 		m.counters.Inc(CounterDropWithoutReason)
 		return ev
+	case ClearResolved, ClearStale:
+		// Evidence and silence are the monitor's own verdicts.
+		m.counters.Inc(CounterDropRefusedReason)
+		return ev
+	case ClearSourceDisabled, ClearLanded, ClearFlightEnded:
 	}
 	if ac, ok := m.aircraft[id]; ok {
 		m.dropAircraft(ac, reason, &ev)

@@ -102,6 +102,10 @@ const (
 	// CounterZoneKeyDuplicate counts zones given a fallback key because an
 	// earlier zone has the same country and identifier.
 	CounterZoneKeyDuplicate = "zone_key_duplicate"
+	// CounterDropRefusedReason counts Drop calls refused because they
+	// named resolved or stale, which only the monitor's own judgement
+	// gives.
+	CounterDropRefusedReason = "drop_refused_reason"
 	// CounterConfigInvalid counts configuration values NewMonitor replaced
 	// with their default (a NaN, infinite or negative time, an unknown
 	// severity) or found unusable (a cpa.Policy Evaluate refuses).
