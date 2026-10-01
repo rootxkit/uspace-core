@@ -87,6 +87,18 @@ Each entry names the work package and the vectors it affects.
   grid `Index`, and the counters `zone_checks_not_evaluated`,
   `zone_limits_not_judged`, `height_checks_not_evaluated`; passes
   `zones_vertical.json` (38 cases). [WP-8]
+- `cpa`: closest point of approach in the mid-latitude tangent plane
+  with the older sample advanced, `t_cpa` clamped to >= 0, the vertical
+  gap at `t_cpa`, a conflict as a loss of separation anywhere in the
+  window (closed-form intervals, with `LoSStartS`), inside the minima
+  now as a conflict and pressure
+  tracks as unknown vertical; non-finite inputs, an invalid policy and
+  overflow are not judged (with a reason), never judged clear; results
+  are identical in either order; a pair within the polar limit (10 x
+  the neighbour radius plus the window's travel, from a pole) is not
+  judged. Neighbour `Grid` with per-band longitude columns, safe across
+  the antimeridian and at the poles, checked against brute force.
+  `cpa.json` 27/27 in both orders. [WP-9]
 
 ## [0.1.0] - unreleased (G-M1)
 
