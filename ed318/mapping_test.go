@@ -148,7 +148,7 @@ func TestED269MapsBothWays(t *testing.T) {
 	if z2.Geometry.Type != GeometryPoint || *z2.Geometry.RadiusM != 1640*core.FeetToMetres || *z2.Geometry.Layer.Uom != UomFeet {
 		t.Errorf("TST002 circle: %+v", z2.Geometry)
 	}
-	if string(z2.Properties.ExtendedProperties[ED269Key]) != `{"restrictionConditions":["Notify 24 h before"],"uSpaceClass":"EUROCONTROL"}` {
+	if string(z2.Properties.ExtendedProperties[ED269Key]) != `{"radius":{"value":1640,"uom":"FT"},"restrictionConditions":["Notify 24 h before"],"uSpaceClass":"EUROCONTROL"}` {
 		t.Errorf("kept ED-269 fields: %s", z2.Properties.ExtendedProperties[ED269Key])
 	}
 	if reread.Features[0].Properties.LimitedApplicability != nil {
@@ -419,6 +419,70 @@ func TestFromED269CarriedTextsRefusals(t *testing.T) {
 		var fe *core.FieldError
 		if !errors.As(err, &fe) || fe.Field != c.field {
 			t.Errorf("%s: %v, want a FieldError on %q", name, err, c.field)
+		}
+	}
+}
+
+// An FT circle round-trips exactly through ED-318: TST002 (1640 ft) and a
+// radius whose metres do not divide back to it (3500 ft), each written
+// back in the feet published, carried in extendedProperties.ed269.radius;
+// the radius in ED-318 is metres under the feet layer (E-01 twin: an
+// edited ED-318 radius is written as the shortest feet that convert to
+// it, not as the stale published value).
+func TestFTCircleRoundTripsExactly(t *testing.T) {
+	for _, ft := range []float64{1640, 3500} {
+		doc := only(validED269(t), "TST002")
+		r := ft
+		doc.Zones[0].Geometry[0].Projection.Radius = &r
+		fc, err := FromED269(doc, Metadata{}, "en-GB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := fc.Features[0].Geometry
+		if *g.RadiusM != ft*core.FeetToMetres || *g.Layer.Uom != UomFeet {
+			t.Errorf("%v ft: radius %v m under %s", ft, *g.RadiusM, *g.Layer.Uom)
+		}
+		raw, err := Export(fc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		back, err := ToED269(parseOrFail(t, raw), "en-GB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := *back.Zones[0].Geometry[0].Projection.Radius; got != ft {
+			t.Errorf("%v ft came back as %v", ft, got)
+		}
+		sameED269(t, back, doc)
+	}
+	fc, err := FromED269(only(validED269(t), "TST002"), Metadata{}, "en-GB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := 600.0
+	fc.Features[0].Geometry.RadiusM = &edited
+	back, err := ToED269(fc, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := *back.Zones[0].Geometry[0].Projection.Radius; got*core.FeetToMetres != edited || got == 1640 {
+		t.Errorf("an edited radius came back as %v ft", got)
+	}
+}
+
+// A carried radius that is not {value, uom: FT} with a positive value is
+// refused.
+func TestKeptRadiusRefused(t *testing.T) {
+	for _, bad := range []string{`{"value":1640,"uom":"M"}`, `{"value":-1,"uom":"FT"}`, `"1640"`} {
+		fc, err := FromED269(only(validED269(t), "TST002"), Metadata{}, "en-GB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fc.Features[0].Properties.ExtendedProperties[ED269Key] = json.RawMessage(`{"radius":` + bad + `}`)
+		_, err = ToED269(fc, "")
+		var fe *core.FieldError
+		if !errors.As(err, &fe) || fe.Field != "features[0].properties.extendedProperties.ed269.radius" {
+			t.Errorf("%s: %v", bad, err)
 		}
 	}
 }

@@ -20,7 +20,8 @@ import (
 //     fields `uSpaceClass`, the zone-level `title`, and
 //     `restrictionConditions` when ED-269 published it as a list
 //     (ED-318's is one string; the list is joined with newlines there
-//     and kept whole here);
+//     and kept whole here), and `radius` {value, uom: "FT"} for a circle
+//     ED-269 published in feet (ED-318's radius is metres);
 //   - in ED-269, written by ToED269 and read back by FromED269: `texts`,
 //     the whole ED-318 text lists of the zone whose other languages
 //     ED-269's single string cannot hold, by member (`name`, `message`,
@@ -32,7 +33,14 @@ const ED269Key = "ed269"
 // ED-269 document.
 const textsKey = "texts"
 
-var ed269KeyFields = []string{"uSpaceClass", "title", "restrictionConditions"}
+var ed269KeyFields = []string{"uSpaceClass", "title", "restrictionConditions", "radius"}
+
+// keptRadius is a circle radius as ED-269 published it in feet, carried
+// under ED269Key so that ToED269 writes it back exactly.
+type keptRadius struct {
+	Value float64 `json:"value"`
+	Uom   string  `json:"uom"`
+}
 
 // FromED269 maps a parsed ED-269 document onto ED-318 (spec 02 F1):
 // restriction becomes type (REQ_AUTHORISATION becomes REQ_AUTHORIZATION),
@@ -41,8 +49,9 @@ var ed269KeyFields = []string{"uSpaceClass", "title", "restrictionConditions"}
 // permanent period has none; any other permanent period becomes an empty
 // TimePeriod, which applies always), each text becomes a one-entry list
 // in lang, uomDimensions M and FT become the layer's m and ft, a Circle
-// becomes a Point with a Circle extent (its radius in metres, feet
-// converted with core.FeetToMetres), and the document's title and
+// becomes a Point with a Circle extent (its radius always in metres, feet
+// converted with core.FeetToMetres, the published feet kept in
+// extendedProperties.ed269.radius for ToED269), and the document's title and
 // description are kept. meta becomes the collection's metadata (nil when
 // it is the zero value).
 //
@@ -137,6 +146,9 @@ func fromZone(z *ed269.GeoZone, lang, path string) (*Feature, error) {
 	}
 	if z.Title != nil {
 		keep["title"] = *z.Title
+	}
+	if len(z.Geometry) == 1 && z.Geometry[0].Uom == ed269.UomFeet && z.Geometry[0].Projection.Radius != nil {
+		keep["radius"] = keptRadius{Value: *z.Geometry[0].Projection.Radius, Uom: string(ed269.UomFeet)}
 	}
 	ext, err := fromExtended(rest, keep, path)
 	if err != nil {
@@ -583,7 +595,8 @@ func toZone(f *Feature, path, lang string) (map[string]any, error) {
 	if z.RegulationExemption != nil {
 		m["regulationExemption"] = *z.RegulationExemption
 	}
-	rest, err := toExtended(m, z, here)
+	var kept *keptRadius
+	rest, err := toExtended(m, z, here, &kept)
 	if err != nil {
 		return nil, err
 	}
@@ -611,7 +624,7 @@ func toZone(f *Feature, path, lang string) (map[string]any, error) {
 		return nil, err
 	}
 	m["applicability"] = periods
-	vol, err := toVolume(f.Geometry, path+".geometry")
+	vol, err := toVolume(f.Geometry, path+".geometry", kept)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +634,7 @@ func toZone(f *Feature, path, lang string) (map[string]any, error) {
 
 // toExtended restores the ED269Key fields and returns the rest of
 // extendedProperties.
-func toExtended(m map[string]any, z *UASZone, here string) (map[string]json.RawMessage, error) {
+func toExtended(m map[string]any, z *UASZone, here string, radius **keptRadius) (map[string]json.RawMessage, error) {
 	if z.RestrictionConditions != nil {
 		m["restrictionConditions"] = *z.RestrictionConditions
 	}
@@ -648,6 +661,12 @@ func toExtended(m map[string]any, z *UASZone, here string) (map[string]json.RawM
 					return nil, core.Fieldf(where+"."+k, "must be a string")
 				}
 				m[k] = s
+			case "radius":
+				var r keptRadius
+				if err := json.Unmarshal(v, &r); err != nil || r.Uom != string(ed269.UomFeet) || !core.IsFinite(r.Value) || r.Value <= 0 {
+					return nil, core.Fieldf(where+"."+k, "must be {value, uom: FT} with a positive value")
+				}
+				*radius = &r
 			case "restrictionConditions":
 				var list []string
 				if err := json.Unmarshal(v, &list); err != nil || list == nil {
@@ -728,7 +747,7 @@ func deref(s *string) string {
 	return *s
 }
 
-func toVolume(g Geometry, where string) (map[string]any, error) {
+func toVolume(g Geometry, where string, kept *keptRadius) (map[string]any, error) {
 	if g.Type == GeometryCollection {
 		if len(g.Geometries) != 1 {
 			return nil, core.Fieldf(where+".geometries", "has %d layers; ED-269 holds one volume per zone", len(g.Geometries))
@@ -772,7 +791,13 @@ func toVolume(g Geometry, where string) (map[string]any, error) {
 		}
 		radius := *g.RadiusM
 		if feet {
-			radius = shortestFeet(radius)
+			// The feet ED-269 published, while the metres still convert
+			// from them exactly; else the shortest feet that do.
+			if kept != nil && kept.Value*core.FeetToMetres == radius {
+				radius = kept.Value
+			} else {
+				radius = shortestFeet(radius)
+			}
 		}
 		v["horizontalProjection"] = map[string]any{
 			"type":   ed269.ShapeCircle,
