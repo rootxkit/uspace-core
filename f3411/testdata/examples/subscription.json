@@ -1,0 +1,9 @@
+{
+  "id": "03e5572a-f733-49af-bc14-8a18bd53ee39",
+  "owner": "myuss",
+  "uss_base_url": "https://example.com/rid",
+  "notification_index": 3,
+  "time_start": {"value": "1985-04-12T23:20:50.52Z", "format": "RFC3339"},
+  "time_end": {"value": "1985-04-13T23:20:50.52Z", "format": "RFC3339"},
+  "version": "2"
+}

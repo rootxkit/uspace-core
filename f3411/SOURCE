@@ -1,0 +1,20 @@
+# Where the f3411 types and constants come from. Update together with
+# generate.go and re-run `go generate ./f3411`.
+uas_standards_repo = https://github.com/interuss/uas_standards
+uas_standards_commit = 6e182f43ec960b3bccf131c9006ff9979dd8a56e
+# uas_standards generates its v22a api.py from this file (its
+# tools/openapi_conversion/generate_apis.sh: "F3411-22a" from
+# interfaces/astm/f3411/v22a/remoteid/updated.yaml), at the submodule
+# commit uas_standards pins:
+spec_repo = https://github.com/uastech/standards
+spec_commit = dd4016b09fc8cb98f30c2a17b5a088fb2995ab54
+spec_path = remoteid/updated.yaml
+spec_title = Standard Remote ID API Interfaces 2.1.0
+# canonical.yaml at the same commit differs in two places: updated.yaml
+# types OperatingArea.volumes as Volume4D where canonical.yaml has
+# OperatingArea (updated.yaml was added by commit 1007138, "Fix
+# OperatingArea.volumes -> Volume4D"), and lets a Service Provider read an
+# ISA (dd4016b, security of GET /dss/identification_service_areas/{id}).
+constants = src/uas_standards/astm/f3411/v22a/constants.py
+generator = github.com/oapi-codegen/oapi-codegen/v2 v2.8.0, types only (oapi-codegen.yaml)
+postprocess = ./internal/oapialias (one-element anyOf unions become aliases)

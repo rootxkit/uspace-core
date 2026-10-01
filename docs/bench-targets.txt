@@ -32,3 +32,4 @@ BenchmarkValidateCTA        300
 BenchmarkQuery              300
 BenchmarkVerifyReceiver     5000
 BenchmarkVerifyJWT          200000
+BenchmarkUnmarshalRIDFlight 20000
