@@ -1100,3 +1100,26 @@ func TestDropRefusesEvidenceReasons(t *testing.T) {
 	m := headOn(t, DefaultConfig())
 	wantEvents(t, "landed", m.Drop("B", ClearLanded, 1), nil, []string{"conflict:A:B=landed"})
 }
+
+func TestSwitchDropsByLastSourceAndOtherSourceReRaises(t *testing.T) {
+	// A is heard by Remote ID and by relay gs-1; its last sample before
+	// the switch is the relay's. Switching the relay off drops A as
+	// source_disabled (one-station-off-drops-only-its-aircraft pins the
+	// drop); A's next sample through the still-enabled Remote ID is a
+	// new track and raises the conflict again.
+	m := NewMonitor(DefaultConfig())
+	rid := at("A", 0, 10, 0)
+	rid.Source, rid.Station = "remote_id", "rx-1"
+	m.Observe(rid, 0)
+	relay := at("A", 0, 10, 0.5)
+	relay.Station = "gs-1"
+	m.Observe(relay, 0.5)
+	b := at("B", 495, -10, 0.5)
+	b.Source, b.Station = "remote_id", "rx-1"
+	wantEvents(t, "raise", m.Observe(b, 0.5), []string{"conflict:A:B"}, nil)
+	off := sources.State{Epoch: "e", Version: 1, Controls: []sources.Control{{SourceType: "relay", Enabled: false}}}
+	wantEvents(t, "relay off", m.SwitchSource(off, 0.6), nil, []string{"conflict:A:B=source_disabled"})
+	rid = at("A", 10, 10, 1)
+	rid.Source, rid.Station = "remote_id", "rx-1"
+	wantEvents(t, "remote id re-raises", m.Observe(rid, 1), []string{"conflict:A:B"}, nil)
+}

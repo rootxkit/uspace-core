@@ -30,7 +30,11 @@
 //     unknown flying state is not flying and not a landing: the track is
 //     held, its alerts too, and they go stale unless it flies on.
 //   - source_disabled: SwitchSource took a state that disables the source
-//     of the aircraft's last sample (B-11).
+//     of the aircraft's last admitted sample (B-11). The drop goes by that
+//     last sample only: an aircraft also heard through a source that is
+//     still enabled is dropped all the same, and its next sample from the
+//     enabled source starts a new track and raises its alerts again (as
+//     the old monitor did).
 //   - flight_ended (or any reason the caller names): Drop.
 //
 // Nothing missing, stale, NaN or unjudged clears an alert by itself, and

@@ -205,7 +205,10 @@ func (m *Monitor) Tick(wallS float64) Events {
 // admitted sample came from a source it disables is dropped at once and
 // its alerts cleared as source_disabled (B-11); later samples from that
 // source are rejected_source_disabled until it is enabled again, which
-// replays nothing. A state not taken changes nothing and is counted.
+// replays nothing. The drop goes by the source of the aircraft's last
+// admitted sample only: an aircraft also heard through a source still
+// enabled is dropped, and its next sample from that source raises its
+// alerts again. A state not taken changes nothing and is counted.
 func (m *Monitor) SwitchSource(st sources.State, wallS float64) Events {
 	var ev Events
 	if !m.follower.Apply(st) {
