@@ -17,6 +17,13 @@ env:
   GOFLAGS: -mod=mod
   GOTOOLCHAIN: local
 
+defaults:
+  run:
+    # Explicit bash runs steps with -eo pipefail. The runner's default,
+    # bash -e without pipefail, lets a failing command on the left of a
+    # pipe (go test | tee, go tool cover | tail) pass the step.
+    shell: bash
+
 jobs:
   build-vet-lint:
     name: build, vet, fmt, lint

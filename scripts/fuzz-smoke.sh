@@ -9,7 +9,14 @@ fuzztime="${FUZZTIME:-10s}"
 status=0
 found=0
 for pkg in $($GO list ./...); do
-  targets="$($GO test -list '^Fuzz' "$pkg" 2>/dev/null | grep '^Fuzz' || true)"
+  # A package whose tests do not build lists nothing; that is a failure,
+  # not a package without fuzz targets.
+  if ! list="$($GO test -list '^Fuzz' "$pkg" 2>&1)"; then
+    echo "$list"
+    echo "fuzz-smoke: go test -list failed for $pkg"
+    exit 1
+  fi
+  targets="$(grep '^Fuzz' <<<"$list" || true)"
   for t in $targets; do
     found=1
     echo "== $pkg $t ($fuzztime)"
