@@ -16,6 +16,19 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.3.0] (WP-18)
+
+Additive to 1.2.0: the direct geodesic problem in `geodesy`, for the
+CISP's circle outline in place of its local solver. No vector changed;
+`uspace-lab@6b5b286` remains the pin.
+
+### API declared stable
+
+From `1.3.0` `geodesy.Destination` is stable: its signature, the
+agreement with `Inverse` to under 0.1 mm, the bearing taken modulo 360,
+the longitude wrapped into [-180, 180], and NaN for an invalid input. No
+counter is added.
+
 ### Added
 
 - `geodesy`: `Destination` solves the direct geodesic problem on WGS84
