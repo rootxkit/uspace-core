@@ -71,3 +71,11 @@ func BenchmarkInCircle(b *testing.B) {
 		sinkB = in
 	}
 }
+
+func BenchmarkVincentyDirect(b *testing.B) {
+	p := ll(41.7151, 44.8271)
+	for b.Loop() {
+		q := Destination(p, 51.3, 1250)
+		sinkF = q.LatDeg
+	}
+}
