@@ -16,6 +16,15 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `auth`: `Issuer.IssueSession`, `SessionClaims` and `SessionScope`
+  (`"session"`) sign a console or portal session token with exactly the
+  cross-plan Appendix A claims (iss, aud, sub, scope, roles, realm, iat,
+  exp, jti; RS256, kid); every token it issues verifies under
+  `StrictSessionClaims`. `Issue` and the verifier are unchanged. No
+  vector changed. [WP-17]
+
 ## [1.1.0] (C1)
 
 Additive to 1.0.0 for the cross-plan reconciliation C1: JWS helpers and

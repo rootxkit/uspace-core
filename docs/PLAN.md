@@ -451,6 +451,9 @@ type CompactConfig struct{ Issuers map[string]IssuerConfig; Audiences []string; 
 type CompactVerifier struct{...};  func NewCompactVerifier(ctx context.Context, c CompactConfig) (*CompactVerifier, error)
 func (v *CompactVerifier) Verify(ctx context.Context, token string) (CompactClaims, json.RawMessage, error);  func (v *CompactVerifier) Counters() *core.Counters
 // New counters: rejected_b64, rejected_crit, rejected_publisher, rejected_iat, rejected_too_large, key_ring_full.
+// v1.2.0 (WP-17), additive. Session tokens (cross-plan Appendix A, M20): payload exactly iss, aud, sub, scope "session", roles, realm, iat, exp, jti; header alg RS256, kid, typ JWT.
+const SessionScope = "session";  type SessionClaims struct{ Audience, Subject string; Roles []string; Realm string; IssuedAt, ExpiresAt time.Time; JTI string }
+func (i *Issuer) IssueSession(c SessionClaims) (string, error)   // every field required; exp > iat in whole seconds; each issued token verifies under StrictSessionClaims
 ```
 
 ### 3.14 `ed318`, `f3411`, `f3548` (WP-12, G-M2)
