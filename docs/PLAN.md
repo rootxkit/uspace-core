@@ -151,6 +151,10 @@ var Manifest []Entry;  const TotalCases = 682
 // Vincenty inverse on WGS84. ErrNoConvergence for nearly antipodal points (D-09).
 func Inverse(a, b core.LatLon) (distanceM, initialBearingDeg, finalBearingDeg float64, err error)
 func DistanceM(a, b core.LatLon) (float64, error)           // Inverse, distance only
+// Vincenty direct on WGS84 (WP-18, v1.3.0): the counterpart of Inverse to
+// under 0.1 mm; bearing modulo 360, longitude wrapped; an invalid input
+// gives NaN (not Valid), never an error or a panic.
+func Destination(from core.LatLon, bearingDeg, distanceM float64) core.LatLon
 func HaversineM(a, b core.LatLon) float64                    // sphere core.MeanEarthRadiusM; spoof distance only (D-11)
 // Local tangent plane about origin: north/east metres of p using the WGS84
 // meridional and prime-vertical radii at the origin latitude; longitude

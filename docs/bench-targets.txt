@@ -6,6 +6,7 @@ BenchmarkDecodeMessage      1000
 BenchmarkDecodePack         3000
 BenchmarkEncodeMessage      1000
 BenchmarkVincentyInverse    2000
+BenchmarkVincentyDirect     2000
 BenchmarkHaversine          200
 BenchmarkLocalOffset        200
 BenchmarkInPolygon100       2000

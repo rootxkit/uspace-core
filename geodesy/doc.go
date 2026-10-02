@@ -10,6 +10,14 @@
 //     only). Coincident points give 0 without iterating. Geoscience
 //     Australia's worked example agrees to 1 mm. Every zone edge and
 //     circle uses this.
+//   - Destination solves the direct problem with Vincenty's formulae
+//     (WP-18): the position distanceM metres along the geodesic leaving
+//     from at bearingDeg, iterated on sigma to 1e-12 rad. It agrees with
+//     Inverse to under 0.1 mm both ways. A bearing is taken modulo 360,
+//     the longitude is wrapped into [-180, 180], zero distance returns
+//     from unchanged, and from a pole the bearing is measured from the
+//     meridian of from.LonDeg. An invalid from, a non-finite bearing or a
+//     negative or non-finite distance gives NaN, which is not Valid().
 //   - HaversineM is the great circle on the 6,371,008.8 m sphere, for the
 //     spoof-distance check only (D-11). It is up to 0.56 % off the
 //     ellipsoid: never use it for zone edges.

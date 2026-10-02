@@ -16,6 +16,14 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `geodesy`: `Destination` solves the direct geodesic problem on WGS84
+  with Vincenty's formulae, the counterpart of `Inverse` to under 0.1 mm
+  both ways; a bearing is taken modulo 360, the longitude is wrapped
+  across the antimeridian, and an invalid input gives NaN. Nothing that
+  exists changes its output. No vector changed. [WP-18]
+
 ## [1.2.0] (WP-17)
 
 Additive to 1.1.0: one shared signer for console and portal session
