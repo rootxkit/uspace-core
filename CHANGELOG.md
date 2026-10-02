@@ -16,6 +16,20 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.2.0] (WP-17)
+
+Additive to 1.1.0: one shared signer for console and portal session
+tokens in `auth`, for the authority and the USSP in place of their own. No
+vector changed; `uspace-lab@6b5b286` remains the pin.
+
+### API declared stable
+
+From `1.2.0` the new identifiers of `auth` are stable:
+`Issuer.IssueSession`, `SessionClaims` and `SessionScope`, and the wire
+form of the session token (header `alg RS256`, `kid`, `typ JWT`;
+payload exactly `iss`, `aud`, `sub`, `scope`, `roles`, `realm`, `iat`,
+`exp`, `jti`, cross-plan Appendix A). No counter is added.
+
 ### Added
 
 - `auth`: `Issuer.IssueSession`, `SessionClaims` and `SessionScope`
