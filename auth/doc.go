@@ -56,6 +56,13 @@
 // ignored. Every uspace system sets StrictSessionClaims; it is opt-in
 // only so that v1.1.0 is additive.
 //
+// From v1.2.0, Issuer.IssueSession signs a console or portal session
+// token (cross-plan Appendix A, M20): its payload is exactly iss, aud,
+// sub, scope "session", roles, realm, iat, exp and jti, and its header
+// alg RS256, kid and typ JWT. It refuses what the verifier would refuse
+// or read back differently, so every token it returns verifies under
+// StrictSessionClaims with the claims given. Issue is unchanged.
+//
 // # Three signed forms, and when a system uses which
 //
 //   - Bearer JWT (Verifier, Issuer): who is calling. Every API request
