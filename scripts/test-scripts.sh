@@ -122,5 +122,35 @@ check vec-leaky-git-redacted pass 0 "<redacted>" "$out"
 absent vec-leaky-git-token "$token" "$out"
 absent vec-leaky-git-header "$basic" "$out"
 
+# --- fuzz-smoke.sh ----------------------------------------------------
+
+# fuzzfix NAME TARGETS: a checkout with fuzz-smoke.sh and a stand-in go
+# whose one package lists TARGETS (space-separated, may be empty) and
+# whose fuzz runs pass.
+fuzzfix() {
+  local r="$work/$1"
+  mkdir -p "$r/scripts"
+  cp "$here/fuzz-smoke.sh" "$r/scripts/"
+  cat > "$r/go" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "list ./...") echo example.com/fixture/pkg ;;
+  "test -list") for t in $2; do echo "\$t"; done; echo "ok  example.com/fixture/pkg 0.01s" ;;
+  "test -run") echo "fuzz: elapsed: 0s, PASS" ;;
+  *) echo "stand-in go: unexpected \$*" >&2; exit 2 ;;
+esac
+STUB
+  chmod +x "$r/go"
+  echo "$r"
+}
+
+r="$(fuzzfix fuzz-none "")"
+rc=0; out="$(GO="$r/go" FUZZTIME=1s bash "$r/scripts/fuzz-smoke.sh" 2>&1)" || rc=$?
+check fuzz-none fail "$rc" "fuzz-smoke: no fuzz target found" "$out"
+
+r="$(fuzzfix fuzz-one "FuzzDecode")"
+rc=0; out="$(GO="$r/go" FUZZTIME=1s bash "$r/scripts/fuzz-smoke.sh" 2>&1)" || rc=$?
+check fuzz-one pass "$rc" "== example.com/fixture/pkg FuzzDecode (1s)" "$out"
+
 echo "== $passed passed, $failed failed"
 [[ "$failed" == 0 ]]
