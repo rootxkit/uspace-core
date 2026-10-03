@@ -29,11 +29,13 @@ type SessionClaims struct {
 	// Roles are the account's console roles: at least one, none empty,
 	// none with surrounding white space, none twice.
 	Roles []string
-	// Realm is console, police or portal; core does not restrict it.
+	// Realm is console, police or portal; the issuer does not restrict
+	// it, a verifier does with Config.Realms.
 	Realm string
 	// IssuedAt and ExpiresAt bound the session; ExpiresAt must be after
 	// IssuedAt in whole seconds. The TTL limit (Appendix A: <= 12 h) and
-	// the idle timeout are the caller's policy.
+	// the idle timeout are the caller's policy; a verifier enforces the
+	// TTL with Config.MaxSessionTTL.
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 	// JTI is the session id, kept by the caller for revocation.

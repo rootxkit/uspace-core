@@ -13,6 +13,12 @@ vector that pins the corrected behaviour.
 Scope: everything in this module. Out of scope: the systems that import it
 (each has its own policy) and the lab simulators.
 
+Session limits (cross-plan Appendix A): the 12 h session lifetime and
+the realm set are enforced by every system that verifies console or
+portal session tokens, through `auth.Config.MaxSessionTTL` and
+`auth.Config.Realms` under `StrictSessionClaims`; the idle timeout is
+the issuing system's. `IssueSession` signs what its caller asks for.
+
 This repository is public. No secret, key, certificate or token is ever
 committed, including test keys; `gitleaks` runs in CI. Test keys for the
 `auth` package are generated at test time.

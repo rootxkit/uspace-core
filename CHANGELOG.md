@@ -16,6 +16,17 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `auth`: `Config.MaxSessionTTL` and `Config.Realms`, honoured under
+  `StrictSessionClaims`: a session token (scope `session`) whose `exp`
+  is more than `MaxSessionTTL` after its `iat`, or that has no `iat`,
+  and a present `realm` not in `Realms`, are `rejected_claims`. Both are
+  off by default, so no judgement of 1.3.0 changes; `NewVerifier`
+  refuses either without `StrictSessionClaims`, where it would do
+  nothing. SECURITY.md names where the 12 h limit is enforced.
+  [audit N1]
+
 ### Fixed
 
 - `geodesy`: `Destination` refuses, as NaN, a distance longer than one

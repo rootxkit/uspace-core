@@ -82,6 +82,18 @@ type Config struct {
 	// uspace system enables it; it is opt-in only so that v1.1.0 changes
 	// no judgement of v1.0.0. Added in v1.1.0.
 	StrictSessionClaims bool
+	// MaxSessionTTL, with StrictSessionClaims, refuses as rejected_claims
+	// a session token (its scope contains "session") whose exp is more
+	// than this after its iat, or that has no iat (Appendix A: at most
+	// 12 h). Zero is no limit, v1.3.0's judgement; setting it without
+	// StrictSessionClaims is a configuration error. Added in v1.4.0.
+	MaxSessionTTL time.Duration
+	// Realms, with StrictSessionClaims, refuses as rejected_claims a
+	// token whose realm is present and not exactly one of these
+	// (Appendix A: console, police, portal). Empty allows any realm,
+	// v1.3.0's judgement; setting it without StrictSessionClaims is a
+	// configuration error. Added in v1.4.0.
+	Realms []string
 	// MaxSkew is the clock skew allowed on exp, nbf and iat.
 	MaxSkew time.Duration
 	// JWKSCacheTTL is how long a fetched JWKS is fresh. From
@@ -197,7 +209,16 @@ func NewVerifier(ctx context.Context, c Config) (*Verifier, error) {
 	if slices.Contains(c.Audiences, "") {
 		return nil, core.Fieldf("audiences", "an audience is empty")
 	}
+	switch {
+	case c.MaxSessionTTL < 0:
+		return nil, core.Fieldf("max_session_ttl", "negative")
+	case slices.Contains(c.Realms, ""):
+		return nil, core.Fieldf("realms", "a realm is empty")
+	case !c.StrictSessionClaims && (c.MaxSessionTTL > 0 || len(c.Realms) > 0):
+		return nil, core.Fieldf("strict_session_claims", "off, so MaxSessionTTL and Realms would not be applied")
+	}
 	c.Audiences = slices.Clone(c.Audiences)
+	c.Realms = slices.Clone(c.Realms)
 	return newVerifier(ctx, c, "issuers", "issuer")
 }
 
@@ -377,11 +398,11 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 		return Claims{}, refuseToken(CounterRejectedNotYetValid, "nbf", "not valid before %s, more than %s from now",
 			nbf.UTC().Format(time.RFC3339), skew)
 	}
-	iat, present, err := cl.numericDate("iat")
+	iat, hasIAT, err := cl.numericDate("iat")
 	if err != nil {
 		return Claims{}, err
 	}
-	if present && now.Add(skew).Before(iat) {
+	if hasIAT && now.Add(skew).Before(iat) {
 		return Claims{}, refuseToken(CounterRejectedNotYetValid, "iat", "issued at %s, more than %s from now",
 			iat.UTC().Format(time.RFC3339), skew)
 	}
@@ -419,7 +440,8 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 		}
 	}
 	var realm string
-	if raw, has := cl["realm"]; has {
+	raw, hasRealm := cl["realm"]
+	if hasRealm {
 		if realm, ok = jsonString(raw); !ok {
 			if v.cfg.StrictSessionClaims {
 				return Claims{}, refuseToken(CounterRejectedClaims, "realm", "not a string")
@@ -427,10 +449,32 @@ func (v *Verifier) judgeClaims(cl claimSet, iss, kid string) (Claims, error) {
 			realm = ""
 		}
 	}
+	if err := v.judgeSessionLimits(scopes, hasRealm, realm, hasIAT, iat, exp); err != nil {
+		return Claims{}, err
+	}
 	return Claims{
 		Issuer: iss, Subject: sub, Audience: matched, JTI: jti, KeyID: kid,
 		Scopes: scopes, ExpiresAt: exp, IssuedAt: iat, Roles: roles, Realm: realm,
 	}, nil
+}
+
+// judgeSessionLimits applies Config.Realms to a present realm and
+// Config.MaxSessionTTL to a session token; NewVerifier allows either only
+// with StrictSessionClaims.
+func (v *Verifier) judgeSessionLimits(scopes []string, hasRealm bool, realm string, hasIAT bool, iat, exp time.Time) error {
+	if hasRealm && len(v.cfg.Realms) > 0 && !slices.Contains(v.cfg.Realms, realm) {
+		return refuseToken(CounterRejectedClaims, "realm", "%s is not an allowed realm", quoteShort(realm))
+	}
+	if v.cfg.MaxSessionTTL == 0 || !slices.Contains(scopes, SessionScope) {
+		return nil
+	}
+	if !hasIAT {
+		return refuseToken(CounterRejectedClaims, "iat", "missing on a session token")
+	}
+	if ttl := exp.Sub(iat); ttl > v.cfg.MaxSessionTTL {
+		return refuseToken(CounterRejectedClaims, "exp", "%s after iat, longer than the session limit %s", ttl, v.cfg.MaxSessionTTL)
+	}
+	return nil
 }
 
 // matchAudience returns Audience when aud contains it, otherwise the
