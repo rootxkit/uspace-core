@@ -56,7 +56,8 @@ func FuzzShapes(f *testing.F) {
 }
 
 // FuzzDestination feeds arbitrary floats to Destination: it never panics,
-// an invalid input gives NaN, and a valid one gives a valid position whose
+// an invalid input (a distance past MaxDestinationDistanceM included)
+// gives NaN, and a valid one gives a valid position whose
 // distance from the start by Inverse is the input within 1 mm, up to
 // 1000 km.
 func FuzzDestination(f *testing.F) {
@@ -66,11 +67,13 @@ func FuzzDestination(f *testing.F) {
 	f.Add(90.0, 0.0, 90.0, 10000.0)
 	f.Add(41.71, 44.81, 0.0, 0.0)
 	f.Add(0.0, 0.0, 45.0, 1e9)
+	f.Add(0.0, 0.0, 45.0, 4e7)
 	f.Add(math.NaN(), math.Inf(1), math.Inf(-1), -1.0)
 	f.Fuzz(func(t *testing.T, lat, lon, bearing, distanceM float64) {
 		from := ll(lat, lon)
 		to := Destination(from, bearing, distanceM)
-		if !from.Valid() || !core.IsFinite(bearing) || !core.IsFinite(distanceM) || distanceM < 0 {
+		if !from.Valid() || !core.IsFinite(bearing) || !core.IsFinite(distanceM) || distanceM < 0 ||
+			distanceM > MaxDestinationDistanceM {
 			if !math.IsNaN(to.LatDeg) || !math.IsNaN(to.LonDeg) {
 				t.Fatalf("Destination(%v, %v, %v) = %v, want NaN", from, bearing, distanceM, to)
 			}

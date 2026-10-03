@@ -200,6 +200,10 @@ func TestDestinationRefusesInvalid(t *testing.T) {
 		{"distance negative", ok, 0, -0.001},
 		{"distance NaN", ok, 0, math.NaN()},
 		{"distance infinite", ok, 0, math.Inf(1)},
+		{"distance just past one turn", ok, 0, math.Nextafter(MaxDestinationDistanceM, math.Inf(1))},
+		{"distance in millimetres by mistake", ok, 30, 5e9},
+		{"distance 1e300", ok, 0, 1e300},
+		{"distance MaxFloat64", ok, 0, math.MaxFloat64},
 	}
 	for _, c := range cases {
 		got := Destination(c.from, c.bearing, c.dist)
@@ -218,6 +222,8 @@ func TestDestinationRefusesInvalid(t *testing.T) {
 		{"bearing large", ok, 1e6, 1},
 		{"distance zero", ok, 0, 0},
 		{"distance one turn", ok, 0, 4.0075e7},
+		{"distance at the bound", ok, 0, MaxDestinationDistanceM},
+		{"distance at the bound, oblique", ok, 30, MaxDestinationDistanceM},
 	}
 	for _, c := range accepted {
 		if got := Destination(c.from, c.bearing, c.dist); !got.Valid() {

@@ -16,6 +16,14 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Fixed
+
+- `geodesy`: `Destination` refuses, as NaN, a distance longer than one
+  equatorial circumference (`MaxDestinationDistanceM`, about 40 075 km).
+  It returned a valid-looking position for any finite distance, also
+  where the arc had no significant bits left (1e300 m); every distance
+  up to one turn gives what it gave before. No vector changed. [audit S8]
+
 ## [1.3.0] (WP-18)
 
 Additive to 1.2.0: the direct geodesic problem in `geodesy`, for the
