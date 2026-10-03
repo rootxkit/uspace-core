@@ -11,6 +11,14 @@ import (
 // lambdaToleranceRad is for Inverse.
 const sigmaToleranceRad = 1e-12
 
+// MaxDestinationDistanceM is the longest distance Destination accepts:
+// one equatorial circumference of the WGS84 ellipsoid (2 pi a, about
+// 40 075 km), the longest closed geodesic. A longer distance is no
+// path anyone flies and, far enough past it, leaves no significant bits
+// in the arc, so the position it would give is confident and
+// meaningless; Destination refuses it as invalid.
+const MaxDestinationDistanceM = 2 * math.Pi * core.WGS84SemiMajorM
+
 // Destination solves the direct geodesic problem on the WGS84 ellipsoid
 // with Vincenty's formulae (T. Vincenty, Survey Review 23, 1975), the
 // counterpart of Inverse: the position reached from `from` after
@@ -22,10 +30,12 @@ const sigmaToleranceRad = 1e-12
 // a pole the bearing is measured from the meridian of from.LonDeg.
 //
 // An invalid from (non-finite or out of range), a non-finite bearing, or
-// a negative or non-finite distance returns NaN for both coordinates,
-// which is not Valid(). It never panics.
+// a negative, non-finite or longer than MaxDestinationDistanceM distance
+// returns NaN for both coordinates, which is not Valid(). It never
+// panics.
 func Destination(from core.LatLon, bearingDeg, distanceM float64) core.LatLon {
-	if !from.Valid() || !core.IsFinite(bearingDeg) || !core.IsFinite(distanceM) || distanceM < 0 {
+	if !from.Valid() || !core.IsFinite(bearingDeg) || !core.IsFinite(distanceM) ||
+		distanceM < 0 || distanceM > MaxDestinationDistanceM {
 		return core.LatLon{LatDeg: math.NaN(), LonDeg: math.NaN()}
 	}
 	if distanceM == 0 {

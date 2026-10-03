@@ -16,6 +16,29 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `auth`: `Config.MaxSessionTTL` and `Config.Realms`, honoured under
+  `StrictSessionClaims`: a session token (scope `session`) whose `exp`
+  is more than `MaxSessionTTL` after its `iat`, or that has no `iat`,
+  and a present `realm` not in `Realms`, are `rejected_claims`. Both are
+  off by default, so no judgement of 1.3.0 changes; `NewVerifier`
+  refuses either without `StrictSessionClaims`, where it would do
+  nothing. SECURITY.md names where the 12 h limit is enforced.
+  [audit N1]
+
+### Fixed
+
+- `geodesy`: `Destination` refuses, as NaN, a distance longer than one
+  equatorial circumference (`MaxDestinationDistanceM`, about 40 075 km).
+  It returned a valid-looking position for any finite distance, also
+  where the arc had no significant bits left (1e300 m); every distance
+  up to one turn gives what it gave before. No vector changed. [audit S8]
+- `auth`: `IssueSession` refuses a role with surrounding white space
+  (`" operator"`, an em space included) and a role listed twice, as a
+  `*core.FieldError` on `roles`; they were signed as given, confusing
+  display and audit. The verifier's judgement is unchanged. [audit N2]
+
 ## [1.3.0] (WP-18)
 
 Additive to 1.2.0: the direct geodesic problem in `geodesy`, for the

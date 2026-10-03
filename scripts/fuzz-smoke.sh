@@ -25,7 +25,10 @@ for pkg in $($GO list ./...); do
     fi
   done
 done
+# The module has Fuzz targets (auth, geodesy, the decoders), so finding
+# none means the listing is broken, not that there is nothing to run.
 if [[ "$found" == "0" ]]; then
-  echo "no fuzz targets found yet (the decoders of WP-3, WP-5, WP-11 add them)"
+  echo "fuzz-smoke: no fuzz target found; go list or go test -list matched nothing"
+  exit 1
 fi
 exit $status

@@ -63,6 +63,12 @@
 // or read back differently, so every token it returns verifies under
 // StrictSessionClaims with the claims given. Issue is unchanged.
 //
+// From v1.4.0, Config.MaxSessionTTL and Config.Realms let a strict
+// verifier enforce Appendix A's session limits itself: a session token
+// whose exp is more than MaxSessionTTL after its iat (or that has no
+// iat), and a realm not in Realms, are rejected_claims. Both are off by
+// default, so v1.4.0 changes no judgement of v1.3.0.
+//
 // # Three signed forms, and when a system uses which
 //
 //   - Bearer JWT (Verifier, Issuer): who is calling. Every API request

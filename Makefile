@@ -16,7 +16,7 @@ LAB     ?= ../uspace-lab
 # both files together. `make tools` installs them into $(go env GOPATH)/bin.
 GOLANGCI_LINT_VERSION ?= v2.14.0
 STATICCHECK_VERSION   ?= v0.8.1
-# The gitleaks version gitleaks-action runs in CI (GITLEAKS_VERSION there).
+# The gitleaks version the CI gitleaks job runs (GITLEAKS_VERSION there).
 # .gitleaks.toml relies on how this version applies allowlists.
 GITLEAKS_VERSION      ?= v8.24.3
 # govulncheck, pinned like the linters; CI runs the same version.
@@ -24,7 +24,7 @@ GOVULNCHECK_VERSION   ?= v1.8.0
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
         check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck geoid \
-        semver-gate release-gates consumer-check release-check ci clean
+        semver-gate release-gates script-tests consumer-check release-check ci clean
 
 all: ci
 
@@ -109,6 +109,10 @@ semver-gate:
 # The fixture tests of semver-gate.sh and release-check.sh (bash, git, jq).
 release-gates:
 	scripts/test-release-gates.sh
+
+# The fixture tests of check-vectors.sh and fuzz-smoke.sh (bash, git).
+script-tests:
+	scripts/test-scripts.sh
 
 # The vectors run from a scratch consumer module (VERSION= a published tag
 # to fetch it from GitHub instead of replacing it with this checkout).

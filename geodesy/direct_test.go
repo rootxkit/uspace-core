@@ -114,6 +114,58 @@ func TestDestinationRoundTripWithInverse(t *testing.T) {
 	}
 }
 
+// Past 10 000 km, up to the semi-circumference less a margin: seeded
+// random lines from 10 000 to 18 000 km keep the full promise, distance
+// and bearing back within 0.1 mm, and Destination(a, Inverse(a, b))
+// lands on b. Up to 19 990 km the distance back still agrees; there the
+// bearing is ill-conditioned (every geodesic to the antipode meets
+// there), and a nearly antipodal pair Inverse cannot solve is skipped
+// (D-09), never counted as agreement.
+func TestDestinationRoundTripToHalfTurn(t *testing.T) {
+	const fullPromiseM, distanceOnlyM = 1.8e7, 1.999e7
+	rng := rand.New(rand.NewPCG(18, 2))
+	solved := 0
+	for i := range 2000 {
+		from := ll(rng.Float64()*178-89, rng.Float64()*360-180)
+		bearing := rng.Float64() * 360
+		checkRoundTrip(t, from, bearing, 1e7+rng.Float64()*(fullPromiseM-1e7))
+
+		d := fullPromiseM + rng.Float64()*(distanceOnlyM-fullPromiseM)
+		to := Destination(from, bearing, d)
+		got, _, _, err := Inverse(from, to)
+		switch {
+		case errors.Is(err, ErrNoConvergence):
+		case err != nil:
+			t.Fatalf("Inverse(%v, %v): %v", from, to, err)
+		case math.Abs(got-d) > roundTripToleranceM:
+			t.Errorf("case %d: from %v bearing %v: distance %v, want %v (off %v m)", i, from, bearing, got, d, got-d)
+		default:
+			solved++
+		}
+
+		b := ll(rng.Float64()*178-89, rng.Float64()*360-180)
+		dist, az, _, err := Inverse(from, b)
+		if errors.Is(err, ErrNoConvergence) || dist <= 1e7 || dist > fullPromiseM {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		landed := Destination(from, az, dist)
+		miss, err := DistanceM(landed, b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if miss > roundTripToleranceM {
+			t.Errorf("case %d: Destination(%v, %v, %v) = %v, %v m from %v", i, from, az, dist, landed, miss, b)
+		}
+	}
+	// The skip must not swallow the check: almost every long line solves.
+	if solved < 1900 {
+		t.Errorf("only %d of 2000 lines past %v m were solved by Inverse", solved, fullPromiseM)
+	}
+}
+
 func TestDestinationAcrossAntimeridian(t *testing.T) {
 	east := checkRoundTrip(t, ll(0, 179.999), 90, 1000)
 	if east.LonDeg > -179 || east.LonDeg < -180 {
@@ -200,6 +252,10 @@ func TestDestinationRefusesInvalid(t *testing.T) {
 		{"distance negative", ok, 0, -0.001},
 		{"distance NaN", ok, 0, math.NaN()},
 		{"distance infinite", ok, 0, math.Inf(1)},
+		{"distance just past one turn", ok, 0, math.Nextafter(MaxDestinationDistanceM, math.Inf(1))},
+		{"distance in millimetres by mistake", ok, 30, 5e9},
+		{"distance 1e300", ok, 0, 1e300},
+		{"distance MaxFloat64", ok, 0, math.MaxFloat64},
 	}
 	for _, c := range cases {
 		got := Destination(c.from, c.bearing, c.dist)
@@ -218,6 +274,8 @@ func TestDestinationRefusesInvalid(t *testing.T) {
 		{"bearing large", ok, 1e6, 1},
 		{"distance zero", ok, 0, 0},
 		{"distance one turn", ok, 0, 4.0075e7},
+		{"distance at the bound", ok, 0, MaxDestinationDistanceM},
+		{"distance at the bound, oblique", ok, 30, MaxDestinationDistanceM},
 	}
 	for _, c := range accepted {
 		if got := Destination(c.from, c.bearing, c.dist); !got.Valid() {

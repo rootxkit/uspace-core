@@ -167,7 +167,18 @@ func TestIssueSessionRefusalsBesideAcceptance(t *testing.T) {
 		{"jti not UTF-8", is, edit(func(s *SessionClaims) { s.JTI = "\xfe" }), "jti"},
 		{"realm not UTF-8", is, edit(func(s *SessionClaims) { s.Realm = "c\x80" }), "realm"},
 		{"role not UTF-8", is, edit(func(s *SessionClaims) { s.Roles = []string{"op\xff"} }), "roles"},
-		{"non-ASCII UTF-8", is, edit(func(s *SessionClaims) { s.Subject = "რე<&>"; s.Roles = []string{" x"} }), ""},
+		{"non-ASCII UTF-8", is, edit(func(s *SessionClaims) {
+			s.Subject = "რე<&>"
+			s.Roles = []string{"\u10DB\u10E4\u10E0\u10D8\u10DC\u10D0\u10D5\u10D8"}
+		}), ""},
+		{"a role with a leading em space", is, edit(func(s *SessionClaims) { s.Roles = []string{"\u2003x"} }), "roles"},
+		{"a role with a leading space", is, edit(func(s *SessionClaims) { s.Roles = []string{" operator"} }), "roles"},
+		{"a role with a trailing space", is, edit(func(s *SessionClaims) { s.Roles = []string{"operator "} }), "roles"},
+		{"a role with a leading tab", is, edit(func(s *SessionClaims) { s.Roles = []string{"\toperator"} }), "roles"},
+		{"a role of spaces only", is, edit(func(s *SessionClaims) { s.Roles = []string{"   "} }), "roles"},
+		{"a role with a space inside", is, edit(func(s *SessionClaims) { s.Roles = []string{"flight operator"} }), ""},
+		{"a role twice", is, edit(func(s *SessionClaims) { s.Roles = []string{"operator", "viewer", "operator"} }), "roles"},
+		{"two different roles", is, edit(func(s *SessionClaims) { s.Roles = []string{"operator", "viewer"} }), ""},
 		{"exp equal to iat", is, edit(func(s *SessionClaims) { s.ExpiresAt = s.IssuedAt }), "exp"},
 		{"exp before iat", is, edit(func(s *SessionClaims) { s.ExpiresAt = s.IssuedAt.Add(-time.Second) }), "exp"},
 		{"exp after iat in the same second", is, edit(func(s *SessionClaims) {

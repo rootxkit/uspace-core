@@ -1,0 +1,9 @@
+# Every third-party action is pinned to a full commit SHA with its version
+# in a trailing comment; Dependabot moves the SHAs by pull request, so a
+# moved tag upstream never changes what runs here without review.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
