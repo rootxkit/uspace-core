@@ -196,12 +196,26 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+      # The gitleaks binary itself, checked against a SHA-256 written here
+      # (not one fetched beside it), and run without any token: the action
+      # wrapper needed GITHUB_TOKEN and was one more third-party step.
+      # Pinned (and in the Makefile): .gitleaks.toml relies on how this
+      # version applies allowlists. Change the version and the hash
+      # together, from the release's gitleaks_<v>_checksums.txt.
+      - name: install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pinned (and in the Makefile): .gitleaks.toml relies on how this
-          # version applies allowlists. Change both together.
           GITLEAKS_VERSION: "8.24.3"
+          GITLEAKS_SHA256: 9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c
+        run: |
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$tarball"
+          curl -sSfL -o "$RUNNER_TEMP/$tarball" "$url"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$tarball" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
+      - name: history and working tree
+        run: |
+          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose
+          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose --no-git --source .
 
   # Runs only for a v* tag, after every gating job above passed on the
   # tagged commit (go test -race ./..., the vectors, fuzz, vulnerabilities,

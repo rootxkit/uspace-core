@@ -16,7 +16,7 @@ LAB     ?= ../uspace-lab
 # both files together. `make tools` installs them into $(go env GOPATH)/bin.
 GOLANGCI_LINT_VERSION ?= v2.14.0
 STATICCHECK_VERSION   ?= v0.8.1
-# The gitleaks version gitleaks-action runs in CI (GITLEAKS_VERSION there).
+# The gitleaks version the CI gitleaks job runs (GITLEAKS_VERSION there).
 # .gitleaks.toml relies on how this version applies allowlists.
 GITLEAKS_VERSION      ?= v8.24.3
 # govulncheck, pinned like the linters; CI runs the same version.
