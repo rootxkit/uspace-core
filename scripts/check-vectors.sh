@@ -19,9 +19,24 @@ path="$(sed -n 's/^uspace_lab_path *= *//p' "$dst/VERSION")"
 local_files="$(sed -n 's/^local_files *= *//p' "$dst/VERSION")"
 excludes=(--exclude=VERSION --exclude=SHA256SUMS)
 for lf in $local_files; do excludes+=("--exclude=$lf"); done
+# The token reaches git as an HTTP header for this repository only,
+# through the environment: never in the remote URL, the command line or
+# the clone's .git/config, so neither git's messages nor a process
+# listing carry it. Whatever git prints is redacted anyway.
+basic=""
 if [[ -n "${LAB_READ_TOKEN:-}" ]]; then
-  repo="${repo/https:\/\//https://x-access-token:${LAB_READ_TOKEN}@}"
+  basic="$(printf 'x-access-token:%s' "$LAB_READ_TOKEN" | base64 | tr -d '\r\n')"
+  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.${repo}.extraheader" \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
 fi
+redact() {
+  local s="$1"
+  if [[ -n "${LAB_READ_TOKEN:-}" ]]; then
+    s="${s//"$LAB_READ_TOKEN"/<redacted>}"
+    s="${s//"$basic"/<redacted>}"
+  fi
+  printf '%s' "$s"
+}
 
 echo "== online: uspace-lab@${commit:0:12} $path"
 tmp="$(mktemp -d)"
@@ -29,7 +44,8 @@ trap 'rm -rf "$tmp"' EXIT
 if ! ( git -C "$tmp" init -q && git -C "$tmp" remote add origin "$repo" \
        && git -C "$tmp" fetch -q --depth 1 origin "$commit" \
        && git -C "$tmp" checkout -q FETCH_HEAD -- "$path" ) 2>"$tmp/err"; then
-  echo "unverified: could not fetch uspace-lab@${commit:0:12} ($(tr '\n' ' ' < "$tmp/err" | cut -c1-200))"
+  err="$(redact "$(tr '\n' ' ' < "$tmp/err")")"
+  echo "unverified: could not fetch uspace-lab@${commit:0:12} (${err:0:200})"
   if [[ "${REQUIRE_LAB:-0}" == "1" ]]; then exit 1; fi
   exit 0
 fi

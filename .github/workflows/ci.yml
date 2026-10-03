@@ -44,6 +44,8 @@ jobs:
           if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
       - run: go build ./...
       - run: go vet ./...
+      - name: fixture tests of the helper scripts
+        run: scripts/test-scripts.sh
       - name: go mod tidy is clean
         run: |
           go mod tidy
