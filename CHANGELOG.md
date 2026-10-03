@@ -23,6 +23,10 @@ for a behaviour change the line sits under the heading of the next major
   It returned a valid-looking position for any finite distance, also
   where the arc had no significant bits left (1e300 m); every distance
   up to one turn gives what it gave before. No vector changed. [audit S8]
+- `auth`: `IssueSession` refuses a role with surrounding white space
+  (`" operator"`, an em space included) and a role listed twice, as a
+  `*core.FieldError` on `roles`; they were signed as given, confusing
+  display and audit. The verifier's judgement is unchanged. [audit N2]
 
 ## [1.3.0] (WP-18)
 
