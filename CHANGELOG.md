@@ -16,6 +16,26 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.4.0] (WP-19)
+
+Additive to 1.3.0: memory-mapped geoid and DEM grid loaders, so the
+processes on one host share one copy of EGM2008 and of each tile in the
+page cache; `terrain.Tile.ElevationM` answering the same on every
+architecture; and the retro-audit changes merged since 1.3.0. No vector
+changed; `uspace-lab@6b5b286` remains the pin.
+
+### API declared stable
+
+From `1.4.0` `geoid.LoadMapped`, `geoid.Grid.Mapped`,
+`terrain.MappedDirOpener`, `terrain.Tile.Mapped` and
+`terrain.StoreOptions.OpenTile` are stable: their signatures; answers
+bit for bit those of `Load` and `ParseTile` on the same file; a
+read-only memory map on linux and darwin and a read into memory
+elsewhere, reported by `Mapped`; a file whose bytes `Parse` or
+`ParseTile` refuses is refused with the same `*core.FieldError`; a
+mapping released only when its grid or tile is unreachable, with no
+`Close`. No counter is added.
+
 ### Added
 
 - `auth`: `Config.MaxSessionTTL` and `Config.Realms`, honoured under
@@ -57,6 +77,12 @@ for a behaviour change the line sits under the heading of the next major
   amd64, which never fused, every answer is bit for bit what it was.
   CI runs the vectors and the loaders on linux/arm64 and no longer skips
   five terrain tests there. No vector changed. [WP-19]
+- `auth`: the package doc, `ReceiverVerifier`'s doc and the text of
+  `NewReceiverVerifier`'s no-keys `*core.FieldError` (still on `keys`)
+  no longer say an ingest without receiver keys binds to loopback only;
+  they say it refuses every report and reports itself not ready, as
+  uspace-authority's rid-ingest does since its #36. No behaviour
+  changes. [WP-11]
 
 ## [1.3.0] (WP-18)
 
