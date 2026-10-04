@@ -11,14 +11,16 @@
 # is classified by comparing the base and head versions by case name:
 #
 #   behaviour change  a new or removed file, a removed case, an existing
-#                     case whose input or expected changed, or a changed
-#                     header key other than description, source and
-#                     generated (fixtures, policy, tolerance, units,
-#                     owners, utm_commit are what judgements read).
+#                     case whose input or expected changed, an existing
+#                     case that lost an owner (that owner's vector test
+#                     stops running it), or a changed header key other
+#                     than description, source and generated (fixtures,
+#                     policy, tolerance, units, owners, utm_commit are
+#                     what judgements read).
 #   additive          cases were added and nothing above changed: new
 #                     cases that existing behaviour passes (00 §6.3).
 #   editorial         only why, source, description or generated text,
-#                     or the order of cases, changed.
+#                     or the order of cases or of a case's owners, changed.
 #
 # Every changed file needs a CHANGELOG.md line added by this pull request,
 # `vectors: <file> (<clause>)`, naming the regulation or standard clause,
@@ -76,14 +78,19 @@ done
 compare='
   def body: del(.description, .source, .generated, .cases);
   def bycase: map({key: .name, value: {input, expected}}) | from_entries;
+  def owners: map({key: .name, value: (.owner // [] | if type == "array" then . else [.] end | unique)}) | from_entries;
+  def lost($a; $b): [$a | keys[] | . as $k | select($b | has($k)) | ($a[$k] - $b[$k]) as $d
+    | select($d | length > 0) | "\($k) (\($d | map(tostring) | join(" ")))"];
   $old[0] as $o | $new[0] as $n
   | ($o.cases | bycase) as $oc | ($n.cases | bycase) as $nc
   | ($o | body) as $oh | ($n | body) as $nh
+  | ($o.cases | owners) as $oo | ($n.cases | owners) as $no
   | {
       dup: ((($o.cases | length) != ($oc | length)) or (($n.cases | length) != ($nc | length))),
       removed: [$oc | keys[] | . as $k | select($nc | has($k) | not)],
       changed: [$oc | keys[] | . as $k | select(($nc | has($k)) and $nc[$k] != $oc[$k])],
       added: [$nc | keys[] | . as $k | select($oc | has($k) | not)],
+      owner_removed: lost($oo; $no),
       header: [($oh + $nh) | keys[] | . as $k | select($oh[$k] != $nh[$k])],
       old_count: ($o.cases | length), new_count: ($n.cases | length)
     }'
@@ -109,15 +116,15 @@ for line in "${changes[@]}"; do
   counts="cases $(jqr .old_count <<< "$r") -> $(jqr .new_count <<< "$r")"
   if [[ "$(jqr .dup <<< "$r")" == "true" ]]; then
     kind[$f]=behaviour; echo "  $f: behaviour change (duplicate case names; cannot compare by name; $counts)"
-  elif [[ "$(jqr '(.removed + .changed + .header) | length' <<< "$r")" != "0" ]]; then
+  elif [[ "$(jqr '(.removed + .changed + .owner_removed + .header) | length' <<< "$r")" != "0" ]]; then
     kind[$f]=behaviour
-    echo "  $f: behaviour change ($counts; removed: $(list .removed "$r"); input or expected changed: $(list .changed "$r"); header keys changed: $(list .header "$r"))"
+    echo "  $f: behaviour change ($counts; removed: $(list .removed "$r"); input or expected changed: $(list .changed "$r"); owners removed: $(list .owner_removed "$r"); header keys changed: $(list .header "$r"))"
   elif [[ "$(jqr '.added | length' <<< "$r")" != "0" ]]; then
     kind[$f]=additive
     echo "  $f: additive ($counts; added: $(list .added "$r"); no existing case's input or expected changed)"
   else
     kind[$f]=editorial
-    echo "  $f: editorial (same cases, inputs and expected values; only text or order changed)"
+    echo "  $f: editorial (same cases, inputs, expected values and owners; only text or order changed)"
   fi
 done
 

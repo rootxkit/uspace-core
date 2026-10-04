@@ -22,15 +22,17 @@ g() {
     -c core.autocrlf=false -c commit.gpgsign=false -c tag.gpgsign=false "$@"
 }
 
-# vec FILE NAME=EXPECTED...: a vector file; TOL and WHY vary the header and text.
+# vec FILE NAME=EXPECTED...: a vector file; TOL and WHY vary the header and
+# text, OWN_<name> the owner list of one case (default ["authority", "ussp"]).
 vec() {
-  local out="$repo/vectors/testdata/$1" sep="" c
+  local out="$repo/vectors/testdata/$1" sep="" c own
   shift
   {
     printf '{\n  "description": "fixture",\n  "tolerance": {"dist_m": %s},\n  "cases": [' "${TOL:-0.1}"
     for c in "$@"; do
-      printf '%s\n    {"name": "%s", "input": {"x": 1}, "expected": %s, "why": "%s"}' \
-        "$sep" "${c%%=*}" "${c#*=}" "${WHY:-why}"
+      own="OWN_${c%%=*}"
+      printf '%s\n    {"name": "%s", "owner": %s, "input": {"x": 1}, "expected": %s, "why": "%s"}' \
+        "$sep" "${c%%=*}" "${!own:-[\"authority\", \"ussp\"]}" "${c#*=}" "${WHY:-why}"
       sep=","
     done
     printf '\n  ]\n}\n'
@@ -169,6 +171,25 @@ expect fail "header keys changed: tolerance"
 # Only the why text changed: editorial, a line and a pin suffice.
 setup editorial 1.0.0
 WHY=reworded vec cpa.json a=1 b=2; pin lab2
+changelog "## [Unreleased]" "" "- vectors: cpa.json (LESSONS C-01)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
+commit
+expect pass "cpa.json: editorial"
+
+# Removing an owner from a case is a behaviour change: that owner's
+# vector test stops running the case. Reordering the owners is not.
+setup owner-removed 1.0.0
+OWN_b='["authority"]' vec cpa.json a=1 b=2; pin lab2
+changelog "## [Unreleased]" "" "- vectors: cpa.json (ED-269 §2)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
+commit
+expect fail "owners removed: b (ussp)"
+expect fail "lacks the label behaviour-change"
+
+setup owner-removed-major 1.0.0
+OWN_b='["authority"]' vec cpa.json a=1 b=2; pin lab2; major_changelog; commit
+expect pass "behaviour change with a new major heading" behaviour-change
+
+setup owner-reordered 1.0.0
+OWN_b='["ussp", "authority"]' vec cpa.json a=1 b=2; pin lab2
 changelog "## [Unreleased]" "" "- vectors: cpa.json (LESSONS C-01)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
 commit
 expect pass "cpa.json: editorial"
