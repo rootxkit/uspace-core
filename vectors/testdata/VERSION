@@ -3,10 +3,10 @@
 # against SHA256SUMS always, and against the lab checkout at this commit
 # when it can reach it.
 uspace_lab_repo = https://github.com/rootxkit/uspace-lab.git
-uspace_lab_commit = 6b5b286a2c5b56c06eb742885e8cbc4e299fb51a
+uspace_lab_commit = 216fa56cb7746d58a0d5cf3bfb4b97a482686df7
 uspace_lab_path = knowledge/vectors
 utm_commit = 484cd228035f2f424530e233ce72100d0fc1842a
-synced_at = 2026-10-01
+synced_at = 2026-10-04
 # Files written in this repository until the lab merges them; excluded
 # from the online diff and from the utm_commit check, still in SHA256SUMS.
 local_files = 
