@@ -88,20 +88,55 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # The -skip list fails on arm64 on main too, unrelated to WP-19: the
-      # compiler fuses ScaleM*x + OffsetM in terrain.Tile.ElevationM into a
-      # multiply-add, which lands an ulp off the exact metres these tests
-      # compare with (400.00000000000006 for 400). Reported in PR #37 for
-      # the owner; remove the list when ElevationM is made reproducible.
+      # Nothing is skipped on arm64 (macos-latest): terrain.Tile.ElevationM
+      # rounds each product explicitly, so the compiler cannot fuse it into
+      # a multiply-add and the exact-metre tests hold on every architecture.
       - name: go test the loaders
-        env:
-          ARM64_ULP_TESTS: ^(TestStoreEviction|TestStoreLockNotHeldAcrossOpen|TestStoreConcurrent|TestStoreDuplicateRead|TestDirOpener)$
+        shell: bash
         run: |
-          skip=""
-          if [ "$(go env GOARCH)" = arm64 ]; then skip="$ARM64_ULP_TESTS"; fi
-          go test -count=1 -shuffle=on -v -skip "$skip" ./internal/... ./geoid/ ./terrain/ 2>&1 | tee loaders.log
+          set -o pipefail
+          go env GOARCH
+          go test -count=1 -shuffle=on -v ./internal/... ./geoid/ ./terrain/ 2>&1 | tee loaders.log
       - name: which path ran
+        if: always()
+        shell: bash
         run: grep -E -- '--- SKIP|^(ok|FAIL)' loaders.log || true
+
+  # The knowledge vectors and the grid loaders on linux/arm64, where the
+  # compiler fuses x*y + z into one multiply-add unless the code forbids
+  # it; the vectors job above runs on amd64, which never fuses. A vector
+  # that holds on one architecture and not the other fails here.
+  vectors-arm64:
+    name: knowledge vectors on linux/arm64
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: the architecture under test
+        run: test "$(go env GOARCH)" = arm64 && go env GOARCH
+      - name: run every vector test
+        run: |
+          set -o pipefail
+          go test -count=1 -run 'Vector|Manifest|Version' -v ./... 2>&1 | tee vectors.log | grep -E '^(--- (FAIL|SKIP)|FAIL|ok)' || { echo "vector tests failed"; exit 1; }
+      - name: go test the loaders
+        run: |
+          set -o pipefail
+          go test -count=1 -shuffle=on -v ./internal/... ./geoid/ ./terrain/ 2>&1 | tee loaders.log | grep -E -- '^(--- (FAIL|SKIP)|FAIL|ok)'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: vectors-arm64-log
+          path: |
+            vectors.log
+            loaders.log
 
   test-race:
     name: test with the race detector

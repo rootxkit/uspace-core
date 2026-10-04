@@ -159,9 +159,15 @@ func (t *Tile) ElevationM(p core.LatLon) *float64 {
 	if v00 == NoData || v01 == NoData || v10 == NoData || v11 == NoData {
 		return nil
 	}
-	top := (1-fx)*float64(v00) + fx*float64(v01)
-	bottom := (1-fx)*float64(v10) + fx*float64(v11)
-	e := OffsetM + ScaleM*((1-fy)*top+fy*bottom)
+	// Every product is rounded by an explicit float64 conversion before it
+	// is added: the Go spec lets a compiler fuse x*y + z into one
+	// multiply-add (arm64 does; amd64 does not), which skips that rounding
+	// and moves the answer by an ulp (400.00000000000006 for 400). The
+	// conversions forbid the fusion, so every architecture returns what
+	// amd64 always has.
+	top := float64((1-fx)*float64(v00)) + float64(fx*float64(v01))
+	bottom := float64((1-fx)*float64(v10)) + float64(fx*float64(v11))
+	e := OffsetM + float64(ScaleM*(float64((1-fy)*top)+float64(fy*bottom)))
 	return &e
 }
 
