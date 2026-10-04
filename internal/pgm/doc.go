@@ -16,4 +16,11 @@
 // Raw reads a sample and returns 0 outside the grid; Number reads a header
 // value as a finite number. Encode writes the same layout, for tests and
 // tools.
+//
+// ParseFile parses an open file through the same Parse, either read into
+// memory or mapped read-only (internal/mmapfile: mmap on linux and darwin,
+// a read elsewhere), so that processes loading the same grid share its
+// pages. Raw is the only reader of the samples and bound-checks every
+// index against the grid and the bytes; a mapping is released only when
+// its Grid is unreachable, never during a Raw.
 package pgm

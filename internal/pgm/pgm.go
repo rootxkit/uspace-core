@@ -3,6 +3,7 @@ package pgm
 import (
 	"bytes"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -30,6 +31,7 @@ type Grid struct {
 	// repeated later in the file replaces the earlier value.
 	Header map[string]string
 	data   []byte
+	mapped bool // data is a memory map released when the Grid is unreachable
 }
 
 // field names the byte at offset in an error.
@@ -159,7 +161,11 @@ func (g *Grid) Raw(ix, iy int) uint16 {
 	if at+1 >= len(g.data) {
 		return 0
 	}
-	return uint16(g.data[at])<<8 | uint16(g.data[at+1])
+	v := uint16(g.data[at])<<8 | uint16(g.data[at+1])
+	// A mapped grid's bytes are released when g is unreachable (ParseFile):
+	// keep g reachable until the bytes are read.
+	runtime.KeepAlive(g)
+	return v
 }
 
 // Number returns the header value under key read as a finite number: the
