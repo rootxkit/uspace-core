@@ -130,9 +130,9 @@ type Report struct {
 // from that receiver within twice the window. It is safe for concurrent
 // use.
 //
-// An ingest configured without receiver keys cannot authenticate anyone
-// and must bind to loopback only (R-06); this type refuses to be built
-// without keys.
+// An ingest configured without receiver keys cannot authenticate anyone:
+// it must refuse every report and report itself not ready until a key
+// arrives (R-06); this type refuses to be built without keys.
 type ReceiverVerifier struct {
 	keys     map[string][]byte
 	maxSkew  time.Duration
@@ -153,7 +153,7 @@ func NewReceiverVerifier(keys map[string][]byte, maxSkew time.Duration, opts ...
 		opt(&o)
 	}
 	if len(keys) == 0 {
-		return nil, core.Fieldf("keys", "no receiver keys: an ingest without keys binds to loopback only")
+		return nil, core.Fieldf("keys", "no receiver keys: an ingest without keys refuses every report")
 	}
 	if maxSkew <= 0 {
 		return nil, core.Fieldf("max_skew", "must be positive, got %s", maxSkew)
