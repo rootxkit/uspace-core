@@ -120,7 +120,8 @@
 // a nonce already seen from that receiver within twice the window. The
 // nonce memory is bounded per receiver (oldest evicted, counted as
 // nonces_evicted). An ingest without receiver keys cannot authenticate
-// anyone and must bind to loopback only.
+// anyone: it must refuse every report and report itself not ready until
+// a key arrives (R-06).
 //
 // The report is parsed before the HMAC is checked, because its
 // receiver_id selects the key; a datagram longer than
