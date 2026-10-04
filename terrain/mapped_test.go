@@ -48,6 +48,16 @@ func sameElevation(t *testing.T, p core.LatLon, a, b *float64) {
 	}
 }
 
+// syntheticFlat parses cellTile(latSW, 44, elevationM) from memory.
+func syntheticFlat(t testing.TB, latSW int, elevationM float64) *Tile {
+	t.Helper()
+	tile, err := ParseTile(cellTile(latSW, 44, elevationM))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tile
+}
+
 func deref(p *float64) any {
 	if p == nil {
 		return nil
@@ -244,8 +254,11 @@ func TestStoreOpenTileFailures(t *testing.T) {
 	mu.Lock()
 	mode = "ok"
 	mu.Unlock()
-	if e, err := s.Elevation(tbilisi); err != nil || e == nil || e.ElevationM != 250 {
-		t.Fatalf("after the retry: %v %v", e, err)
+	// The tile's own answer, bit for bit (about 250 m; not the literal,
+	// which arm64's fused multiply-add misses by an ulp in ElevationM).
+	want := syntheticFlat(t, 41, 250).ElevationM(tbilisi)
+	if e, err := s.Elevation(tbilisi); err != nil || e == nil || want == nil || math.Float64bits(e.ElevationM) != math.Float64bits(*want) {
+		t.Fatalf("after the retry: %v %v, want %v", e, err, deref(want))
 	}
 	wantCounters(t, s, map[string]uint64{
 		CounterTileReadFailed: 2, CounterTileUnavailable: 2, CounterTileReadRetried: 2, CounterTilesLoaded: 1,
@@ -264,6 +277,16 @@ func TestStoreEvictsMappedTiles(t *testing.T) {
 		files[cell] = cellTile(lat, 44, float64(10*lat))
 	}
 	dir := tileDir(t, files)
+	// Each cell's answer from its bytes, read and parsed: the mapped store
+	// must give it bit for bit.
+	want := map[int]float64{}
+	for lat := 30; lat < 42; lat++ {
+		e := syntheticFlat(t, lat, float64(10*lat)).ElevationM(core.LatLon{LatDeg: float64(lat) + 0.5, LonDeg: 44.5})
+		if e == nil {
+			t.Fatalf("lat %d: unknown", lat)
+		}
+		want[lat] = *e
+	}
 	drainMappings(t)
 	s := NewStore(idx, StoreOptions{OpenTile: MappedDirOpener(dir, 0), MaxTiles: 2})
 	var wg sync.WaitGroup
@@ -275,7 +298,7 @@ func TestStoreEvictsMappedTiles(t *testing.T) {
 			for i := 0; i < 300; i++ {
 				lat := 30 + (i*7+g)%12
 				e, err := s.Elevation(core.LatLon{LatDeg: float64(lat) + 0.5, LonDeg: 44.5})
-				if err != nil || e == nil || e.ElevationM != float64(10*lat) {
+				if err != nil || e == nil || math.Float64bits(e.ElevationM) != math.Float64bits(want[lat]) {
 					errs <- "wrong answer"
 					return
 				}
