@@ -17,8 +17,10 @@
 #                     than description, source and generated (fixtures,
 #                     policy, tolerance, units, owners, utm_commit are
 #                     what judgements read).
-#   additive          cases were added and nothing above changed: new
-#                     cases that existing behaviour passes (00 §6.3).
+#   additive          cases were added, or owners were added to an
+#                     existing case, and nothing above changed: new cases,
+#                     or new consumers of an unchanged case, that existing
+#                     behaviour passes (00 §6.3).
 #   editorial         only why, source, description or generated text,
 #                     or the order of cases or of a case's owners, changed.
 #
@@ -91,6 +93,7 @@ compare='
       changed: [$oc | keys[] | . as $k | select(($nc | has($k)) and $nc[$k] != $oc[$k])],
       added: [$nc | keys[] | . as $k | select($oc | has($k) | not)],
       owner_removed: lost($oo; $no),
+      owner_added: lost($no; $oo),
       header: [($oh + $nh) | keys[] | . as $k | select($oh[$k] != $nh[$k])],
       old_count: ($o.cases | length), new_count: ($n.cases | length)
     }'
@@ -119,9 +122,11 @@ for line in "${changes[@]}"; do
   elif [[ "$(jqr '(.removed + .changed + .owner_removed + .header) | length' <<< "$r")" != "0" ]]; then
     kind[$f]=behaviour
     echo "  $f: behaviour change ($counts; removed: $(list .removed "$r"); input or expected changed: $(list .changed "$r"); owners removed: $(list .owner_removed "$r"); header keys changed: $(list .header "$r"))"
-  elif [[ "$(jqr '.added | length' <<< "$r")" != "0" ]]; then
+  elif [[ "$(jqr '(.added + .owner_added) | length' <<< "$r")" != "0" ]]; then
     kind[$f]=additive
-    echo "  $f: additive ($counts; added: $(list .added "$r"); no existing case's input or expected changed)"
+    owners_added=""
+    if [[ "$(jqr '.owner_added | length' <<< "$r")" != "0" ]]; then owners_added="; owners added: $(list .owner_added "$r")"; fi
+    echo "  $f: additive ($counts; added: $(list .added "$r")$owners_added; no existing case's input or expected changed)"
   else
     kind[$f]=editorial
     echo "  $f: editorial (same cases, inputs, expected values and owners; only text or order changed)"

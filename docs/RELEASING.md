@@ -11,7 +11,7 @@ what it can; this page says what it checks and what is left to people.
 | Version change | What it may contain |
 |---|---|
 | patch `v1.2.3 -> v1.2.4` | fixes that change no judgement and no exported API: a refusal that was a panic, a counter that was not incremented, documentation, performance |
-| minor `v1.2 -> v1.3` | additions: new functions, types, optional fields, constants; new vector cases that existing behaviour already passes (a new vector file is a major, see 3.2) |
+| minor `v1.2 -> v1.3` | additions: new functions, types, optional fields, constants; new vector cases that existing behaviour already passes, or a new owner on an unchanged case (a new vector file is a major, see 3.2) |
 | major `v1 -> v2` | any change to what a judgement returns for some input, even with no signature change: a changed `expected`, a removed case, an owner removed from a case (that owner's vector test stops running it), a changed header (policy, tolerance, fixtures); a removed or renamed exported identifier; a new version of F3411, F3548 or ED-318 (`04 §4`) |
 
 Before `v1.0.0` the same rule applied one level down: a change to a
@@ -128,7 +128,7 @@ and head versions by case name (`jq`):
 |---|---|---|
 | none under `vectors/testdata/*.json` | - | nothing |
 | only `why`, `source`, `description` or `generated` text, case order, or the order of a case's `owner` list | editorial | a CHANGELOG line, a new lab pin |
-| cases added, no existing case's `input` or `expected` changed, header unchanged | additive (`00 §6.3`) | a CHANGELOG line, a new lab pin |
+| cases added, or owners added to an existing case's `owner` list, no existing case's `input` or `expected` changed, no owner removed, header unchanged | additive (`00 §6.3`) | a CHANGELOG line, a new lab pin |
 | an existing case's `input` or `expected` changed, an owner removed from an existing case's `owner` list, a case removed, a header key changed (policy, tolerance, fixtures, units, owners, `utm_commit`), a new file, a removed file, or a file that is not valid JSON | behaviour change | the above, plus a CHANGELOG heading for a new major that is not yet tagged with the file's line under it, plus the label `behaviour-change` |
 
 - "A CHANGELOG line" is a line added by the pull request matching
@@ -148,7 +148,10 @@ and head versions by case name (`jq`):
 - An owner removed from a case is a behaviour change: `RunOwned` for that
   owner stops running the case, so a judgement that owner was held to is
   no longer checked. The gate compares each case's `owner` list as a set
-  and prints `owners removed: <case> (<owner>)`.
+  and prints `owners removed: <case> (<owner>)`. An owner added to a
+  case is additive (`owners added: <case> (<owner>)`): the new owner's
+  vector test runs a case whose judgement did not change, as with a new
+  case.
 - Additive means the cases are new; it does not prove that existing
   behaviour passes them. The vector tests do, in the same pull request.
 

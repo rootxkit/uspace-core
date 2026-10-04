@@ -194,6 +194,26 @@ changelog "## [Unreleased]" "" "- vectors: cpa.json (LESSONS C-01)" "" "## [1.0.
 commit
 expect pass "cpa.json: editorial"
 
+# Adding an owner to a case is additive: one more consumer runs a case
+# whose input and expected did not change. It still needs its line.
+setup owner-added 1.0.0
+OWN_b='["authority", "ussp", "cisp"]' vec cpa.json a=1 b=2; pin lab2
+changelog "## [Unreleased]" "" "- vectors: cpa.json (ED-269 §2)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
+commit
+expect pass "additive (cases 2 -> 2; added: none; owners added: b (cisp)"
+expect pass "no new major and no label required"
+
+setup owner-added-without-line 1.0.0
+OWN_b='["authority", "ussp", "cisp"]' vec cpa.json a=1 b=2; pin lab2; commit
+expect fail "adds no line 'vectors: cpa.json (<clause>)'"
+
+# One owner swapped for another removes one: behaviour change.
+setup owner-swapped 1.0.0
+OWN_b='["authority", "cisp"]' vec cpa.json a=1 b=2; pin lab2
+changelog "## [Unreleased]" "" "- vectors: cpa.json (ED-269 §2)" "" "## [1.0.0] - 2026-10-01" "" "- first release"
+commit
+expect fail "owners removed: b (ussp)"
+
 # A new vector file is a behaviour change.
 setup new-file 1.0.0
 vec geodesy.json g=1; pin lab2
