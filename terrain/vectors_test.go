@@ -1,6 +1,7 @@
 package terrain
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,27 +42,32 @@ func syntheticGeoid() []byte {
 	return pgm.Encode(36, 19, []pgm.HeaderLine{{Key: "Offset", Value: "-100"}, {Key: "Scale", Value: "0.01"}}, s)
 }
 
-// realGrids loads GeographicLib's grids once from USPACE_GEOID_DIR.
+// realGrids loads GeographicLib's grids once from USPACE_GEOID_DIR, both
+// with geoid.Load and with geoid.LoadMapped.
 var realGrids = struct {
 	sync.Mutex
-	grids map[string]*geoid.Grid
-	errs  map[string]error
-}{grids: map[string]*geoid.Grid{}, errs: map[string]error{}}
+	grids  map[string]*geoid.Grid
+	mapped map[string]*geoid.Grid
+	errs   map[string]error
+}{grids: map[string]*geoid.Grid{}, mapped: map[string]*geoid.Grid{}, errs: map[string]error{}}
 
-func realGrid(name string) (*geoid.Grid, error) {
+func realGrid(name string) (loaded, mapped *geoid.Grid, err error) {
 	realGrids.Lock()
 	defer realGrids.Unlock()
 	if g, ok := realGrids.grids[name]; ok {
-		return g, realGrids.errs[name]
+		return g, realGrids.mapped[name], realGrids.errs[name]
 	}
 	dir := os.Getenv("USPACE_GEOID_DIR")
-	var g *geoid.Grid
-	err := os.ErrNotExist
+	err = os.ErrNotExist
 	if dir != "" {
-		g, err = geoid.Load(filepath.Join(dir, name+".pgm"))
+		path := filepath.Join(dir, name+".pgm")
+		loaded, err = geoid.Load(path)
+		if err == nil {
+			mapped, err = geoid.LoadMapped(path)
+		}
 	}
-	realGrids.grids[name], realGrids.errs[name] = g, err
-	return g, err
+	realGrids.grids[name], realGrids.mapped[name], realGrids.errs[name] = loaded, mapped, err
+	return loaded, mapped, err
 }
 
 func TestVectorsTerrainGeoid(t *testing.T) {
@@ -78,9 +84,9 @@ func TestVectorsTerrainGeoid(t *testing.T) {
 	}
 	var mu sync.Mutex
 	ran := map[string]int{}
-	skipped := 0
+	skipped, ranMapped := 0, 0
 	t.Cleanup(func() {
-		t.Logf("terrain_geoid.json: ran %v, skipped %d (GeographicLib grids absent)", ran, skipped)
+		t.Logf("terrain_geoid.json: ran %v, skipped %d (GeographicLib grids absent), %d GeographicLib cases also through LoadMapped", ran, skipped, ranMapped)
 	})
 	f.Run(t, func(t *testing.T, c vectors.Case) {
 		var in vectorInput
@@ -111,7 +117,7 @@ func TestVectorsTerrainGeoid(t *testing.T) {
 			c.Decode(t, nil, &exp)
 			g, tol := grid, tolSyntheticM
 			if in.Grid != "synthetic" {
-				rg, err := realGrid(in.Grid)
+				rg, mapped, err := realGrid(in.Grid)
 				if err != nil {
 					mu.Lock()
 					skipped++
@@ -119,6 +125,18 @@ func TestVectorsTerrainGeoid(t *testing.T) {
 					t.Skipf("needs %s.pgm in USPACE_GEOID_DIR (%v)", in.Grid, err)
 				}
 				g, tol = rg, tolGeoLibM
+				// The mapped grid answers the case bit for bit as Load's.
+				nm, err := mapped.UndulationM(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				vectors.Near(t, "undulation_m (LoadMapped)", nm, exp.UndulationM, tol)
+				if nl, err := rg.UndulationM(p); err != nil || math.Float64bits(nl) != math.Float64bits(nm) {
+					t.Errorf("LoadMapped gives %v, Load %v (%v)", nm, nl, err)
+				}
+				mu.Lock()
+				ranMapped++
+				mu.Unlock()
 			}
 			n, err := g.UndulationM(p)
 			if err != nil {

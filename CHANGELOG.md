@@ -26,6 +26,17 @@ for a behaviour change the line sits under the heading of the next major
   refuses either without `StrictSessionClaims`, where it would do
   nothing. SECURITY.md names where the 12 h limit is enforced.
   [audit N1]
+- `geoid`, `terrain`: memory-mapped grid loaders. `geoid.LoadMapped`
+  maps a GeographicLib grid read-only on linux and darwin, so processes
+  on one host share its pages in the page cache instead of each holding
+  a heap copy (74.7 MB for EGM2008 2.5'); `terrain.MappedDirOpener` with
+  the new optional `StoreOptions.OpenTile` does the same for DEM tiles.
+  Elsewhere they read the file as `Load` and `DirOpener` do;
+  `Grid.Mapped` and `Tile.Mapped` say which. They parse through the same
+  checks and answer bit for bit what `Load` and `ParseTile` answer; a
+  truncated file is refused as before. A mapped file must be replaced by
+  renaming, never rewritten in place. Nothing that exists changes its
+  output; no counter is added. No vector changed. [WP-19]
 
 ### Fixed
 

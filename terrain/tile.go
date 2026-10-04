@@ -84,6 +84,11 @@ func ParseTile(data []byte) (*Tile, error) {
 	if err != nil {
 		return nil, err
 	}
+	return tileFromGrid(g)
+}
+
+// tileFromGrid applies the tile checks of ParseTile to a parsed PGM.
+func tileFromGrid(g *pgm.Grid) (*Tile, error) {
 	offset, err := g.Number("Offset")
 	if err != nil {
 		return nil, err

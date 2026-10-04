@@ -207,10 +207,16 @@ type Grid struct{ Width, Height int; MaxVal int; Header map[string]string; sampl
 func Parse(data []byte, maxBytes int) (*Grid, error)   // P5, 16-bit big-endian only; "# Key value" comments; FieldError names the byte offset
 func (g *Grid) Raw(ix, iy int) uint16
 func (g *Grid) Number(key string) (float64, error)
+// WP-19, v1.4.0: the same Parse over a file read, or mapped read-only
+// (internal/mmapfile: mmap on linux and darwin, a read elsewhere)
+func ParseFile(f *os.File, maxFileBytes int64, maxBytes int, mapped bool, check func(*Grid) error) (*Grid, error)
 
 // geoid
 type Grid struct{...}
 func Parse(data []byte) (*Grid, error);  func Load(path string) (*Grid, error)
+// WP-19, v1.4.0: Load's grid mapped read-only and shared through the page
+// cache (linux, darwin; read as Load elsewhere); bit for bit Load's answers
+func LoadMapped(path string) (*Grid, error);  func (g *Grid) Mapped() bool
 func (g *Grid) UndulationM(p core.LatLon) (float64, error)   // bilinear, wraps in longitude; error outside [-90, 90]
 func (g *Grid) Description() string                          // "EGM2008 2.5'" etc. from the header
 func AMSLFromHAE(altHAEM float64, undulationM float64) float64 // alt_amsl_m = alt_hae_m - N
@@ -231,6 +237,10 @@ func (s *Store) Elevation(p core.LatLon) (*Elevation, error)  // nil,nil = unkno
 func (s *Store) Counters() *core.Counters
 type Ground interface{ Elevation(core.LatLon) (*Elevation, error) } // what zones takes
 const Attribution = "Copernicus DEM ..."                      // D-05
+// WP-19, v1.4.0: StoreOptions.OpenTile func(cell string) (*Tile, error), used
+// instead of Open + ParseTile when set; MappedDirOpener maps the tiles
+func MappedDirOpener(dir string, maxBytes int64) func(cell string) (*Tile, error)
+func (t *Tile) Mapped() bool
 ```
 
 ### 3.5 `odid` (WP-3; types frozen in `odid/types.go`)

@@ -15,6 +15,15 @@
 // computed on HAE as if it were AMSL is off by that much. Without a geoid
 // there is no AMSL altitude and the aircraft is not judged vertically.
 //
+// Load reads the whole file into the process's heap (egm2008-2_5.pgm is
+// 74.7 MB). LoadMapped maps it read-only instead, on linux and darwin, so
+// that every process on a host shares one copy in the page cache; on other
+// platforms it reads the file as Load does, and Grid.Mapped says which.
+// Both go through Parse's checks and answer bit for bit the same. A mapped
+// file must not be truncated or rewritten in place while a process maps it
+// (the process faults with SIGBUS): install a new grid by renaming it over
+// the old one.
+//
 // Vectors: vectors/testdata/terrain_geoid.json, function geoid_undulation,
 // run from terrain/vectors_test.go: the synthetic grid always, the
 // GeographicLib reference values only when USPACE_GEOID_DIR holds

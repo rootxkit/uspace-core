@@ -15,6 +15,14 @@
 //     (one minute by default, not once per message). Tiles are cached up
 //     to MaxTiles, least recently used out first, and the cache lock is
 //     never held across a read (B-06).
+//   - Tiles come from StoreOptions.Open (bytes, parsed by ParseTile;
+//     DirOpener reads <dir>/<cell>.pgm into memory) or, since v1.4.0,
+//     StoreOptions.OpenTile (a parsed tile; MappedDirOpener maps the file
+//     read-only on linux and darwin, so processes share its pages, and
+//     reads it elsewhere; Tile.Mapped says which). Both answer bit for bit
+//     the same. A mapped tile is unmapped once evicted and no goroutine
+//     holds it; its file must not be truncated or rewritten in place
+//     while mapped (SIGBUS): replace it by renaming a new file over it.
 //
 // Height above ground is never stored; it is AMSL minus this elevation
 // (D-02), both on EGM2008. The DEM is a surface model (roofs, canopy) and

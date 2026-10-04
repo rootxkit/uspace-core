@@ -39,6 +39,11 @@ func Parse(data []byte) (*Grid, error) {
 	if err != nil {
 		return nil, err
 	}
+	return fromPGM(g)
+}
+
+// fromPGM applies the geoid checks of Parse to a parsed PGM.
+func fromPGM(g *pgm.Grid) (*Grid, error) {
 	offset, err := g.Number("Offset")
 	if err != nil {
 		return nil, err
