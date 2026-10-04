@@ -16,6 +16,27 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.5.0] (WP-L4 re-sync)
+
+Minor to 1.4.0: the knowledge vectors re-synced from
+`uspace-lab@216fa56` (lab PR #17, WP-L4 spec errata), which changed one
+file. No code changed, no exported identifier was added or removed, and
+no judgement changed: every case keeps its `input` and `expected`, and
+no header key changed, so the semver gate classifies the change as
+editorial. The pin moves from `uspace-lab@6b5b286` to
+`uspace-lab@216fa56`; `utm_commit` stays `484cd22`.
+
+### Changed
+
+- vectors: alert_lifecycle.json (cross-plan decision 2026-10-02 cisp Q18, lab WP-L4): the
+  cases `zone-stops-applying-clears` and
+  `applicability-at-placed-time-not-arrival` no longer list `cisp` in
+  their `owner`, matching the file's header `owners`
+  (`[authority, ussp]`); the CISP runs no alert monitor. Core runs every
+  case whatever its `owner` (PLAN D4), so its tests are unchanged. A
+  system calling `RunOwned(t, "cisp", ...)` on this file now runs no
+  case; no system on `main` does. Case counts are unchanged. [WP-L4]
+
 ## [1.4.0] (WP-19)
 
 Additive to 1.3.0: memory-mapped geoid and DEM grid loaders, so the
