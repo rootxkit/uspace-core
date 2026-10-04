@@ -183,7 +183,7 @@ func heapGrowth(t *testing.T, load func() (*Grid, error)) int64 {
 }
 
 // TestLoadMappedKeepsTheGridOutOfTheHeap: loading a 4 MB grid through Load
-// grows the heap by at least its size (the presence twin, which proves the
+// grows the heap by about its size (the presence twin, which proves the
 // measurement), through LoadMapped by less than 1 MiB.
 func TestLoadMappedKeepsTheGridOutOfTheHeap(t *testing.T) {
 	const w, h = 2000, 1001
@@ -193,8 +193,10 @@ func TestLoadMappedKeepsTheGridOutOfTheHeap(t *testing.T) {
 	}
 	path := writeGrid(t, pgm.Encode(w, h, []pgm.HeaderLine{{Key: "Offset", Value: "-108"}, {Key: "Scale", Value: "0.003"}}, samples))
 	const sampleBytes = 2 * w * h
-	if got := heapGrowth(t, func() (*Grid, error) { return Load(path) }); got < sampleBytes {
-		t.Fatalf("Load grew the heap by %d bytes, less than the %d bytes of samples: the measurement is broken", got, sampleBytes)
+	// Three quarters, not all: garbage of earlier tests collected during
+	// the measurement lowers the difference a little.
+	if got := heapGrowth(t, func() (*Grid, error) { return Load(path) }); got < sampleBytes*3/4 {
+		t.Fatalf("Load grew the heap by %d bytes, less than 3/4 of the %d bytes of samples: the measurement is broken", got, sampleBytes)
 	}
 	if !mmapfile.Supported {
 		t.Skip("no memory maps on this platform: LoadMapped reads into the heap as Load does")
