@@ -20,6 +20,9 @@ type Mapping struct {
 	err    error
 }
 
+// beforeMap, when set by a test, runs between the size check and the map.
+var beforeMap func()
+
 // live counts the mappings not yet closed.
 var live atomic.Int64
 
@@ -62,12 +65,27 @@ func Map(f *os.File, maxBytes int64) (*Mapping, error) {
 	if size == 0 {
 		return &Mapping{data: []byte{}}, nil
 	}
+	if beforeMap != nil {
+		beforeMap()
+	}
 	data, err := mmap(f, int(size))
 	if err != nil {
 		return nil, err
 	}
 	live.Add(1)
-	return &Mapping{data: data, mapped: true}, nil
+	m := &Mapping{data: data, mapped: true}
+	// A file truncated between the size check and the map is mapped past
+	// its end, and the first read there faults the process (SIGBUS).
+	// Check the size again now that the map exists. This does not cover a
+	// truncation after Map returns (doc.go).
+	if fi, err := f.Stat(); err != nil || fi.Size() != size {
+		_ = m.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.Fieldf("file", "changed from %d to %d bytes while it was mapped", size, fi.Size())
+	}
+	return m, nil
 }
 
 // Read returns the bytes of f read into memory, as io.ReadAll does: the

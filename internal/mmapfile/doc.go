@@ -15,7 +15,8 @@
 // refuses it.
 //
 // The bytes of a mapped file are read-only (a write faults) and stay valid
-// until Close. A mapped file must not be truncated or rewritten in place
+// until Close. Map checks the file's size again once it is mapped and
+// refuses a file truncated in between. A mapped file must not be truncated or rewritten in place
 // while mapped: the kernel then faults the reader with SIGBUS, which a Go
 // program cannot recover from. Replace such a file by renaming a new one
 // over it.

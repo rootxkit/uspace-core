@@ -207,3 +207,41 @@ func TestRefusesClosedFile(t *testing.T) {
 		t.Error("a closed file read")
 	}
 }
+
+// TestMapRefusesAFileTruncatedWhileMapping: a file truncated between the
+// size check and the map is refused, not mapped past its end, where the
+// first read would fault the process with SIGBUS. The accepted twin is
+// the same file left alone.
+func TestMapRefusesAFileTruncatedWhileMapping(t *testing.T) {
+	if !Supported {
+		t.Skip("no memory maps on this platform: Read copies what is there")
+	}
+	const n = 5 * 4096
+	f := writeFile(t, content(n))
+	beforeMap = func() {
+		if err := os.Truncate(f.Name(), 100); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { beforeMap = nil })
+	before := Live()
+	m, err := Map(f, 1<<20)
+	if err == nil {
+		// Without the check this read is past the end of the file.
+		t.Fatalf("a truncated file mapped, last byte %d", m.Bytes()[n-1])
+	}
+	var fe *core.FieldError
+	if !errors.As(err, &fe) || fe.Field != "file" || !strings.Contains(fe.Reason, "changed") {
+		t.Fatalf("truncated while mapping: %v", err)
+	}
+	if Live() != before {
+		t.Error("the refused mapping was not released")
+	}
+	beforeMap = nil
+	g := writeFile(t, content(n))
+	m, err = Map(g, 1<<20)
+	if err != nil || len(m.Bytes()) != n || m.Bytes()[n-1] != content(n)[n-1] {
+		t.Fatalf("untouched file: %v", err)
+	}
+	_ = m.Close()
+}
