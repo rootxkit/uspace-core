@@ -291,9 +291,23 @@ jobs:
           curl -sSfL -o "$RUNNER_TEMP/$tarball" "$url"
           echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$tarball" | sha256sum --check --strict -
           tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
+      # Which commits: on a pull request only its own (base..head), so a
+      # finding on another branch never fails it; on main, a tag or a
+      # manual run the whole history of the commit checked out, which
+      # holds the pushed range. Never every fetched branch (gitleaks'
+      # default --all): the checkout fetches them all.
       - name: history and working tree
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            range="origin/$BASE_REF..$HEAD_SHA"
+          else
+            range="$GITHUB_SHA"
+          fi
+          echo "gitleaks commits: $range ($(git rev-list --count "$range") commits)"
+          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose --log-opts="$range"
           "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose --no-git --source .
 
   # Runs only for a v* tag, after every gating job above passed on the
