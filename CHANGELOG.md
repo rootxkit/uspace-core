@@ -49,6 +49,14 @@ for a behaviour change the line sits under the heading of the next major
   (`" operator"`, an em space included) and a role listed twice, as a
   `*core.FieldError` on `roles`; they were signed as given, confusing
   display and audit. The verifier's judgement is unchanged. [audit N2]
+- `terrain`: `Tile.ElevationM` gives the same answer on every
+  architecture. Go lets a compiler fuse `x*y + z` into one multiply-add;
+  arm64 did, in the bilinear sum and in `OffsetM + ScaleM*...`, and
+  answered an ulp off amd64 (400.00000000000006 for 400). Each product
+  is now rounded by an explicit conversion, which forbids the fusion; on
+  amd64, which never fused, every answer is bit for bit what it was.
+  CI runs the vectors and the loaders on linux/arm64 and no longer skips
+  five terrain tests there. No vector changed. [WP-19]
 
 ## [1.3.0] (WP-18)
 
