@@ -33,8 +33,11 @@ func MappedDirOpener(dir string, maxBytes int64) func(cell string) (*Tile, error
 			return nil, err
 		}
 		defer f.Close() //nolint:errcheck // read-only; the mapping does not need the file
-		g, err := pgm.ParseFile(f, maxBytes, pgm.DefaultMaxBytes, true)
-		if err != nil {
+		var tile *Tile
+		if _, err := pgm.ParseFile(f, maxBytes, pgm.DefaultMaxBytes, true, func(g *pgm.Grid) (err error) {
+			tile, err = tileFromGrid(g)
+			return err
+		}); err != nil {
 			// Name the tile, as DirOpener does, where the error is about
 			// the file rather than a byte in it.
 			var fe *core.FieldError
@@ -43,7 +46,7 @@ func MappedDirOpener(dir string, maxBytes int64) func(cell string) (*Tile, error
 			}
 			return nil, err
 		}
-		return tileFromGrid(g)
+		return tile, nil
 	}
 }
 

@@ -2,6 +2,7 @@ package pgm
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -70,7 +71,7 @@ func TestParseFileAgreesWithParse(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, mapped := range []bool{false, true} {
-			g, err := ParseFile(openBytes(t, data), int64(len(data)), 0, mapped)
+			g, err := ParseFile(openBytes(t, data), int64(len(data)), 0, mapped, nil)
 			if err != nil {
 				t.Fatalf("%s mapped=%v: %v", name, mapped, err)
 			}
@@ -109,7 +110,7 @@ func TestParseFileRefusals(t *testing.T) {
 			t.Fatalf("%s: Parse accepted it", name)
 		}
 		for _, mapped := range []bool{false, true} {
-			g, err := ParseFile(openBytes(t, data), 1<<20, 0, mapped)
+			g, err := ParseFile(openBytes(t, data), 1<<20, 0, mapped, nil)
 			if err == nil || g != nil {
 				t.Fatalf("%s mapped=%v: accepted", name, mapped)
 			}
@@ -123,15 +124,37 @@ func TestParseFileRefusals(t *testing.T) {
 	}
 	// Past the file bound: refused before mapping (E-10); at it, accepted.
 	for _, mapped := range []bool{false, true} {
-		if _, err := ParseFile(openBytes(t, good), int64(len(good)-1), 0, mapped); err == nil {
+		if _, err := ParseFile(openBytes(t, good), int64(len(good)-1), 0, mapped, nil); err == nil {
 			t.Errorf("mapped=%v: a file past maxFileBytes was accepted", mapped)
 		}
-		if _, err := ParseFile(openBytes(t, good), int64(len(good)), 0, mapped); err != nil {
+		if _, err := ParseFile(openBytes(t, good), int64(len(good)), 0, mapped, nil); err != nil {
 			t.Errorf("mapped=%v: a file at maxFileBytes was refused: %v", mapped, err)
 		}
 	}
+	// The caller's check refuses a grid Parse accepts, with its own error,
+	// and the mapping goes with it; a check that passes keeps the grid.
+	errCheck := errors.New("refused by the caller")
+	drainMappings(t) // the grids accepted at the bound above
+	for _, mapped := range []bool{false, true} {
+		g, err := ParseFile(openBytes(t, good), 1<<20, 0, mapped, func(*Grid) error { return errCheck })
+		if g != nil || !errors.Is(err, errCheck) {
+			t.Errorf("mapped=%v: check refusal gave %v, %v", mapped, g, err)
+		}
+		if mmapfile.Live() != 0 {
+			t.Errorf("mapped=%v: a grid the check refused left a live mapping", mapped)
+		}
+		g, err = ParseFile(openBytes(t, good), 1<<20, 0, mapped, func(g *Grid) error {
+			if g.Width != 2 {
+				return errCheck
+			}
+			return nil
+		})
+		if err != nil || g == nil || g.Raw(1, 0) != 0xFFFF {
+			t.Errorf("mapped=%v: a grid the check accepts: %v", mapped, err)
+		}
+	}
 	// The sample bound applies as in Parse.
-	if _, err := ParseFile(openBytes(t, good), 1<<20, 11, true); err == nil {
+	if _, err := ParseFile(openBytes(t, good), 1<<20, 11, true, nil); err == nil {
 		t.Error("samples past maxBytes accepted")
 	}
 }
@@ -143,7 +166,7 @@ func TestParseFileReleasesMapping(t *testing.T) {
 		t.Skip("no memory maps on this platform: ParseFile reads, nothing to release")
 	}
 	drainMappings(t)
-	g, err := ParseFile(openBytes(t, syntheticGeoid()), 1<<20, 0, true)
+	g, err := ParseFile(openBytes(t, syntheticGeoid()), 1<<20, 0, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +199,7 @@ func FuzzParseFile(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		want, wantErr := Parse(data, bound)
 		for _, mapped := range []bool{true, false} {
-			g, err := ParseFile(openBytes(t, data), bound+1<<10, bound, mapped)
+			g, err := ParseFile(openBytes(t, data), bound+1<<10, bound, mapped, nil)
 			if (err == nil) != (wantErr == nil) {
 				t.Fatalf("mapped=%v: ParseFile error %v, Parse error %v", mapped, err, wantErr)
 			}

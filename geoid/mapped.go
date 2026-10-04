@@ -16,8 +16,9 @@ import (
 //
 // The file is refused past the bound Load applies before it is mapped,
 // and then parsed and checked as Parse does: a truncated file, trailing
-// bytes and a bad header are the same *core.FieldError. The mapping is
-// released once the Grid is unreachable; there is no Close.
+// bytes and a bad header are the same *core.FieldError, and a refused
+// file is unmapped before the error returns. An accepted grid's mapping
+// is released once the Grid is unreachable; there is no Close.
 //
 // The file must not be truncated or rewritten in place while mapped (the
 // process would fault with SIGBUS): install a new grid by renaming it
@@ -28,11 +29,14 @@ func LoadMapped(path string) (*Grid, error) {
 		return nil, err
 	}
 	defer f.Close() //nolint:errcheck // read-only file; the mapping does not need it
-	g, err := pgm.ParseFile(f, maxFileBytes, pgm.DefaultMaxBytes, true)
-	if err != nil {
+	var grid *Grid
+	if _, err := pgm.ParseFile(f, maxFileBytes, pgm.DefaultMaxBytes, true, func(g *pgm.Grid) (err error) {
+		grid, err = fromPGM(g)
+		return err
+	}); err != nil {
 		return nil, err
 	}
-	return fromPGM(g)
+	return grid, nil
 }
 
 // Mapped reports whether the grid's samples are a read-only memory map of

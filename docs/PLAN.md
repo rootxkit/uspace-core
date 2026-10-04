@@ -209,7 +209,7 @@ func (g *Grid) Raw(ix, iy int) uint16
 func (g *Grid) Number(key string) (float64, error)
 // WP-19, v1.4.0: the same Parse over a file read, or mapped read-only
 // (internal/mmapfile: mmap on linux and darwin, a read elsewhere)
-func ParseFile(f *os.File, maxFileBytes int64, maxBytes int, mapped bool) (*Grid, error)
+func ParseFile(f *os.File, maxFileBytes int64, maxBytes int, mapped bool, check func(*Grid) error) (*Grid, error)
 
 // geoid
 type Grid struct{...}

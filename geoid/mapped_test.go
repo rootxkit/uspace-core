@@ -150,6 +150,10 @@ func TestLoadMappedRefusals(t *testing.T) {
 		if !errors.As(err, &fe) {
 			t.Errorf("%s: %T is not a *core.FieldError", name, err)
 		}
+		// Released before the error returns, not at some later GC.
+		if mmapfile.Live() != 0 {
+			t.Errorf("%s: %d mappings live after the refusal", name, mmapfile.Live())
+		}
 	}
 	drainMappings(t)
 	dir := t.TempDir()

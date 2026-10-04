@@ -120,6 +120,10 @@ func TestMappedDirOpenerRefusals(t *testing.T) {
 		if err.Error() != want.Error() {
 			t.Errorf("%s: %v, ParseTile says %v", cell, err, want)
 		}
+		// Released before the error returns, not at some later GC.
+		if mmapfile.Live() != 0 {
+			t.Errorf("%s: %d mappings live after the refusal", cell, mmapfile.Live())
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "N41E044.pgm"), good, 0o600); err != nil {
 		t.Fatal(err)
