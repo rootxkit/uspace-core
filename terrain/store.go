@@ -133,6 +133,11 @@ type StoreOptions struct {
 	// DirOpener reads <dir>/<cell>.pgm. With no Open every tile read
 	// fails, counted.
 	Open func(cell string) ([]byte, error)
+	// OpenTile, when set, is used instead of Open and ParseTile: it
+	// returns the parsed tile for a cell name. MappedDirOpener maps
+	// <dir>/<cell>.pgm read-only. An error, or no tile, counts as
+	// tile_read_failed as from Open. Added in v1.4.0.
+	OpenTile func(cell string) (*Tile, error)
 	// Now is the clock for RetryAfter. Default time.Now.
 	Now func() time.Time
 }
@@ -310,6 +315,16 @@ func (s *Store) tile(cell string) *Tile {
 }
 
 func (s *Store) read(cell string) (*Tile, error) {
+	if s.opts.OpenTile != nil {
+		t, err := s.opts.OpenTile(cell)
+		if err != nil {
+			return nil, err
+		}
+		if t == nil {
+			return nil, core.Fieldf("open_tile", "no tile and no error for %s", cell)
+		}
+		return t, nil
+	}
 	if s.opts.Open == nil {
 		return nil, core.Fieldf("open", "no Open function configured")
 	}
