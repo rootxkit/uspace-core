@@ -130,7 +130,7 @@ jobs:
         run: |
           set -o pipefail
           go test -count=1 -shuffle=on -v ./internal/... ./geoid/ ./terrain/ 2>&1 | tee loaders.log | grep -E -- '^(--- (FAIL|SKIP)|FAIL|ok)'
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: vectors-arm64-log
@@ -155,7 +155,7 @@ jobs:
         run: go test -race -count=1 -shuffle=on -coverprofile=coverage.out -covermode=atomic ./...
       - name: coverage summary
         run: go tool cover -func=coverage.out | tail -n 1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: coverage.out
@@ -192,7 +192,7 @@ jobs:
         env:
           STRICT: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
         run: scripts/manifest-coverage.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: vectors-log
@@ -215,7 +215,7 @@ jobs:
         run: FUZZTIME=10s scripts/fuzz-smoke.sh
       - name: failing inputs found by the fuzzer
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-failures
           path: "**/testdata/fuzz/**"
@@ -241,7 +241,7 @@ jobs:
         # never a failure: CI runners are noisy and the targets are design
         # budgets, checked for real in the lab's load tests.
         run: scripts/bench-report.sh bench.txt >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench
           path: bench.txt
