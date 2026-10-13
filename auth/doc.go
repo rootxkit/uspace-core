@@ -69,6 +69,11 @@
 // iat), and a realm not in Realms, are rejected_claims. Both are off by
 // default, so v1.4.0 changes no judgement of v1.3.0.
 //
+// From v1.6.0, Issuer.WithStringAudience returns an Issuer whose Issue
+// writes aud as a string rather than a one-element array, for a
+// verifier that reads only the string form (uspace-lab finding C3). The
+// Verifier's judgement of aud is unchanged: it accepts both.
+//
 // # Three signed forms, and when a system uses which
 //
 //   - Bearer JWT (Verifier, Issuer): who is calling. Every API request

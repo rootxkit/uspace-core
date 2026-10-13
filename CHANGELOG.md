@@ -16,6 +16,24 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.6.0] (lab finding C3)
+
+Additive to 1.5.0: an issuer that writes a single audience as a JSON
+string. No judgement changed, no vector changed, and nothing exported
+was removed or renamed; `uspace-lab@216fa56` remains the pin.
+
+### Added
+
+- `auth.Issuer.WithStringAudience` returns an Issuer with the same iss,
+  key and JWKS whose `Issue` writes `aud` as a string (`"aud":"host"`)
+  instead of a one-element array. RFC 7519 §4.1.3 allows both, and
+  `auth.Verifier` accepts both, as before; the string form is for a
+  verifier that compares `aud` as a string only, the InterUSS mock USS
+  of monitoring v0.36.0 that the lab's uss_qualifier runs use
+  (uspace-lab `docs/decisions/2026-10-05-conformance-findings.md` C3).
+  `Issue` on any other Issuer is unchanged (an array), and
+  `IssueSession` writes a string as it always did. [C3]
+
 ## [1.5.0] (WP-L4 re-sync)
 
 Minor to 1.4.0: the knowledge vectors re-synced from
