@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
+	"github.com/lestrrat-go/jwx/v3/jws"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -22,6 +24,23 @@ type Issuer struct {
 	iss  string
 	priv jwk.Key
 	jwks jwk.Set
+	// stringAud makes Issue write aud as a JSON string instead of a
+	// one-element array (WithStringAudience).
+	stringAud bool
+}
+
+// WithStringAudience returns an Issuer that signs with the same key, iss
+// and JWKS as i, and whose Issue writes the single audience as a JSON
+// string ("aud":"host") instead of a one-element array
+// ("aud":["host"]). RFC 7519 §4.1.3 allows both, and Verifier accepts
+// both; the string form is for a verifier that compares aud as a string
+// only (the InterUSS mock USS of monitoring v0.36.0, uspace-lab finding
+// C3). i is not changed: its Issue keeps writing the array, as before
+// v1.6.0. IssueSession writes a string in either case.
+func (i *Issuer) WithStringAudience() *Issuer {
+	c := *i
+	c.stringAud = true
+	return &c
 }
 
 // NewIssuer builds an issuer for iss signing with key under kid. It
@@ -82,7 +101,9 @@ func importSigningKey(kid string, key *rsa.PrivateKey) (priv, pub jwk.Key, err e
 
 // Issue signs a token for sub and aud granting scopes (sent as the
 // space-separated scope claim; omitted when scopes is empty), valid from
-// now for ttl. Times are whole seconds (RFC 7519 NumericDate).
+// now for ttl. Times are whole seconds (RFC 7519 NumericDate). aud is
+// written as a one-element array, or as a string by an Issuer from
+// WithStringAudience.
 func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now time.Time) (string, error) {
 	switch {
 	case sub == "":
@@ -104,6 +125,9 @@ func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now 
 		return "", core.Fieldf("jti", "no randomness: %v", err)
 	}
 	now = now.Truncate(time.Second)
+	if i.stringAud {
+		return i.issueStringAudience(sub, aud, scopes, now, now.Add(ttl), hex.EncodeToString(jti[:]))
+	}
 	b := jwt.NewBuilder().
 		Issuer(i.iss).
 		Subject(sub).
@@ -119,6 +143,45 @@ func (i *Issuer) Issue(sub, aud string, scopes []string, ttl time.Duration, now 
 		return "", core.Fieldf("token", "%v", err)
 	}
 	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), i.priv))
+	if err != nil {
+		return "", core.Fieldf("token", "%v", err)
+	}
+	return string(signed), nil
+}
+
+// stringAudPayload is Issue's payload with aud as a string. jwx's
+// builder always writes aud as an array, so this form is marshalled here,
+// with the same members, and signed as IssueSession signs.
+type stringAudPayload struct {
+	Issuer    string `json:"iss"`
+	Subject   string `json:"sub"`
+	Audience  string `json:"aud"`
+	IssuedAt  int64  `json:"iat"`
+	ExpiresAt int64  `json:"exp"`
+	JTI       string `json:"jti"`
+	Scope     string `json:"scope,omitempty"`
+}
+
+func (i *Issuer) issueStringAudience(sub, aud string, scopes []string, iat, exp time.Time, jti string) (string, error) {
+	payload, err := json.Marshal(stringAudPayload{
+		Issuer: i.iss, Subject: sub, Audience: aud, IssuedAt: iat.Unix(), ExpiresAt: exp.Unix(),
+		JTI: jti, Scope: strings.Join(scopes, " "),
+	})
+	if err != nil {
+		return "", core.Fieldf("token", "%v", err)
+	}
+	kid, ok := i.priv.KeyID()
+	if !ok || kid == "" {
+		return "", core.Fieldf("kid", "empty")
+	}
+	hdr := jws.NewHeaders()
+	if err := hdr.Set(jws.KeyIDKey, kid); err != nil {
+		return "", core.Fieldf("header", "%v", err)
+	}
+	if err := hdr.Set(jws.TypeKey, "JWT"); err != nil {
+		return "", core.Fieldf("header", "%v", err)
+	}
+	signed, err := jws.Sign(payload, jws.WithKey(jwa.RS256(), i.priv, jws.WithProtectedHeaders(hdr)))
 	if err != nil {
 		return "", core.Fieldf("token", "%v", err)
 	}
