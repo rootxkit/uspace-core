@@ -15,7 +15,7 @@ LAB     ?= ../uspace-lab
 # Linter versions pinned to the ones .github/workflows/ci.yml runs. Change
 # both files together. `make tools` installs them into $(go env GOPATH)/bin.
 GOLANGCI_LINT_VERSION ?= v2.14.0
-STATICCHECK_VERSION   ?= v0.8.1
+STATICCHECK_VERSION   ?= v0.8.2
 # The gitleaks version the CI gitleaks job runs (GITLEAKS_VERSION there).
 # .gitleaks.toml relies on how this version applies allowlists.
 GITLEAKS_VERSION      ?= v8.24.3
