@@ -16,6 +16,30 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.7.0] (ANSP gap 3)
+
+Additive to 1.6.0: the ground over a box. No judgement changed, no
+vector changed, and nothing exported was removed or renamed;
+`uspace-lab@216fa56` remains the pin.
+
+### Added
+
+- `terrain`: `Store.RangeM(bbox, maxSamples)` gives the least and
+  greatest ground elevation over a box, for a caller that holds a limit
+  above ground for a whole area: the ANSP's AGL dynamic restriction,
+  made an absolute F3548 volume with the least ground under the lower
+  limit and the greatest under the upper, so the volume never shrinks
+  (uspace-ansp `docs/PLAN.md` section 15 gap 3). The range bounds every
+  answer `Store.Elevation` gives inside the box: it reads every sample a
+  bilinear interpolation there can read, so a peak between the box's
+  corners is in it. A box any part of which is unknown to `Elevation`
+  (a cell outside the index, an unreadable tile, a NoData sample) is
+  `(nil, nil)`, counted `range_unknown`, never the range of the part
+  that is known (LESSONS D-04). Bounded by `MaxRangeCells` (64) and a
+  sample bound (`DefaultMaxRangeSamples`); a box across the
+  antimeridian is refused. Nothing that exists changes its output; no
+  vector changed. [ANSP gap 3]
+
 ## [1.6.0] (lab finding C3)
 
 Additive to 1.5.0: an issuer that writes a single audience as a JSON

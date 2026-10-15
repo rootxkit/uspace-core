@@ -23,6 +23,10 @@
 //     the same. A mapped tile is unmapped once evicted and no goroutine
 //     holds it; its file must not be truncated or rewritten in place
 //     while mapped (SIGBUS): replace it by renaming a new file over it.
+//   - Store.RangeM bounds the elevation over a box: the least and
+//     greatest of every sample an interpolation inside it can read, for
+//     an absolute volume made from a limit above ground that must never
+//     shrink. Any unknown part makes the whole box unknown (nil, nil).
 //
 // Height above ground is never stored; it is AMSL minus this elevation
 // (D-02), both on EGM2008. The DEM is a surface model (roofs, canopy) and
