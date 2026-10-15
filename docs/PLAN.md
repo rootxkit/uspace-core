@@ -1,11 +1,12 @@
 # uspace-core implementation plan
 
-Status: plan for parallel implementation by independent agents. Branch
+Status: plan for parallel implementation by independent agents; the work packages are
+implemented and released (latest tag `v1.6.0`). Written on branch
 `plan/initial`. Inputs: the spec at `uspace-lab/docs/spec/` (especially
 `00 §6`, `00 §6.3`, `04`, `05`, `07` G-M1..G-M3, `09`), the knowledge base
-at `uspace-lab/knowledge/` (`LESSONS.md`, 16 vector files, `scenarios.md`,
+at `uspace-lab/knowledge/` (`LESSONS.md`, 18 vector files, `scenarios.md`,
 `README.md`) and the predecessor `rootxkit/utm` (read-only reference). The
-vectors are vendored at `uspace-lab@c6b7f33` (generated from
+vectors are vendored at `uspace-lab@216fa56` (generated from
 `utm@484cd22`).
 
 Sections: 1 scope and decisions; 2 module layout and dependency graph;
@@ -608,7 +609,7 @@ package `doc.go` rewritten to describe what was built; CHANGELOG entry.
 
 | WP | Slug | Owns (exclusively) | Vectors | Depends on | Milestone |
 |---|---|---|---|---|---|
-| WP-0 | `plan-scaffold` | `core/`, `vectors/`, `odid/types.go`, scripts, CI, docs | manifest | - | done on `plan/initial` |
+| WP-0 | `plan-scaffold` | `core/`, `vectors/`, `odid/types.go`, scripts, CI, docs | manifest | - | done (`v0.1.0`) |
 | WP-1 | `geodesy` | `geodesy/` | `geodesy.json` | WP-0 | G-M1 |
 | WP-2 | `terrain-geoid` | `terrain/`, `geoid/`, `internal/pgm/` | `terrain_geoid.json` | WP-0 | G-M1 |
 | WP-3 | `odid-codec` | `odid/` except `types.go` (additions to it only by plan change) | `odid_decode.json` | WP-0 | G-M1 |
@@ -625,6 +626,9 @@ package `doc.go` rewritten to describe what was built; CHANGELOG entry.
 | WP-14 | `v1.1-additive` (JWS helpers, the `v1.1.0` release PR) | `auth/` | none (no vector changes in C1) | `v1.0.0`; release after WP-15, WP-16 | C1 (`v1.1.0`) |
 | WP-15 | `geodesy-cell` | `geodesy/cell/` (new) | none | `v1.0.0` | C1 |
 | WP-16 | `basis-skip-conflicts` | one constant in `core/ident.go`; `alerting.Config.SkipConflicts` | none | `v1.0.0` | C1 |
+| WP-17 | `issue-session` | `auth/session.go` | none | `v1.1.0` | `v1.2.0` |
+| WP-18 | `geodesy-destination` | `geodesy/direct.go` | none | `v1.2.0` | `v1.3.0` |
+| WP-19 | `geoid-mmap` | `internal/mmapfile/`, loader files in `internal/pgm/`, `geoid/`, `terrain/` | none | `v1.3.0` | `v1.4.0` |
 
 Waves (what can run in parallel):
 
@@ -747,7 +751,7 @@ Jobs on push to `main`, tags `v*`, and pull requests, ubuntu-latest, Go
 from `go.mod`:
 
 1. `build-vet-lint`: gofmt check, `go build`, `go vet`, `go mod tidy`
-   clean, staticcheck v0.8.1, golangci-lint v2.14.0
+   clean, staticcheck v0.8.2, golangci-lint v2.14.0
    (`golangci/golangci-lint-action@v8`; both versions pinned, matching the
    `Makefile`, so `make tools lint` reproduces the job locally).
 2. `test-race`: `go test -race -count=1 -shuffle=on -coverprofile` for the
