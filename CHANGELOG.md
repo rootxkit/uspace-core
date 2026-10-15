@@ -16,6 +16,12 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.7.0] (ANSP gap 3)
+
+Additive to 1.6.0: the ground over a box. No judgement changed, no
+vector changed, and nothing exported was removed or renamed;
+`uspace-lab@216fa56` remains the pin.
+
 ### Added
 
 - `terrain`: `Store.RangeM(bbox, maxSamples)` gives the least and
