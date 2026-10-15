@@ -254,6 +254,24 @@ func TestRangeTopEdges(t *testing.T) {
 	}
 }
 
+// A box wholly on the +90 parallel or the +180 meridian touches no
+// cell: unknown, as Elevation is there, never an empty range.
+func TestRangeBoxOnTheTopEdgesOnly(t *testing.T) {
+	s := NewStore(Index{"N89E179": SeaDataset}, StoreOptions{})
+	for _, b := range []geodesy.BBox{box(90, 179.5, 90, 179.6), box(89.5, 180, 89.6, 180), box(90, 180, 90, 180)} {
+		got, err := s.RangeM(b, 0)
+		if err != nil || got != nil {
+			t.Fatalf("%+v: want unknown, got %+v %v", b, got, err)
+		}
+		if e, err := s.Elevation(core.LatLon{LatDeg: b.MinLat, LonDeg: b.MinLon}); err != nil || e != nil {
+			t.Fatalf("%+v: Elevation answers %+v %v, the range must agree", b, e, err)
+		}
+	}
+	if n := s.Counters().Snapshot()[CounterRangeUnknown]; n != 3 {
+		t.Fatalf("range_unknown %d, want 3", n)
+	}
+}
+
 func TestRangeInvalidBox(t *testing.T) {
 	s := rangeStore(t, slopeSpec(), nil)
 	for _, c := range []struct {

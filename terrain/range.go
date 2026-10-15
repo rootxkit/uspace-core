@@ -81,6 +81,15 @@ func (s *Store) RangeM(b geodesy.BBox, maxSamples int) (*Range, error) {
 	// starts there.
 	lat1 = min(lat1, 89)
 	lon1 = min(lon1, 179)
+	if lat0 > lat1 || lon0 > lon1 {
+		// A box lying wholly on the +90 parallel or the +180 meridian
+		// touches no cell: Elevation answers unknown there (CellName
+		// N90 or E180 is in no index), so the range is unknown too,
+		// never the empty {+Inf, -Inf}.
+		s.counters.Inc(CounterUnknownCell)
+		s.counters.Inc(CounterRangeUnknown)
+		return nil, nil
+	}
 	cells := (lat1 - lat0 + 1) * (lon1 - lon0 + 1)
 	if cells > MaxRangeCells {
 		return nil, core.Fieldf("bbox", "touches %d cells; at most %d", cells, MaxRangeCells)
