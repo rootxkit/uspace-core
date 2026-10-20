@@ -21,7 +21,7 @@ var validReasons = map[core.IdentStatus]map[core.IdentReason]bool{
 		core.ReasonOperatorMismatch: true, core.ReasonOwnerUnknown: true, core.ReasonNotInRegistry: true,
 		core.ReasonSerialConflict: true, core.ReasonRegistryUnavailable: true,
 	},
-	core.IdentUnidentified: {core.ReasonNoSerial: true},
+	core.IdentUnidentified: {core.ReasonNoSerial: true, core.ReasonDetailsUnavailable: true},
 }
 
 // invariants every identification holds, whatever the input.
