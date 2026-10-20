@@ -71,8 +71,8 @@ func isPlaceKind(kind string) bool {
 //     unknown_operator aircraft also refreshes
 //     identification:<country>:<identifier>:<id>;
 //   - a zone that cannot be judged (a containment error, NotEvaluated) or
-//     an identification that is absent holds its alerts: neither
-//     refreshed nor shown false (C-09);
+//     an identification that is absent or held (heldIdentification)
+//     holds its alerts: neither refreshed nor shown false (C-09);
 //   - every other zone, identification and height alert of the aircraft
 //     was judged false by this sample and is shown false.
 func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
@@ -111,7 +111,7 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 			continue
 		}
 		switch ident := tr.Identification; {
-		case ident == nil:
+		case m.heldIdentification(ident):
 			kept = append(kept, idKey)
 		case ident.Status.IncidentStatus():
 			m.refresh(m.identificationRaise(idKey, ac.id, res.Raise, ident), atS, ev)
@@ -140,6 +140,26 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 	for _, key := range falseKeys {
 		m.showFalse(key, atS, nil, ev)
 	}
+}
+
+// heldIdentification reports whether a sample's identification is
+// treated as absent: nil; not judged because the Service Provider's
+// details were not fetched (details_unavailable, always); or not judged
+// because the registry could not be read (registry_unavailable, when
+// Config.HoldUnjudgedIdentification is set). A held identification
+// raises nothing and shows nothing false, so it neither raises
+// identification or identification_mismatch nor clears them, and it does
+// not keep the identity fresh (C-09).
+func (m *Monitor) heldIdentification(ident *core.Identification) bool {
+	switch {
+	case ident == nil:
+		return true
+	case ident.Reason == core.ReasonDetailsUnavailable:
+		return true
+	case ident.Reason == core.ReasonRegistryUnavailable:
+		return m.cfg.HoldUnjudgedIdentification
+	}
+	return false
 }
 
 // zoneRaise is a zone or height alert from a zones.Raise. The detail
@@ -196,10 +216,11 @@ func (m *Monitor) identificationRaise(key, id string, zr *zones.Raise, ident *co
 // flying or not, with or without a position (G-02): raised while the
 // identification says mismatch, shown false by one that says otherwise,
 // and stale with the aircraft's identity, not its track. A sample with no
-// identification judges nothing and does not keep the identity fresh.
+// identification, or a held one (heldIdentification), judges nothing and
+// does not keep the identity fresh.
 func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Events) {
 	ident := tr.Identification
-	if ident == nil {
+	if m.heldIdentification(ident) {
 		return
 	}
 	atS := math.Min(tr.CapturedAtS, wallS)

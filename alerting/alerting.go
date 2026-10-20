@@ -197,6 +197,17 @@ type Config struct {
 	// it, so there is nothing to clear, whereas a switch at run time would
 	// leave active conflicts with no judgement to clear them.
 	SkipConflicts bool
+	// HoldUnjudgedIdentification holds an identification whose reason is
+	// registry_unavailable as if the sample carried none: it neither
+	// raises nor shows false identification (G-03) or
+	// identification_mismatch (G-02), and does not keep the identity
+	// fresh. The registry could not be consulted, so the block does not
+	// say whether the aircraft is registered (core.IdentReason.Judged).
+	// details_unavailable is held whatever this says. Default false,
+	// which keeps the 1.x behaviour: registry_unavailable is
+	// unknown_operator and raises identification in an incident zone.
+	// The default becomes true in the next major.
+	HoldUnjudgedIdentification bool
 }
 
 // DefaultConfig is the policy alert_lifecycle.json pins: cpa.DefaultPolicy
@@ -265,7 +276,9 @@ type Track struct {
 	Identified  *bool
 	// Identification is the registry's verdict on who the aircraft is;
 	// nil when the message carries none (then neither identification alert
-	// is refreshed or shown false by it).
+	// is refreshed or shown false by it). One that is not judged is held
+	// the same way: details_unavailable always, registry_unavailable under
+	// Config.HoldUnjudgedIdentification.
 	Identification *core.Identification
 	// Env is the ground and geoid at Pos (zones.Env).
 	Env zones.Env

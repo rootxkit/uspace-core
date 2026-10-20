@@ -1,5 +1,5 @@
 {
- "description": "Alert raise/clear sequences through the airspace monitor. Each case is a list of steps on one monitor: observe (one aircraft message at wall time t_s), tick (no message), switch_source (U-15). expected.per_step[i] lists what step i raised and cleared (with the clear reason: resolved, stale, source_disabled, landed). Aircraft fields: id, lat_deg/lon_deg (computed; north_m/east_m are how the case was built), alt_amsl_m (default 550), vn/ve/vd (m/s, vd down), flying (default true: armed for relay, airborne for Remote ID), captured_at_s (default t_s; the ingest's placement), rx_at_s (default captured_at_s), station_clock_offset_s (the station's own ts = captured_at_s + offset; default 0), backlog, source (relay | remote_id), station, alt_source, identification, transmitter, identified. An absent alt_source is geodetic: a vertical position, judged against the vertical minimum (utm read every altitude but 'pressure' that way). Policy 60 s / 60 m / 20 m / 800 m; defaults clear_after_s 3, stale_after_s 15, neighbour_max_age_s 10, live_max_age_s 10, pressure_uncertainty_m 250, ahead_tolerance_s 1, max_aircraft 50000, max_source_share 0.5. The source key of max_source_share is (source, station). Zones are ED-269 features. counters lists the counts the case pins; a refused sample is counted under its reason (rejected_older_than_held, rejected_placed_ahead, rejected_capacity, rejected_source_share, the last two also per source as <counter>/<source>/<station>) and judges nothing.",
+ "description": "Alert raise/clear sequences through the airspace monitor. Each case is a list of steps on one monitor: observe (one aircraft message at wall time t_s), tick (no message), switch_source (U-15). expected.per_step[i] lists what step i raised and cleared (with the clear reason: resolved, stale, source_disabled, landed). Aircraft fields: id, lat_deg/lon_deg (computed; north_m/east_m are how the case was built), alt_amsl_m (default 550), vn/ve/vd (m/s, vd down), flying (default true: armed for relay, airborne for Remote ID), captured_at_s (default t_s; the ingest's placement), rx_at_s (default captured_at_s), station_clock_offset_s (the station's own ts = captured_at_s + offset; default 0), backlog, source (relay | remote_id), station, alt_source, identification, transmitter, identified. An absent alt_source is geodetic: a vertical position, judged against the vertical minimum (utm read every altitude but 'pressure' that way). Policy 60 s / 60 m / 20 m / 800 m; defaults clear_after_s 3, stale_after_s 15, neighbour_max_age_s 10, live_max_age_s 10, pressure_uncertainty_m 250, ahead_tolerance_s 1, max_aircraft 50000, max_source_share 0.5. The source key of max_source_share is (source, station). Zones are ED-269 features. counters lists the counts the case pins; a refused sample is counted under its reason (rejected_older_than_held, rejected_placed_ahead, rejected_capacity, rejected_source_share, the last two also per source as <counter>/<source>/<station>) and judges nothing. An identification whose reason is details_unavailable is not judged (spec 04 section 3.2): it neither raises nor clears, the identification keys held as for an absent identification and an active identification_mismatch neither refreshed nor shown false (leaving the zone still clears identification: the zone is judged false); with config hold_unjudged_identification true (default false) registry_unavailable is held the same way.",
  "source": [
   "utm airspace/tests/test_monitor.py",
   "utm airspace/tests/test_monitor_geozones.py",
@@ -5886,6 +5886,1962 @@
    },
    "why": "C-18, the twin of source-share-refuses-a-flooding-source: rx-1 holds two aircraft, as many as its share, but neither has an alert. The share counts alert holders only, so a third id from rx-1 is admitted, judged, and raises its conflict with A.",
    "source": ""
+  },
+  {
+   "name": "details-unavailable-in-prohibited-zone-holds",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "zones": [
+      {
+       "identifier": "Z5",
+       "country": "GEO",
+       "type": "COMMON",
+       "restriction": "PROHIBITED",
+       "applicability": [
+        {
+         "permanent": "YES"
+        }
+       ],
+       "zoneAuthority": [],
+       "geometry": [
+        {
+         "uomDimensions": "M",
+         "lowerVerticalReference": "AMSL",
+         "upperVerticalReference": "AMSL",
+         "horizontalProjection": {
+          "type": "Polygon",
+          "coordinates": [
+           [
+            [
+             44.8171,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7051
+            ]
+           ]
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "clear_after_s": 3.0
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "1581F5FKD229400A",
+        "operator_reg": "GEOabcd1234efgh",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "1581F5FKD229400A",
+        "operator_reg": "GEOabcd1234efgh",
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 5.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "1581F5FKD229400A",
+        "operator_reg": "GEOabcd1234efgh",
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "zone",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "zone",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "G-13: A enters a PROHIBITED zone before the Display Provider has its details. The zone alert is raised; no identification alert, since nobody has asked who A is. The details arrive (registered, matched) and still nothing is raised. On exit the zone alert clears resolved. utm raised a critical identification on entry: the false incident of the staging finding.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2)",
+   "decision": "details_unavailable (a Display Provider flight whose Service Provider details have not been fetched) is not judged: it raises nothing and clears nothing, the identification keys held as for an absent identification (spec 04 section 3.2 errata 2026-10-20, LESSONS G-03, G-13, C-09). utm has no such reason and raised identification for every unidentified status."
+  },
+  {
+   "name": "details-arrive-as-serial-unknown-raises-identification",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "zones": [
+      {
+       "identifier": "Z5",
+       "country": "GEO",
+       "type": "COMMON",
+       "restriction": "PROHIBITED",
+       "applicability": [
+        {
+         "permanent": "YES"
+        }
+       ],
+       "zoneAuthority": [],
+       "geometry": [
+        {
+         "uomDimensions": "M",
+         "lowerVerticalReference": "AMSL",
+         "upperVerticalReference": "AMSL",
+         "horizontalProjection": {
+          "type": "Polygon",
+          "coordinates": [
+           [
+            [
+             44.8171,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7051
+            ]
+           ]
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "clear_after_s": 3.0
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 5.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "zone",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED",
+         "status": "unknown_operator",
+         "identification_reason": "serial_unknown"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "zone",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED"
+        },
+        "reason": "resolved"
+       },
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z5",
+         "restriction": "PROHIBITED",
+         "status": "unknown_operator",
+         "identification_reason": "serial_unknown"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "G-13, the presence twin of details-unavailable-in-prohibited-zone-holds: the same flight, but the details name a serial no registry row holds. Nothing is raised for identification while details_unavailable; identification (critical, serial_unknown) is raised at the step the details arrive, and both alerts clear resolved together on exit.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2)",
+   "decision": "details_unavailable (a Display Provider flight whose Service Provider details have not been fetched) is not judged: it raises nothing and clears nothing, the identification keys held as for an absent identification (spec 04 section 3.2 errata 2026-10-20, LESSONS G-03, G-13, C-09). utm has no such reason and raised identification for every unidentified status."
+  },
+  {
+   "name": "registry-unavailable-holds-when-configured",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "zones": [
+      {
+       "identifier": "Z6",
+       "country": "GEO",
+       "type": "COMMON",
+       "restriction": "REQ_AUTHORISATION",
+       "applicability": [
+        {
+         "permanent": "YES"
+        }
+       ],
+       "zoneAuthority": [],
+       "geometry": [
+        {
+         "uomDimensions": "M",
+         "lowerVerticalReference": "AMSL",
+         "upperVerticalReference": "AMSL",
+         "horizontalProjection": {
+          "type": "Polygon",
+          "coordinates": [
+           [
+            [
+             44.8171,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7051
+            ]
+           ]
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "clear_after_s": 3.0,
+     "hold_unjudged_identification": true
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 4.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 4.0
+      }
+     },
+     {
+      "t_s": 5.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.0
+      }
+     },
+     {
+      "t_s": 6.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 6.0
+      }
+     },
+     {
+      "t_s": 7.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 7.0
+      }
+     },
+     {
+      "t_s": 9.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 9.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "zone",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION",
+         "status": "unknown_operator",
+         "identification_reason": "serial_unknown"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "zone",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION"
+        },
+        "reason": "resolved"
+       },
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION",
+         "status": "unknown_operator",
+         "identification_reason": "serial_unknown"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "With hold_unjudged_identification: A enters a REQ_AUTHORISATION zone while the registry cannot be read. The zone alert is raised, identification is not. The registry answers serial_unknown at 1 s: identification raised. The registry is unreadable again from 2 s to 5 s, longer than the 3 s hysteresis: the alert is neither refreshed nor shown false, so it is not cleared (shown false, it would clear at 5 s). Judged again at 6 s; both clear resolved together after the exit at 7 s. An aircraft that leaves the zone while still held does clear identification, because the zone is judged false there: that is the zone-bound clear, not the hold clearing.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2); rootxkit/uspace-ussp#62",
+   "decision": "With hold_unjudged_identification, registry_unavailable is not judged and is held as details_unavailable is: no raise, no clear (spec 04 section 3.2 errata 2026-10-20, LESSONS G-03, C-09; rootxkit/uspace-ussp#62). utm has no such setting and raised identification for it."
+  },
+  {
+   "name": "registry-unavailable-raises-by-default",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "zones": [
+      {
+       "identifier": "Z6",
+       "country": "GEO",
+       "type": "COMMON",
+       "restriction": "REQ_AUTHORISATION",
+       "applicability": [
+        {
+         "permanent": "YES"
+        }
+       ],
+       "zoneAuthority": [],
+       "geometry": [
+        {
+         "uomDimensions": "M",
+         "lowerVerticalReference": "AMSL",
+         "upperVerticalReference": "AMSL",
+         "horizontalProjection": {
+          "type": "Polygon",
+          "coordinates": [
+           [
+            [
+             44.8171,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7051
+            ],
+            [
+             44.8371,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7251
+            ],
+            [
+             44.8171,
+             41.7051
+            ]
+           ]
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "clear_after_s": 3.0
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 4.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 4.0
+      }
+     },
+     {
+      "t_s": 5.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.0
+      }
+     },
+     {
+      "t_s": 6.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 6.0
+      }
+     },
+     {
+      "t_s": 7.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 7.0
+      }
+     },
+     {
+      "t_s": 9.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 5000,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "serial_unknown",
+        "serial": "SN-NOBODY",
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.76011756624707,
+       "lon_deg": 44.8271,
+       "captured_at_s": 9.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "zone",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION"
+        }
+       },
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION",
+         "status": "unknown_operator",
+         "identification_reason": "registry_unavailable"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "zone",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION"
+        },
+        "reason": "resolved"
+       },
+       {
+        "kind": "identification",
+        "severity": "critical",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "identifier": "Z6",
+         "restriction": "REQ_AUTHORISATION",
+         "status": "unknown_operator",
+         "identification_reason": "serial_unknown"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "The presence twin of registry-unavailable-holds-when-configured: the same steps without hold_unjudged_identification. registry_unavailable raises identification on entry as it always has, refreshes it while the registry is unreadable, and both clear together after the exit. The default stays until a major release changes it, and that change will show here.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2); rootxkit/uspace-ussp#62"
+  },
+  {
+   "name": "mismatch-held-while-details-unavailable",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "clear_after_s": 3.0
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 4.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 4.0
+      }
+     },
+     {
+      "t_s": 5.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unidentified",
+        "reason": "details_unavailable",
+        "serial": null,
+        "operator_reg": null,
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.0
+      }
+     },
+     {
+      "t_s": 6.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 6.0
+      }
+     },
+     {
+      "t_s": 7.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 7.0
+      }
+     },
+     {
+      "t_s": 10.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 10.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "A broadcasts a registered serial with another operator's number: identification_mismatch raised at 0 s. From 1 s to 5 s its identification is details_unavailable, longer than the 3 s hysteresis: the mismatch is neither refreshed nor shown false, so it is not cleared (shown false, it would clear at 4 s). Judged again as operator_mismatch at 6 s: nothing new. Judged registered, matched at 7 s: shown false, cleared resolved at 10.5 s. The hold is shorter than stale_after_s, so the mismatch does not go stale meanwhile.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2); uspace-core #51",
+   "decision": "A held identification (details_unavailable) neither refreshes nor shows false an active identification_mismatch: who the aircraft is was not judged (spec 04 section 3.2 errata 2026-10-20, LESSONS G-02, G-03; uspace-core #51). utm read an identification without mismatch as showing it false."
+  },
+  {
+   "name": "mismatch-held-while-registry-unavailable",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "clear_after_s": 3.0,
+     "hold_unjudged_identification": true
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 4.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 4.0
+      }
+     },
+     {
+      "t_s": 5.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.0
+      }
+     },
+     {
+      "t_s": 6.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 6.0
+      }
+     },
+     {
+      "t_s": 7.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 7.0
+      }
+     },
+     {
+      "t_s": 10.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 10.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "As mismatch-held-while-details-unavailable, with hold_unjudged_identification and the registry unreadable from 1 s to 5 s (registry_unavailable, mismatch false): the mismatch is held, not cleared, and clears resolved at 10.5 s after the registry judges A registered at 7 s.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2); rootxkit/uspace-ussp#62; uspace-core #51",
+   "decision": "A held identification (registry_unavailable, with hold_unjudged_identification) neither refreshes nor shows false an active identification_mismatch: who the aircraft is was not judged (spec 04 section 3.2 errata 2026-10-20, LESSONS G-02, G-03; uspace-core #51). utm read an identification without mismatch as showing it false."
+  },
+  {
+   "name": "mismatch-shown-false-by-registry-unavailable-by-default",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "config": {
+     "clear_after_s": 3.0
+    },
+    "steps": [
+     {
+      "t_s": 0.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 0.0
+      }
+     },
+     {
+      "t_s": 1.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 1.0
+      }
+     },
+     {
+      "t_s": 2.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 2.0
+      }
+     },
+     {
+      "t_s": 3.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 3.0
+      }
+     },
+     {
+      "t_s": 4.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 4.0
+      }
+     },
+     {
+      "t_s": 5.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "registry_unavailable",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 5.0
+      }
+     },
+     {
+      "t_s": 6.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "unknown_operator",
+        "reason": "operator_mismatch",
+        "serial": "S1",
+        "operator_reg": "GEOX",
+        "mismatch": true,
+        "registered_operator_reg": "GEOY"
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 6.0
+      }
+     },
+     {
+      "t_s": 7.0,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 7.0
+      }
+     },
+     {
+      "t_s": 10.5,
+      "op": "observe",
+      "aircraft": {
+       "id": "A",
+       "north_m": 0,
+       "source": "remote_id",
+       "identification": {
+        "status": "registered",
+        "reason": "matched",
+        "serial": "S1",
+        "operator_reg": "GEOY",
+        "mismatch": false
+       },
+       "lat_deg": 41.7151,
+       "lon_deg": 44.8271,
+       "captured_at_s": 10.5
+      }
+     }
+    ]
+   },
+   "expected": {
+    "per_step": [
+     {
+      "raised": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        },
+        "reason": "resolved"
+       }
+      ]
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        }
+       }
+      ],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": []
+     },
+     {
+      "raised": [],
+      "cleared": [
+       {
+        "kind": "identification_mismatch",
+        "severity": "warning",
+        "aircraft": [
+         "A"
+        ],
+        "detail": {
+         "status": "unknown_operator",
+         "identification_reason": "operator_mismatch"
+        },
+        "reason": "resolved"
+       }
+      ]
+     }
+    ],
+    "active_after": [],
+    "counters": {
+     "rejected_backlog": 0,
+     "rejected_late": 0,
+     "rejected_out_of_order": 0,
+     "rejected_source_disabled": 0,
+     "zone_checks_not_evaluated": 0,
+     "zone_limits_not_judged": 0
+    }
+   },
+   "why": "The presence twin of mismatch-held-while-registry-unavailable: the same steps without hold_unjudged_identification. registry_unavailable carries mismatch false, so it shows the mismatch false; the mismatch clears resolved at 4 s, is raised again by the operator_mismatch at 6 s, and clears resolved at 10.5 s after the registered sample at 7 s.",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490 (the 2 km display limit binds what a Display Provider shows, not the details fetch); 2021/664 Art. 8(2); rootxkit/uspace-ussp#62; uspace-core #51"
   }
  ]
 }

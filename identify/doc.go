@@ -62,6 +62,10 @@
 // owner_unknown: a binding proves identity, not standing. A nil Lookup is Unavailable (registry_unavailable), for a
 // bound track too: a session binding proves who the aircraft is, not that
 // its registration is valid.
+// DetailsUnavailable is an F3411 network flight whose Service Provider
+// details were not fetched: unidentified / details_unavailable, never
+// no_serial, which means the source was asked. It and registry_unavailable
+// are not judged (core.IdentReason.Judged).
 //
 // # The projection a caller reads (G-08)
 //

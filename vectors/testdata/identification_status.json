@@ -1,5 +1,5 @@
 {
- "description": "Network identification (U-02): every track resolved against the registry to registered, suspended, unknown_operator or unidentified, with a stable reason code and a mismatch flag. fixtures.registry is the projection every case reads unless the case gives input.registry_override. input.kind: 'broadcast' (serial + operator ID), 'remote_id_block' (a direct Remote ID observation's identity), 'bound' (a track whose aircraft an authenticated binding names), 'serial_conflict'. An identification alert is raised for statuses {unidentified, unknown_operator} inside PROHIBITED or REQ_AUTHORISATION zones; a mismatch raises identification_mismatch anywhere.",
+ "description": "Network identification (U-02): every track resolved against the registry to registered, suspended, unknown_operator or unidentified, with a stable reason code and a mismatch flag. fixtures.registry is the projection every case reads unless the case gives input.registry_override. input.kind: 'broadcast' (serial + operator ID), 'remote_id_block' (a direct Remote ID observation's identity), 'bound' (a track whose aircraft an authenticated binding names), 'serial_conflict', 'details_unavailable' (a Display Provider flight whose Service Provider details have not been fetched: nothing to resolve, operator_reg as given). An identification alert is raised for statuses {unidentified, unknown_operator} inside PROHIBITED or REQ_AUTHORISATION zones when the identification is judged (details_unavailable is not, spec 04 section 3.2); a mismatch raises identification_mismatch anywhere.",
  "source": [
   "utm gateway/tests/test_identification.py",
   "utm gateway/identification.py",
@@ -1184,6 +1184,29 @@
     "drone_id": null
    },
    "why": "S-10: one of our serials heard where our authenticated telemetry says the aircraft is not: a separate track, unknown_operator with mismatch (see fleet_match.json for when)."
+  },
+  {
+   "name": "details-unavailable",
+   "owner": [
+    "authority",
+    "ussp"
+   ],
+   "input": {
+    "kind": "details_unavailable",
+    "operator_reg": null
+   },
+   "expected": {
+    "status": "unidentified",
+    "reason": "details_unavailable",
+    "serial": null,
+    "operator_reg": null,
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": null
+   },
+   "why": "G-13: a Display Provider flight whose Service Provider details have not been fetched. Nobody has asked who it is, so it is not no_serial: unidentified, details_unavailable, and not judged (it raises nothing, alert_lifecycle.json#details-*).",
+   "source": "authority staging finding 2026-10-19; spec 04 section 3.2 errata 2026-10-20",
+   "decision": "A Display Provider flight without details is details_unavailable, never no_serial (spec 04 section 3.2 and 02 F7 errata 2026-10-20, LESSONS G-13). utm's Display Provider had no such state."
   }
  ]
 }

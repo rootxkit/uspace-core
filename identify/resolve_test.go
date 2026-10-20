@@ -177,6 +177,30 @@ func TestResolveBroadcastDoesNotAliasInputs(t *testing.T) {
 	}
 }
 
+// TestDetailsUnavailable: an F3411 network flight whose details were not
+// fetched is unidentified / details_unavailable and not judged; its twins
+// are the details once fetched: without a serial they are a judged
+// no_serial (the source was asked), with a registered serial they resolve.
+func TestDetailsUnavailable(t *testing.T) {
+	bc := core.BasisAsBroadcast
+	pending := identify.DetailsUnavailable(nil)
+	check(t, pending, wantIdent{core.IdentUnidentified, core.ReasonDetailsUnavailable, nil, nil, nil, false, nil, bc})
+	if pending.Judged() {
+		t.Fatal("details_unavailable is judged")
+	}
+	check(t, identify.DetailsUnavailable(ptr(" GEOX ")),
+		wantIdent{core.IdentUnidentified, core.ReasonDetailsUnavailable, nil, ptr("GEOX"), nil, false, nil, bc})
+	check(t, identify.DetailsUnavailable(ptr("   ")),
+		wantIdent{core.IdentUnidentified, core.ReasonDetailsUnavailable, nil, nil, nil, false, nil, bc})
+	asked := identify.ResolveBroadcast(registry(), nil, nil)
+	check(t, asked, wantIdent{core.IdentUnidentified, core.ReasonNoSerial, nil, nil, nil, false, nil, bc})
+	if !asked.Judged() {
+		t.Fatal("no_serial is not judged")
+	}
+	check(t, identify.ResolveBroadcast(registry(), ptr("SN-A"), ptr(regActive)),
+		wantIdent{core.IdentRegistered, core.ReasonMatched, ptr("SN-A"), ptr(regActive), nil, false, ptr("d-active"), bc})
+}
+
 // TestRegistryUnavailable: no registry consulted, as opposed to a registry
 // that knows nobody (E-02, PLAN section 11 gap 5: no vector).
 func TestRegistryUnavailable(t *testing.T) {

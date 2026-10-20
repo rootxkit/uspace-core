@@ -217,6 +217,23 @@ func Unavailable(sn, operatorReg *string) core.Identification {
 	}
 }
 
+// DetailsUnavailable is an F3411 network flight whose Service Provider
+// details have not been fetched (spec 04 section 3.2): unidentified /
+// details_unavailable. The source was not asked who the aircraft is, so
+// the block is not judged (core.IdentReason.Judged) and raises nothing;
+// unidentified / no_serial is for a source that was asked and gave no
+// serial. The operator number is cleaned and echoed when the caller has
+// one. Basis is as_broadcast; a caller that reports the flight on the
+// provider basis sets Basis itself, as it does for ResolveBroadcast.
+func DetailsUnavailable(operatorReg *string) core.Identification {
+	return core.Identification{
+		Status:      core.IdentUnidentified,
+		Reason:      core.ReasonDetailsUnavailable,
+		OperatorReg: clean(operatorReg),
+		Basis:       core.BasisAsBroadcast,
+	}
+}
+
 func noSerial(operatorReg *string) core.Identification {
 	return core.Identification{
 		Status:      core.IdentUnidentified,

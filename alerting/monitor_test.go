@@ -474,6 +474,150 @@ func TestIdentificationHeldWithoutIdentification(t *testing.T) {
 	}
 }
 
+// holdMonitor is zoneMonitor with HoldUnjudgedIdentification set.
+func holdMonitor(t *testing.T, hold bool, zs ...*zones.Zone) *Monitor {
+	t.Helper()
+	cfg := DefaultConfig()
+	cfg.Zones = zs
+	cfg.HoldUnjudgedIdentification = hold
+	return NewMonitor(cfg)
+}
+
+func sortedActiveKeys(m *Monitor) []string {
+	var keys []string
+	for _, a := range m.Active() {
+		keys = append(keys, a.Key)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// identAt is a stationary track of A, northM metres north of the origin
+// at tS, carrying id.
+func identAt(northM, tS float64, id *core.Identification) Track {
+	a := at("A", northM, 0, tS)
+	a.Identification = id
+	return a
+}
+
+func TestHoldUnjudgedIdentificationDefaultsOff(t *testing.T) {
+	if DefaultConfig().HoldUnjudgedIdentification {
+		t.Fatal("HoldUnjudgedIdentification is on by default in v1")
+	}
+}
+
+// TestUnjudgedIdentificationRaisesNothing: inside a PROHIBITED zone, an
+// identification that is not judged raises the zone alert only, and the
+// same aircraft, once judged unregistered, raises identification at that
+// step. details_unavailable is held whatever the flag says;
+// registry_unavailable raises with the flag off (the 1.x behaviour) and
+// is held with it on. Presence twins: a judged no_serial or
+// serial_unknown raises with the flag on.
+func TestUnjudgedIdentificationRaisesNothing(t *testing.T) {
+	zoneOnly := []string{"zone:GEO:Z:A"}
+	both := []string{"zone:GEO:Z:A", "identification:GEO:Z:A"}
+	for _, c := range []struct {
+		name   string
+		hold   bool
+		status core.IdentStatus
+		reason core.IdentReason
+		want   []string
+	}{
+		{"details_unavailable/flag_off", false, core.IdentUnidentified, core.ReasonDetailsUnavailable, zoneOnly},
+		{"details_unavailable/flag_on", true, core.IdentUnidentified, core.ReasonDetailsUnavailable, zoneOnly},
+		{"registry_unavailable/flag_off", false, core.IdentUnknownOperator, core.ReasonRegistryUnavailable, both},
+		{"registry_unavailable/flag_on", true, core.IdentUnknownOperator, core.ReasonRegistryUnavailable, zoneOnly},
+		{"no_serial/flag_on", true, core.IdentUnidentified, core.ReasonNoSerial, both},
+		{"serial_unknown/flag_on", true, core.IdentUnknownOperator, core.ReasonSerialUnknown, both},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, c.hold, polygonZone(t, "Z", "PROHIBITED", ""))
+			wantEvents(t, "entry", m.Observe(identAt(0, 0, ident(c.status, c.reason, false)), 0), c.want, nil)
+			if len(c.want) == 1 {
+				judged := ident(core.IdentUnknownOperator, core.ReasonSerialUnknown, false)
+				wantEvents(t, "judged", m.Observe(identAt(0, 1, judged), 1), []string{"identification:GEO:Z:A"}, nil)
+			}
+		})
+	}
+}
+
+// TestUnjudgedIdentificationClearsNothing: an active identification
+// alert is held by unjudged samples for longer than the hysteresis (the
+// key stays active, nothing raised or cleared), as with no
+// identification; its twin, a judged registered identification, shows it
+// false and resolves it. With the flag off, registry_unavailable is
+// judged as in 1.x and keeps the alert true.
+func TestUnjudgedIdentificationClearsNothing(t *testing.T) {
+	unregistered := ident(core.IdentUnknownOperator, core.ReasonSerialUnknown, false)
+	for _, c := range []struct {
+		name string
+		hold bool
+		held *core.Identification
+	}{
+		{"details_unavailable/flag_off", false, ident(core.IdentUnidentified, core.ReasonDetailsUnavailable, false)},
+		{"details_unavailable/flag_on", true, ident(core.IdentUnidentified, core.ReasonDetailsUnavailable, false)},
+		{"registry_unavailable/flag_on", true, ident(core.IdentUnknownOperator, core.ReasonRegistryUnavailable, false)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, c.hold, polygonZone(t, "Z", "PROHIBITED", ""))
+			m.Observe(identAt(0, 0, unregistered), 0)
+			for s := 1.0; s <= 6; s++ {
+				wantEvents(t, "held", m.Observe(identAt(0, s, c.held), s), nil, nil)
+			}
+			if got, want := sortedActiveKeys(m), []string{"identification:GEO:Z:A", "zone:GEO:Z:A"}; !slices.Equal(got, want) {
+				t.Fatalf("active %v, want %v", got, want)
+			}
+			for _, a := range m.Active() {
+				if a.Key == "identification:GEO:Z:A" && a.LastTrueS != 0 {
+					t.Fatalf("held identification refreshed: last true at %v", a.LastTrueS)
+				}
+			}
+			var cleared []string
+			for s := 7.0; s <= 11; s++ {
+				_, cl := kinds(m.Observe(identAt(0, s, ident(core.IdentRegistered, core.ReasonMatched, false)), s))
+				cleared = append(cleared, cl...)
+			}
+			if !slices.Equal(cleared, []string{"identification:GEO:Z:A=resolved"}) {
+				t.Fatalf("judged registered: cleared %v", cleared)
+			}
+		})
+	}
+	t.Run("registry_unavailable/flag_off", func(t *testing.T) {
+		m := holdMonitor(t, false, polygonZone(t, "Z", "PROHIBITED", ""))
+		m.Observe(identAt(0, 0, unregistered), 0)
+		unavailable := ident(core.IdentUnknownOperator, core.ReasonRegistryUnavailable, false)
+		for s := 1.0; s <= 6; s++ {
+			wantEvents(t, "refreshed", m.Observe(identAt(0, s, unavailable), s), nil, nil)
+		}
+		for _, a := range m.Active() {
+			if a.LastTrueS != 6 {
+				t.Fatalf("%s not refreshed: last true at %v", a.Key, a.LastTrueS)
+			}
+		}
+	})
+}
+
+// TestDetailsArriveThenClearOnExit is the hold-then-judge sequence:
+// details_unavailable on entry (zone alert only), the details resolve
+// serial_unknown (identification raised at that step), and leaving the
+// zone clears both, resolved, together.
+func TestDetailsArriveThenClearOnExit(t *testing.T) {
+	m := holdMonitor(t, false, polygonZone(t, "Z", "PROHIBITED", ""))
+	pending := ident(core.IdentUnidentified, core.ReasonDetailsUnavailable, false)
+	wantEvents(t, "entry", m.Observe(identAt(0, 0, pending), 0), []string{"zone:GEO:Z:A"}, nil)
+	wantEvents(t, "pending", m.Observe(identAt(0, 1, pending), 1), nil, nil)
+	unregistered := ident(core.IdentUnknownOperator, core.ReasonSerialUnknown, false)
+	wantEvents(t, "details", m.Observe(identAt(0, 2, unregistered), 2), []string{"identification:GEO:Z:A"}, nil)
+	var cleared []string
+	for s := 3.0; s <= 7; s++ {
+		_, cl := kinds(m.Observe(identAt(5000, s, unregistered), s))
+		cleared = append(cleared, cl...)
+	}
+	if !slices.Equal(cleared, []string{"identification:GEO:Z:A=resolved", "zone:GEO:Z:A=resolved"}) {
+		t.Fatalf("exit: cleared %v", cleared)
+	}
+}
+
 func TestZoneNotEvaluatedHolds(t *testing.T) {
 	// A CONDITIONAL zone with an AGL ceiling and no terrain is not
 	// evaluated (Z-09); its alert is held, never cleared by it.
@@ -627,6 +771,55 @@ func TestMismatchLifecycle(t *testing.T) {
 	}
 	if !slices.Equal(cleared, []string{"identification_mismatch:A=resolved"}) {
 		t.Fatalf("cleared %v", cleared)
+	}
+}
+
+// TestUnjudgedIdentificationHoldsMismatch: an unjudged identification
+// (mismatch false) neither shows identification_mismatch false nor keeps
+// the identity fresh, exactly as no identification: the alert goes stale
+// after StaleAfterS. Twins (presence): registry_unavailable with the
+// flag off is judged as in 1.x and resolves it, and so does a judged
+// registered identification with mismatch false.
+func TestUnjudgedIdentificationHoldsMismatch(t *testing.T) {
+	mismatch := ident(core.IdentUnknownOperator, core.ReasonOperatorMismatch, true)
+	for _, c := range []struct {
+		name string
+		hold bool
+		next *core.Identification
+	}{
+		{"details_unavailable/flag_off", false, ident(core.IdentUnidentified, core.ReasonDetailsUnavailable, false)},
+		{"details_unavailable/flag_on", true, ident(core.IdentUnidentified, core.ReasonDetailsUnavailable, false)},
+		{"registry_unavailable/flag_on", true, ident(core.IdentUnknownOperator, core.ReasonRegistryUnavailable, false)},
+		{"no_identification", false, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, c.hold)
+			wantEvents(t, "raise", m.Observe(identAt(0, 0, mismatch), 0), []string{"identification_mismatch:A"}, nil)
+			for s := 1.0; s <= 15; s++ {
+				wantEvents(t, "held", m.Observe(identAt(0, s, c.next), s), nil, nil)
+			}
+			wantEvents(t, "stale", m.Observe(identAt(0, 16.5, c.next), 16.5), nil, []string{"identification_mismatch:A=stale"})
+		})
+	}
+	for _, c := range []struct {
+		name string
+		next *core.Identification
+	}{
+		{"registry_unavailable/flag_off", ident(core.IdentUnknownOperator, core.ReasonRegistryUnavailable, false)},
+		{"registered", ident(core.IdentRegistered, core.ReasonMatched, false)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, false)
+			m.Observe(identAt(0, 0, mismatch), 0)
+			var cleared []string
+			for s := 1.0; s <= 6; s++ {
+				_, cl := kinds(m.Observe(identAt(0, s, c.next), s))
+				cleared = append(cleared, cl...)
+			}
+			if !slices.Equal(cleared, []string{"identification_mismatch:A=resolved"}) {
+				t.Fatalf("cleared %v", cleared)
+			}
+		})
 	}
 }
 
