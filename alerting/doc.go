@@ -15,12 +15,15 @@
 //     Config.ClearAfterS since it was last true. Only a judgement shows
 //     false: a pair cpa.Evaluate did not judge (a stale neighbour, bad
 //     numbers), a zone zones.JudgeVertical did not evaluate, or a sample
-//     without an identification neither refreshes nor shows false (C-04,
-//     C-09, hysteresis_rule). An active pair is judged on every sample of
-//     either aircraft wherever the other now is, so it is never shown
-//     false by falling outside the neighbour search. A resolved conflict
-//     carries both the last numbers that showed it true (Detail) and the
-//     separation of the judgement that cleared it (ClearingDetail, C-14).
+//     without an identification (or with one held as not judged:
+//     details_unavailable, and registry_unavailable under
+//     Config.HoldUnjudgedIdentification) neither refreshes nor shows
+//     false (C-04, C-09, hysteresis_rule). An active pair is judged on
+//     every sample of either aircraft wherever the other now is, so it is
+//     never shown false by falling outside the neighbour search. A
+//     resolved conflict carries both the last numbers that showed it true
+//     (Detail) and the separation of the judgement that cleared it
+//     (ClearingDetail, C-14).
 //   - stale: an aircraft involved was not heard for Config.StaleAfterS
 //     (T-10). The mismatch alert goes stale with the aircraft's identity,
 //     the others with its flying track. When an alert could be cleared
