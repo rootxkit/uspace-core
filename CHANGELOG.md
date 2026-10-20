@@ -24,7 +24,13 @@ resolved as `unidentified / no_serial`, raised `identification` (G-03)
 in an incident zone, and became an `unregistered` violation for a
 registered aircraft (authority staging, 2026-10-19). Nothing that exists
 changes its output under the default configuration, and nothing exported
-was removed or renamed.
+was removed or renamed. The knowledge vectors are re-synced from
+`uspace-lab@3946517` (lab PR #37, WP-L4 errata): new cases only, no
+existing case's `input` or `expected` changed and no header key other
+than `description` changed, so the semver gate classifies the change
+as additive. The pin moves from `uspace-lab@216fa56` to
+`uspace-lab@3946517`; `utm_commit` stays `484cd22`. 690 cases in all
+(682 before).
 
 ### Added
 
@@ -54,6 +60,20 @@ was removed or renamed.
   stands: `registry_unavailable` is `unknown_operator` and raises
   `identification` in a PROHIBITED or REQ_AUTHORISATION zone. A system
   sets it to stop raising on a registry it could not read. [DP details]
+- vectors: alert_lifecycle.json (spec 04 section 3.2 and 02 F7 errata 2026-10-20; F3411-22a NET0480, NET0490; Regulation (EU) 2021/664 Art. 8(2)): seven new cases (35 to 42).
+  `details-unavailable-in-prohibited-zone-holds` and its presence twin
+  `details-arrive-as-serial-unknown-raises-identification`;
+  `registry-unavailable-holds-when-configured` (case config
+  `hold_unjudged_identification: true`) and its twin
+  `registry-unavailable-raises-by-default`;
+  `mismatch-held-while-details-unavailable`,
+  `mismatch-held-while-registry-unavailable` (with the flag) and their
+  twin `mismatch-shown-false-by-registry-unavailable-by-default`. The
+  vector runner reads the new case config key. [DP details]
+- vectors: identification_status.json (spec 04 section 3.2): one new case,
+  `details-unavailable` (43 to 44), of the new input kind
+  `details_unavailable`, run through `identify.DetailsUnavailable`.
+  [DP details]
 
 ### Planned for 2.0.0
 

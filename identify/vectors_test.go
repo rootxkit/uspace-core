@@ -150,7 +150,7 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 			t.Errorf("basis %q, want %q", got.Basis, wantBasis)
 		}
 	})
-	want := map[string]int{"broadcast": 29, "remote_id_block": 6, "bound": 7, "serial_conflict": 1}
+	want := map[string]int{"broadcast": 29, "remote_id_block": 6, "bound": 7, "serial_conflict": 1, "details_unavailable": 1}
 	for k, n := range want {
 		if ran[k] != n {
 			t.Errorf("kind %s: ran %d cases, want %d", k, ran[k], n)

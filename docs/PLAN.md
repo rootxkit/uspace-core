@@ -143,7 +143,7 @@ func (c Case) Decode(t TB, in, exp any);  func (c Case) ExpectedIsNull() bool
 func Unmarshal(t TB, raw json.RawMessage, v any);  func StrictUnmarshal(raw []byte, v any) error
 func Near(t TB, field string, got, want, tol float64);  func NearPtr(t TB, field string, got, want *float64, tol float64)
 func EqualTime(t TB, field string, got, want time.Time);  func EqualTimePtr(...);  func EqualStrPtr(t TB, field string, got, want *string)
-var Manifest []Entry;  const TotalCases = 682
+var Manifest []Entry;  const TotalCases = 690
 ```
 
 ### 3.3 `geodesy` (WP-1)
@@ -521,10 +521,10 @@ package implements; the package's tests name them.
 | `ed269` | `ed269_parse.json` (54), `zones_applicability.json` (32) | Z-01, Z-02, Z-03, Z-04, Z-05, Z-06, Z-07, T-09 |
 | `timeplace` | `rid_time.json` (25): 18 broadcast, 7 network | T-01, T-02, T-05 (documented), T-07, T-08, T-12 |
 | `rid` | `rid_identity.json` (24), `pressure_altitude.json` (16) | I-01, I-02, I-03, I-04, I-06, I-07 (documented limit), R-07, R-08, R-10, R-11, R-13, E-09, E-10 |
-| `identify` | `identification_status.json` (43), `fleet_match.json` (14) | G-01, G-02, G-03, G-04, G-05, G-12, I-05, I-06, I-08, I-09, D-11, E-15 |
+| `identify` | `identification_status.json` (44), `fleet_match.json` (14) | G-01, G-02, G-03, G-04, G-05, G-12, I-05, I-06, I-08, I-09, D-11, E-15 |
 | `zones` | `zones_vertical.json` (49) | Z-06, Z-08, Z-09 (with S-37), Z-10, Z-11, R-09, D-01, D-04, T-09 |
 | `cpa` | `cpa.json` (37) | C-01, C-02, C-03, C-04, C-09, C-10, C-15, C-19, D-10, E-15 |
-| `alerting` | `alert_lifecycle.json` (35) | C-05, C-06, C-07, C-08 (republish hook), C-09, C-14, C-18, T-03, T-04, T-05, T-06, T-10, T-13, B-11, G-02, G-03, I-02, I-04, INV-03 |
+| `alerting` | `alert_lifecycle.json` (42) | C-05, C-06, C-07, C-08 (republish hook), C-09, C-14, C-18, T-03, T-04, T-05, T-06, T-10, T-13, B-11, G-02, G-03, I-02, I-04, INV-03 |
 | `auth` | `rid_receiver_auth.json` (14); `jwt_verify.json` (16, G-M3; written here by WP-11, now a lab file) | R-06, B-14 (duplicate credential is a startup error), 06 §3, E-14 |
 | `ed318`, `f3411`, `f3548` | schema examples of `uas_standards`; an ED-318 round-trip vector (new, G-M2) | Z-03, Z-05, 04 §3.1 special values, 09 §1.4-1.6 |
 

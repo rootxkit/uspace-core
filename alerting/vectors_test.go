@@ -18,7 +18,7 @@ import (
 )
 
 // alertLifecycleCases is the number of cases in alert_lifecycle.json.
-const alertLifecycleCases = 35
+const alertLifecycleCases = 42
 
 // tolDetail mirrors the header's `tolerance."detail floats"`: the old
 // monitor rounded every detail float to 0.1 and the monitor keeps full
