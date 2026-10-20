@@ -24,3 +24,46 @@ func TestBasisProviderWireForm(t *testing.T) {
 		t.Fatalf("round trip: %v, basis %q", err, back.Basis)
 	}
 }
+
+// TestJudged covers every reason: only the two whose input was not
+// consulted are not judged (presence and absence over one table), and a
+// nil identification is not judged.
+func TestJudged(t *testing.T) {
+	for _, c := range []struct {
+		reason IdentReason
+		want   bool
+	}{
+		{ReasonMatched, true},
+		{ReasonSessionBinding, true},
+		{ReasonUASSuspended, true},
+		{ReasonUASRevoked, true},
+		{ReasonOperatorSuspended, true},
+		{ReasonOperatorRevoked, true},
+		{ReasonSerialUnknown, true},
+		{ReasonNotASerial, true},
+		{ReasonOperatorAbsent, true},
+		{ReasonOperatorMismatch, true},
+		{ReasonOwnerUnknown, true},
+		{ReasonNotInRegistry, true},
+		{ReasonSerialConflict, true},
+		{ReasonNoSerial, true},
+		{ReasonRegistryUnavailable, false},
+		{ReasonDetailsUnavailable, false},
+		{IdentReason("a_reason_from_a_later_version"), true},
+	} {
+		if got := c.reason.Judged(); got != c.want {
+			t.Errorf("%q.Judged() = %v, want %v", c.reason, got, c.want)
+		}
+		id := &Identification{Status: IdentUnidentified, Reason: c.reason}
+		if got := id.Judged(); got != c.want {
+			t.Errorf("Identification{%q}.Judged() = %v, want %v", c.reason, got, c.want)
+		}
+	}
+	var none *Identification
+	if none.Judged() {
+		t.Error("a nil identification is judged")
+	}
+	if ReasonDetailsUnavailable != "details_unavailable" {
+		t.Fatalf("ReasonDetailsUnavailable = %q", ReasonDetailsUnavailable)
+	}
+}

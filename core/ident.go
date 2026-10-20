@@ -19,7 +19,9 @@ const (
 )
 
 // IncidentStatus reports whether the status raises `identification`
-// inside a PROHIBITED or REQ_AUTHORISATION zone (G-03).
+// inside a PROHIBITED or REQ_AUTHORISATION zone (G-03). It reads the
+// status alone; whether the identification was judged at all is
+// Identification.Judged, which the caller checks first.
 func (s IdentStatus) IncidentStatus() bool {
 	return s == IdentUnidentified || s == IdentUnknownOperator
 }
@@ -63,8 +65,28 @@ const (
 	// ReasonNoSerial means no serial was broadcast.
 	ReasonNoSerial IdentReason = "no_serial"
 	// ReasonRegistryUnavailable means the registry could not be consulted.
+	// It is not judged (IdentReason.Judged).
 	ReasonRegistryUnavailable IdentReason = "registry_unavailable"
+	// ReasonDetailsUnavailable means the Service Provider's details (the
+	// serial and operator number of an F3411 network flight) have not
+	// been fetched, so the source was never asked who the aircraft is.
+	// Status unidentified; not judged (IdentReason.Judged). Distinct from
+	// no_serial, which means the source was asked and gave no serial.
+	ReasonDetailsUnavailable IdentReason = "details_unavailable"
 )
+
+// Judged reports whether an identification with this reason was judged:
+// its inputs were consulted (the source was asked who the aircraft is
+// and the registry answered). details_unavailable and
+// registry_unavailable are not judged: the resolver could not consult
+// one of its inputs, so the block says nothing about whether the
+// aircraft is registered. A judgement that rests on identification
+// (G-03 identification, G-02 mismatch, a violation) treats a block that
+// is not judged as absent. Every other reason, including one this
+// version does not know, is judged.
+func (r IdentReason) Judged() bool {
+	return r != ReasonDetailsUnavailable && r != ReasonRegistryUnavailable
+}
 
 // IdentBasis says what the resolution rests on (04 §3.2, LESSONS R-05).
 type IdentBasis string
@@ -104,4 +126,10 @@ type Identification struct {
 	RegistryUASID *string `json:"registry_uas_id,omitempty"`
 	// Basis is the resolution basis; empty in vectors that predate it.
 	Basis IdentBasis `json:"basis,omitempty"`
+}
+
+// Judged reports whether the identification was judged
+// (IdentReason.Judged). A nil identification is not.
+func (id *Identification) Judged() bool {
+	return id != nil && id.Reason.Judged()
 }
