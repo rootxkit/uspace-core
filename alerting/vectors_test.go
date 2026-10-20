@@ -73,13 +73,16 @@ type vStep struct {
 }
 
 type vConfig struct {
-	ClearAfterS      *float64          `json:"clear_after_s"`
-	StaleAfterS      *float64          `json:"stale_after_s"`
-	NeighbourMaxAgeS *float64          `json:"neighbour_max_age_s"`
-	LiveMaxAgeS      *float64          `json:"live_max_age_s"`
-	MaxAircraft      *int              `json:"max_aircraft"`
-	MaxSourceShare   *float64          `json:"max_source_share"`
-	Zones            []json.RawMessage `json:"zones"`
+	ClearAfterS      *float64 `json:"clear_after_s"`
+	StaleAfterS      *float64 `json:"stale_after_s"`
+	NeighbourMaxAgeS *float64 `json:"neighbour_max_age_s"`
+	LiveMaxAgeS      *float64 `json:"live_max_age_s"`
+	MaxAircraft      *int     `json:"max_aircraft"`
+	MaxSourceShare   *float64 `json:"max_source_share"`
+	// HoldUnjudgedIdentification is Config.HoldUnjudgedIdentification;
+	// absent is the default (false).
+	HoldUnjudgedIdentification *bool             `json:"hold_unjudged_identification"`
+	Zones                      []json.RawMessage `json:"zones"`
 }
 
 type vInput struct {
@@ -196,6 +199,9 @@ func configOf(t *testing.T, pol vPolicy, in vConfig) Config {
 	set(&c.MaxSourceShare, in.MaxSourceShare)
 	if in.MaxAircraft != nil {
 		c.MaxAircraft = *in.MaxAircraft
+	}
+	if in.HoldUnjudgedIdentification != nil {
+		c.HoldUnjudgedIdentification = *in.HoldUnjudgedIdentification
 	}
 	for i, raw := range in.Zones {
 		gz, problems := ed269.ParseZone(raw, ed269.Limits{})

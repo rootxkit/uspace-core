@@ -125,6 +125,8 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 				t.Fatal("serial_conflict case without serial")
 			}
 			got = identify.SerialConflict(*in.Serial, in.OperatorReg)
+		case "details_unavailable":
+			got = identify.DetailsUnavailable(in.OperatorReg)
 		default:
 			t.Fatalf("unknown kind %q", in.Kind)
 		}
