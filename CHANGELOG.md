@@ -16,6 +16,55 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.8.0] (DP details)
+
+Additive to 1.7.0: an identification that was not judged. A Display
+Provider flight whose Service Provider details were never fetched was
+resolved as `unidentified / no_serial`, raised `identification` (G-03)
+in an incident zone, and became an `unregistered` violation for a
+registered aircraft (authority staging, 2026-10-19). Nothing that exists
+changes its output under the default configuration, and nothing exported
+was removed or renamed.
+
+### Added
+
+- `core`: `ReasonDetailsUnavailable` (`details_unavailable`, status
+  `unidentified`): the Service Provider's details have not been
+  fetched, so the source was never asked who the aircraft is.
+  `no_serial` keeps its meaning: the source was asked and gave no
+  serial. [DP details]
+- `core`: `IdentReason.Judged()` and `(*Identification).Judged()`: an
+  identification is judged when its inputs were consulted. False for
+  `details_unavailable` and `registry_unavailable` (and for a nil
+  identification), true for every other reason. `IdentStatus.IncidentStatus`
+  is unchanged and reads the status alone. [DP details]
+- `identify`: `DetailsUnavailable(operatorReg)` builds the
+  `unidentified / details_unavailable` block on the `as_broadcast`
+  basis (a provider-basis caller sets `Basis`), the one place a Display
+  Provider gets it from (spec 04 §3.2). [DP details]
+- `alerting`: `details_unavailable` is held as an absent identification
+  (C-09): it raises and shows false neither `identification` nor
+  `identification_mismatch`, does not keep the identity fresh, and does
+  not change the aircraft's eviction class. An active alert stays
+  active under it and goes stale with the identity, as with no
+  identification. New reason, so no earlier behaviour changes.
+  [DP details]
+- `alerting`: `Config.HoldUnjudgedIdentification` (default false) holds
+  `registry_unavailable` the same way. With it off, the 1.x behaviour
+  stands: `registry_unavailable` is `unknown_operator` and raises
+  `identification` in a PROHIBITED or REQ_AUTHORISATION zone. A system
+  sets it to stop raising on a registry it could not read. [DP details]
+
+### Planned for 2.0.0
+
+- `alerting`: `Config.HoldUnjudgedIdentification` becomes true by
+  default, so `registry_unavailable` no longer raises `identification`.
+  That changes a judgement, so it waits for the next major (`00 §6.3`,
+  `docs/RELEASING.md` §3). It is listed here, not under a `## [2.0.0]`
+  heading, because a version heading above `[1.8.0]` would fail the
+  v1.8.0 tag's release check; the first behaviour-change pull request
+  for 2.0.0 adds that heading and moves this line under it.
+
 ## [1.7.0] (ANSP gap 3)
 
 Additive to 1.6.0: the ground over a box. No judgement changed, no
