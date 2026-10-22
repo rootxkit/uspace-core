@@ -75,6 +75,34 @@
       "why": "JSON member names are case-sensitive, and every source read names the unit uom (schema Schema_LayeredGeoJSON.json, uas_standards VerticalLayer). Kept as an unknown member, UOM would leave the layer without a uom, and the 600 ft ceiling its producer meant would be read as 600 m. Each spelling of uom that differs in case only (UOM, Uom, UoM, ...) is refused by name, as ED-269's uomDimensions is (owner decision 2026-10-22); other unknown members are still kept. The base's TSD001, with uom ft, is the accepted twin."
     },
     {
+      "name": "refuse-upper-in-another-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/0/geometry/layer", "value": {"Upper": 300, "upperReference": "WGS84", "lower": 0, "lowerReference": "AGL", "uom": "m"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[0].geometry.layer.Upper", "reason_contains": "ED-318 writes upper"}},
+      "why": "JSON member names are case-sensitive, and every source read names the ceiling upper (schema Schema_LayeredGeoJSON.json, uas_standards VerticalLayer). Kept as an unknown member, Upper would leave TSU001's layer without a ceiling, read as 0 m AGL to unlimited, and the U-space airspace whose 300 m ceiling bounds where its services are required would apply at every height above it. Each spelling of each layer member that differs in case only (Upper, LOWER, UpperReference, lowerreference, UOM, ...) is refused by name (owner decision 2026-10-23); other unknown members are still kept, and a layer without heights stays valid. The base's TSU001 is the accepted twin."
+    },
+    {
+      "name": "refuse-lower-in-another-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/2/geometry/layer", "value": {"upper": 600, "upperReference": "WGS84", "LOWER": 0, "lowerReference": "AGL", "uom": "m"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[2].geometry.layer.LOWER", "reason_contains": "ED-318 writes lower"}},
+      "why": "JSON member names are case-sensitive, and every source read names the floor lower. Kept as an unknown member, LOWER would leave the layer without a floor, read from the surface whatever value its producer wrote. Each spelling of a layer member that differs in case only is refused by name (owner decision 2026-10-23). The base's TSR001 is the accepted twin."
+    },
+    {
+      "name": "refuse-upper-reference-in-another-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/4/geometry/layer", "value": {"UpperReference": "AMSL", "lowerReference": "AGL"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[4].geometry.layer.UpperReference", "reason_contains": "ED-318 writes upperReference"}},
+      "why": "JSON member names are case-sensitive, and every source read names the ceiling's datum upperReference. Kept as an unknown member, UpperReference would be dropped from TSN001's layer without a word, and the layer accepted with a lower reference only. Each spelling of a layer member that differs in case only is refused by name (owner decision 2026-10-23). The base's TSN001, a layer of references without limits, is the accepted twin."
+    },
+    {
+      "name": "refuse-lower-reference-in-another-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/2/geometry/layer", "value": {"upper": 600, "upperReference": "WGS84", "lower": 0, "lowerreference": "AGL", "uom": "m"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[2].geometry.layer.lowerreference", "reason_contains": "ED-318 writes lowerReference"}},
+      "why": "JSON member names are case-sensitive, and every source read names the floor's datum lowerReference. lower without its reference is refused on its own (LESSONS D-01); lowerreference is also refused by name, so the problem says what was meant. Each spelling of a layer member that differs in case only is refused by name (owner decision 2026-10-23). The base's TSR001 is the accepted twin."
+    },
+    {
       "name": "refuse-no-zone-authority",
       "kind": "parse",
       "patch": [{"op": "replace", "path": "/features/4/properties/zoneAuthority", "value": []}],
