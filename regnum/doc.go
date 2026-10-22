@@ -1,10 +1,14 @@
 // Package regnum validates and normalises UAS operator registration
 // numbers (2019/947 Art. 14).
 //
-// A Validator holds the configured format (LESSONS G-07). DefaultPattern
-// is the EU shape: a three-letter country code, then 8 to 16 letters and
-// digits. The Georgian format is an open question (spec 08 Q5), so the
-// pattern is configuration. Validate refuses an empty or over-long number,
+// A Validator holds the configured format (LESSONS G-07), an Options:
+// the pattern, the secret separator and length, and an optional checksum.
+// The zero Options is the EU shape: DefaultPattern (a three-letter
+// country code, then 8 to 16 letters and digits), a secret part of a
+// hyphen and three letters or digits, no checksum. The Georgian format is
+// an open question (spec 08 Q5), so all of it is configuration. No
+// checksum algorithm is defined until the format is decided
+// (ChecksumByName knows only "none"); a system may pass its own. Validate refuses an empty or over-long number,
 // a number with a hyphen (only the public part is registered, never the
 // EU secret part after the hyphen; spec 06 §5) and a number that does not
 // match the pattern. Errors are *core.FieldError naming
@@ -23,8 +27,9 @@
 // default does, the correction cannot change a match against a registered
 // number: a registered number never contains a hyphen.
 //
-// The package-level functions use DefaultPattern; a system configured with
-// another pattern calls the Validator's methods.
+// The package-level functions use the default format; a system configured
+// with another format calls the methods of a Validator from
+// NewValidatorWith (or NewValidator for a pattern alone).
 //
 // Vectors: vectors/testdata/serials_and_registration.json, the
 // registration_number (4) and public_registration_number (8) kinds, run by

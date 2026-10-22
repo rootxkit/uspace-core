@@ -16,9 +16,9 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
-## [1.9.0] (ED-318 layer)
+## [1.10.0] (ED-318 layer)
 
-Minor to 1.8.0: an ED-318 layer that does not say its vertical limits
+Minor to 1.9.0: an ED-318 layer that does not say its vertical limits
 in ED-318's names is refused instead of read as a zone from the surface
 to unlimited. `ed318.Parse` kept every member of a `layer` it did not
 know as an extra, so a layer written with ED-269's names parsed with
@@ -26,7 +26,7 @@ no lower and no upper limit, and `uomDimensions: "FT"` beside `upper`
 left the limit read as metres. No public ED-318 source or national
 sample read writes those names inside a layer (ED-318 vertical-limit
 field-name check, 2026-10-22), and no existing vector case's `input`
-or `expected` changed: everything 1.8.0 accepted with ED-318's names
+or `expected` changed: everything 1.9.0 accepted with ED-318's names
 is accepted and written back as before. The minor follows 1.4.0's
 precedent for a refusal of input that was silently mis-read (owner
 decision 2026-10-22). The knowledge vectors are re-synced from
@@ -71,6 +71,40 @@ change as additive. The pin moves from `uspace-lab@3946517` to
   the Swiss V2 model make `uom` mandatory against the schema's default,
   and that LayeredGeoJSON and Swiss V2 give the circle radius in
   metres. The status stays UNVERIFIED. [ED-318 layer]
+## [1.9.0] (GCAA config)
+
+Additive to 1.8.0: the registration-number format is configuration as a
+whole, so a national answer to spec 08 Q5 can be applied without code.
+
+### Added
+
+- `regnum`: `Options` and `NewValidatorWith(Options)`: the
+  registration-number format as a whole is configuration (spec 08 Q5,
+  pending GCAA): the pattern, the secret separator (`SecretSep`, default
+  `DefaultSecretSep` = `-`) and the secret length (`SecretLen`, default
+  `DefaultSecretLen` = 3). Under a format the EU default does not match,
+  a system can now strip that format's own secret part instead of keeping
+  it (G-04). The zero `Options` is today's format and returns the same
+  validator the package-level functions use; `NewValidator(pattern)` is
+  `NewValidatorWith(Options{Pattern: pattern})`. A bad separator (not
+  printable ASCII, or a letter, digit or space) or length (outside
+  1..62) is a `*core.FieldError` naming `registration_secret`.
+  `Validator.SecretSep`, `SecretLen` and `HasChecksum` report the
+  effective values, for a system that issues numbers or derives an
+  intake rule from the same format. [GCAA config]
+- `regnum`: a checksum hook, off by default (AMC1 Art. 14(6), spec 09
+  §3). `Options.Checksum` (a `Checksum` func), when set, must accept a
+  number for `Validate` to accept it ("the check character does not
+  verify"); it runs after the pattern, and `PublicPart` does not consult
+  it, so a secret is stripped from a number with a bad check character as
+  well. `ChecksumByName` knows only `none` (and the empty name): no
+  algorithm is written until the national format is decided, and any
+  other name is refused naming `registration_checksum`. [GCAA config]
+
+Nothing that exists changes its output: the package-level functions,
+`NewValidator` and the registration vectors run under the same default
+format, and nothing exported was removed or renamed. No vector changed;
+`uspace-lab@3946517` remains the pin.
 
 ## [1.8.0] (DP details)
 
