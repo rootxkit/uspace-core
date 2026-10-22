@@ -3,7 +3,7 @@
 # against SHA256SUMS always, and against the lab checkout at this commit
 # when it can reach it.
 uspace_lab_repo = https://github.com/rootxkit/uspace-lab.git
-uspace_lab_commit = f5e2a5399109508e88d99eebeb9a0549de2353af
+uspace_lab_commit = cc9f5a8c7818ddeecae31a2202bcb3c3a7d1872c
 uspace_lab_path = knowledge/vectors
 utm_commit = 484cd228035f2f424530e233ce72100d0fc1842a
 synced_at = 2026-10-22
