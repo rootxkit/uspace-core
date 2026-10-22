@@ -16,6 +16,11 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.9.0] (GCAA config)
+
+Additive to 1.8.0: the registration-number format is configuration as a
+whole, so a national answer to spec 08 Q5 can be applied without code.
+
 ### Added
 
 - `regnum`: `Options` and `NewValidatorWith(Options)`: the
