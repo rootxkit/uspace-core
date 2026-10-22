@@ -296,6 +296,114 @@ func TestResolveBound(t *testing.T) {
 	}
 }
 
+// TestResolveBoundWith pairs every mismatch with its no-mismatch twin
+// (E-01): the same aircraft with registrations that agree, or with one
+// of the two absent (04 §3.2 errata 2026-10-22).
+func TestResolveBoundWith(t *testing.T) {
+	reg := registry()
+	declared, intended := "GEO-UA-000999", "GEO-UA-000123"
+	cases := []struct {
+		name               string
+		reg                identify.Lookup
+		droneID            string
+		in                 identify.BoundInputs
+		status             core.IdentStatus
+		reason             core.IdentReason
+		mismatch           bool
+		registration       *string
+		intentRegistration *string
+	}{
+		{"mismatch", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
+			core.IdentRegistered, core.ReasonRegistrationMismatch, true, ptr(declared), ptr(intended)},
+		{"agrees", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(intended), IntentRegistration: ptr(intended)},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr(intended), nil},
+		{"agrees-trimmed-ascii-case", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(" geo-ua-000123\t"), IntentRegistration: ptr(" " + intended + " ")},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr("geo-ua-000123"), nil},
+		// Only ASCII folds: U+212A (Kelvin sign) is not K, U+017F (long s)
+		// is not s.
+		{"kelvin-sign-is-another-registration", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr("GEO-UA-\u212a1"), IntentRegistration: ptr("GEO-UA-k1")},
+			core.IdentRegistered, core.ReasonRegistrationMismatch, true, ptr("GEO-UA-\u212a1"), ptr("GEO-UA-k1")},
+		{"long-s-is-another-registration", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr("GEO-\u017f1"), IntentRegistration: ptr("GEO-S1")},
+			core.IdentRegistered, core.ReasonRegistrationMismatch, true, ptr("GEO-\u017f1"), ptr("GEO-S1")},
+		{"declared-without-intent", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(declared)},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr(declared), nil},
+		{"intent-without-declared", reg, "d-active", identify.BoundInputs{IntentRegistration: ptr(intended)},
+			core.IdentRegistered, core.ReasonSessionBinding, false, nil, nil},
+		{"blank-declared-is-absent", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(" \t "), IntentRegistration: ptr(intended)},
+			core.IdentRegistered, core.ReasonSessionBinding, false, nil, nil},
+		{"blank-intent-is-absent", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr("  ")},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr(declared), nil},
+		{"not-yet-projected-mismatch", reg, "d-new", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
+			core.IdentRegistered, core.ReasonRegistrationMismatch, true, ptr(declared), ptr(intended)},
+		// A standing problem keeps its reason; the mismatch is still flagged.
+		{"suspended-keeps-reason", reg, "d-uas-susp", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
+			core.IdentSuspended, core.ReasonUASSuspended, true, ptr(declared), ptr(intended)},
+		{"suspended-agrees", reg, "d-uas-susp", identify.BoundInputs{DeclaredRegistration: ptr(intended), IntentRegistration: ptr(intended)},
+			core.IdentSuspended, core.ReasonUASSuspended, false, ptr(intended), nil},
+		{"owner-unknown-keeps-reason", reg, "d-owner-missing", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
+			core.IdentUnknownOperator, core.ReasonOwnerUnknown, true, ptr(declared), ptr(intended)},
+		// Not judged: the reason stays registry_unavailable, so nothing
+		// rests on the flag (core.Identification.Judged).
+		{"registry-unavailable-keeps-reason", nil, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
+			core.IdentUnknownOperator, core.ReasonRegistryUnavailable, true, ptr(declared), ptr(intended)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := identify.ResolveBoundWith(c.reg, c.droneID, c.in)
+			if got.Status != c.status || got.Reason != c.reason || got.Mismatch != c.mismatch {
+				t.Errorf("%s / %s mismatch %v, want %s / %s mismatch %v", got.Status, got.Reason, got.Mismatch, c.status, c.reason, c.mismatch)
+			}
+			if str(got.Registration) != str(c.registration) {
+				t.Errorf("registration %s, want %s", str(got.Registration), str(c.registration))
+			}
+			if str(got.IntentRegistration) != str(c.intentRegistration) {
+				t.Errorf("intent_registration %s, want %s", str(got.IntentRegistration), str(c.intentRegistration))
+			}
+			if got.Basis != core.BasisAuthenticated {
+				t.Errorf("basis %q", got.Basis)
+			}
+			// Everything else is ResolveBound's.
+			plain := identify.ResolveBound(c.reg, c.droneID)
+			if str(got.Serial) != str(plain.Serial) || str(got.OperatorReg) != str(plain.OperatorReg) || str(got.RegistryUASID) != str(plain.RegistryUASID) || got.Status != plain.Status {
+				t.Errorf("%+v differs from ResolveBound %+v beyond the registration", got, plain)
+			}
+			if !c.mismatch && got.Reason != plain.Reason {
+				t.Errorf("reason %s without a mismatch, ResolveBound says %s", got.Reason, plain.Reason)
+			}
+		})
+	}
+}
+
+// TestResolveBoundWithCopiesInputs: the block never aliases the caller's
+// strings, so a caller reusing its buffer cannot rewrite a published
+// identification.
+func TestResolveBoundWithCopiesInputs(t *testing.T) {
+	declared, intended := "GEO-UA-000999", "GEO-UA-000123"
+	got := identify.ResolveBoundWith(registry(), "d-active", identify.BoundInputs{DeclaredRegistration: &declared, IntentRegistration: &intended})
+	if got.Registration == &declared || got.IntentRegistration == &intended {
+		t.Fatal("the identification aliases an input")
+	}
+	declared, intended = "changed", "changed"
+	if str(got.Registration) != "GEO-UA-000999" || str(got.IntentRegistration) != "GEO-UA-000123" {
+		t.Fatalf("registration %s, intent_registration %s after the inputs changed", str(got.Registration), str(got.IntentRegistration))
+	}
+}
+
+// TestRegistrationMismatchIsJudged: registration_mismatch rests on inputs
+// that answered, so it is judged, and registered is no incident status
+// (only identification_mismatch is raised, G-02).
+func TestRegistrationMismatchIsJudged(t *testing.T) {
+	if !core.ReasonRegistrationMismatch.Judged() {
+		t.Fatal("registration_mismatch is not judged")
+	}
+	if core.ReasonRegistrationMismatch != "registration_mismatch" {
+		t.Fatalf("wire value %q", core.ReasonRegistrationMismatch)
+	}
+	if core.IdentRegistered.IncidentStatus() {
+		t.Fatal("registered raises an identification incident")
+	}
+}
+
 func TestSerialConflict(t *testing.T) {
 	bc := core.BasisAsBroadcast
 	check(t, identify.SerialConflict(" SN-F ", ptr(" GEOX ")),

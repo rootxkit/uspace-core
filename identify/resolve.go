@@ -183,6 +183,61 @@ func ResolveBound(reg Lookup, droneID string) core.Identification {
 	return id
 }
 
+// BoundInputs is what a USSP knows of a bound aircraft beside its binding
+// (04 §3.2 errata 2026-10-22). A nil or blank value is absent.
+type BoundInputs struct {
+	// DeclaredRegistration is the UA registration the aircraft's
+	// telemetry declares. It is never a source of the registration
+	// served: it only validates against IntentRegistration.
+	DeclaredRegistration *string
+	// IntentRegistration is the authorised intent's UA registration
+	// (Annex IV item 10), the only source of the registration a Service
+	// Provider serves; nil without an intent or when the intent declares
+	// none.
+	IntentRegistration *string
+}
+
+// ResolveBoundWith is ResolveBound with the UA registration rule of
+// 04 §3.2 (errata 2026-10-22). The declared registration is carried,
+// trimmed, as Registration. When both registrations are present and
+// differ (trimmed, ASCII letters case-insensitive, G-12), Mismatch is
+// set, IntentRegistration carries the intent's, and the reason becomes
+// registration_mismatch where ResolveBound said session_binding; any
+// other reason, a standing problem or registry_unavailable, is kept
+// with the mismatch still flagged (as suspension outranks an operator
+// mismatch). A block that is not judged (registry_unavailable) supports
+// no mismatch judgement (core.Identification.Judged). A declared
+// registration with no intent registration is judged against nothing.
+// With zero inputs it is ResolveBound.
+func ResolveBoundWith(reg Lookup, droneID string, in BoundInputs) core.Identification {
+	id := ResolveBound(reg, droneID)
+	declared, intended := clean(in.DeclaredRegistration), clean(in.IntentRegistration)
+	id.Registration = declared
+	if declared == nil || intended == nil || registrationKey(*declared) == registrationKey(*intended) {
+		return id
+	}
+	id.Mismatch = true
+	id.IntentRegistration = intended
+	if id.Reason == core.ReasonSessionBinding {
+		id.Reason = core.ReasonRegistrationMismatch
+	}
+	return id
+}
+
+// registrationKey is what two UA registrations are compared by: the
+// value, already trimmed by clean, with its ASCII letters upper-cased.
+// Only ASCII is folded (G-12): strings.EqualFold would make the Kelvin
+// sign K.
+func registrationKey(value string) string {
+	b := []byte(value)
+	for i, c := range b {
+		if c >= 'a' && c <= 'z' {
+			b[i] = c - ('a' - 'A')
+		}
+	}
+	return string(b)
+}
+
 // SerialConflict is the verdict on a broadcast of one of our serials heard
 // where our authenticated telemetry says the aircraft is not (S-10, I-08;
 // JudgeFleet's VerdictConflict): a separate unverified track,
