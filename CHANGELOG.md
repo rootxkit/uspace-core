@@ -23,6 +23,48 @@ for a behaviour change the line sits under the heading of the next major
   commit on lab `main` (docs/RELEASING.md section 3.1). No vector file
   changed: the files are byte-identical at both commits. [ED-318 layer]
 
+## [1.12.0] (UA registration)
+
+Minor to 1.11.0: the UA registration of a bound aircraft enters
+identification judging (spec 04 section 3.2 errata 2026-10-22, owner
+decision 2026-10-22 on uspace-ussp PLAN section 15 Q41, option 1). The
+authorised intent's registration is the only source of the one a
+Service Provider serves; the one the telemetry declares only validates
+against it, and a disagreement is a mismatch, never silently replaced.
+Additive: a new function, a new reason, two optional fields, and new
+vector cases; `ResolveBound` and every existing case answer as before.
+The knowledge vectors are re-synced from `uspace-lab@1a285da` (lab
+branch `docs/WP-L4-registration-mismatch`, rootxkit/uspace-lab#64):
+new cases only, no gated header key changed, so the semver gate
+classifies the change as additive. The pin moves from
+`uspace-lab@cc9f5a8` to `uspace-lab@1a285da`; `utm_commit` stays
+`484cd22`. 703 cases in all (693 before).
+
+### Added
+
+- `identify`: `ResolveBoundWith(reg, droneID, BoundInputs)`, with
+  `BoundInputs{DeclaredRegistration, IntentRegistration}`. It is
+  `ResolveBound` plus the registration rule: the declared registration
+  is carried, trimmed, as `Registration`; when both are present and
+  differ (trimmed, ASCII letters case-insensitive, G-12) `Mismatch` is
+  set, `IntentRegistration` carries the intent's, and the reason
+  becomes `registration_mismatch` where `ResolveBound` said
+  `session_binding`. Any other reason (a standing problem, or
+  `registry_unavailable`) is kept with the mismatch still flagged. With
+  zero inputs it is `ResolveBound`. [UA registration]
+- `core`: `ReasonRegistrationMismatch` (`registration_mismatch`),
+  judged; `Identification.Registration` and
+  `Identification.IntentRegistration`, optional (`omitempty`), so a
+  block without them encodes as before. [UA registration]
+- vectors: identification_status.json (spec 04 section 3.2 errata 2026-10-22; Implementing Regulation (EU) 2021/664 Annex IV item 10): ten new `bound` cases (45 to 54) with the inputs
+  `declared_registration` and `intent_registration`: agrees, agrees
+  ignoring case and spaces, mismatch, mismatch not yet projected,
+  mismatch under a suspended UAS and not in the registry (reason kept,
+  mismatch flagged), a Kelvin-sign look-alike, declared without an
+  intent registration, the intent's without a declared one, and a blank
+  declared one. The vector test also checks that a bound case without
+  them gives `ResolveBound`'s answer. [UA registration]
+
 ## [1.10.0] (ED-318 layer)
 
 Minor to 1.9.0: an ED-318 layer that does not say its vertical limits
