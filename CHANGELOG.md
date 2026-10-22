@@ -33,12 +33,15 @@ Service Provider serves; the one the telemetry declares only validates
 against it, and a disagreement is a mismatch, never silently replaced.
 Additive: a new function, a new reason, two optional fields, and new
 vector cases; `ResolveBound` and every existing case answer as before.
-The knowledge vectors are re-synced from `uspace-lab@1a285da` (lab
-branch `docs/WP-L4-registration-mismatch`, rootxkit/uspace-lab#64):
-new cases only, no gated header key changed, so the semver gate
-classifies the change as additive. The pin moves from
-`uspace-lab@cc9f5a8` to `uspace-lab@1a285da`; `utm_commit` stays
-`484cd22`. 703 cases in all (693 before).
+The knowledge vectors are re-synced from `uspace-lab@6866228` (lab
+branch `chore/WP-L4-vectors-registration-and-uom`: the head of
+rootxkit/uspace-lab#64 with lab #63's head, 71c5c18, merged in, so that
+one lab commit holds both pull requests' vectors byte for byte; no pull
+request is opened from it): new cases only, no gated header key
+changed, so the semver gate classifies the change as additive. The pin
+moves from `uspace-lab@71c5c18` to `uspace-lab@6866228`, and moves to
+lab main once both lab pull requests are merged; `utm_commit` stays
+`484cd22`. 704 cases in all (694 before).
 
 ### Added
 
@@ -64,6 +67,39 @@ classifies the change as additive. The pin moves from
   intent registration, the intent's without a declared one, and a blank
   declared one. The vector test also checks that a bound case without
   them gives `ResolveBound`'s answer. [UA registration]
+
+## [1.11.0] (ED-318 uom spelling)
+
+Minor to 1.10.0: `uom` spelt in another case inside an ED-318 layer is
+refused by name instead of kept as an extra, which left the layer with
+no `uom` and a ceiling in feet read as metres (owner decision
+2026-10-22, from the review of PR #54). A zone without `upper` and
+`lower` stays valid and applies at every height, as
+`zones_vertical.json` defines it (owner decision 2026-10-23). No public
+ED-318 source or sample in `ed318/testdata` spells `uom` otherwise, and
+no existing vector case's `input` or `expected` changed. The minor
+follows 1.10.0's precedent for a refusal of input that was silently
+misread. The knowledge vectors are re-synced from `uspace-lab@71c5c18`
+(lab branch `docs/WP-L4-ed318-layer-heights`): one new case, no header
+key changed, so the semver gate classifies the change as additive. The
+pin moves from `uspace-lab@cc9f5a8` to `uspace-lab@71c5c18`;
+`utm_commit` stays `484cd22`. 694 cases in all (693 before).
+
+### Added
+
+- vectors: ed318_roundtrip.json (EUROCAE ED-318 JSON schema Schema_LayeredGeoJSON.json at e98b292, uas_standards VerticalLayer at 6e182f4; spec 06 T9): one new case (25 to 26),
+  `refuse-uom-in-upper-case-inside-layer`, the accepted base with one
+  patch; the base's TSD001 (`uom` ft) is its accepted twin.
+  [ED-318 uom spelling]
+
+### Fixed
+
+- `ed318`: `LayerVariants()` also holds the seven spellings of `uom`
+  that differ from it in case only (`UOM`, `Uom`, `UoM`, `uOM`, `uOm`,
+  `uoM`, `UOm`), each mapped to `uom`; `Parse` refuses them inside a
+  layer by name ("is not ED-318's spelling; ED-318 writes uom, in lower
+  case"). ED-269's names keep their reason. Other unknown members are
+  still kept. [ED-318 uom spelling]
 
 ## [1.10.0] (ED-318 layer)
 
