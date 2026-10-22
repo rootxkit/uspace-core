@@ -208,9 +208,10 @@ func distinct(pts []core.LatLon) int {
 }
 
 // layer reads a geometry's vertical layer. A member named as ED-269 names
-// the same limit (layerVariants) is refused by name, and so is a layer
-// with no ED-318 member at all: either would otherwise be read as a zone
-// from the surface to unlimited. Other unknown members are kept in Extra.
+// the same limit, or uom spelt in another case (layerVariants), is
+// refused by name, and so is a layer with no ED-318 member at all: either
+// would otherwise be read as a zone from the surface to unlimited. Other
+// unknown members are kept in Extra.
 func (p *parser) layer(v *value, where string) *Layer {
 	if v.kind != kindObject {
 		p.ps.add(where, "must be an object, not "+describe(v))
@@ -219,8 +220,8 @@ func (p *parser) layer(v *value, where string) *Layer {
 	before := p.ps.count()
 	members := 0
 	for _, k := range v.keys {
-		if canonical, ok := layerVariants[k]; ok {
-			p.ps.add(join(where, k), "is ED-269's name; ED-318 writes "+canonical)
+		if _, ok := layerVariants[k]; ok {
+			p.ps.add(join(where, k), variantReason(k))
 		}
 		if slices.Contains(layerFields, k) {
 			members++
