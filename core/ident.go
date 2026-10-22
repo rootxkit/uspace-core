@@ -73,6 +73,12 @@ const (
 	// Status unidentified; not judged (IdentReason.Judged). Distinct from
 	// no_serial, which means the source was asked and gave no serial.
 	ReasonDetailsUnavailable IdentReason = "details_unavailable"
+	// ReasonRegistrationMismatch means a bound aircraft's telemetry
+	// declares a UA registration other than its authorised intent's
+	// (04 §3.2 errata 2026-10-22). The status stays registered (the
+	// binding still proves which aircraft it is) and Mismatch is always
+	// set. It is judged.
+	ReasonRegistrationMismatch IdentReason = "registration_mismatch"
 )
 
 // Judged reports whether an identification with this reason was judged:
@@ -118,8 +124,18 @@ type Identification struct {
 	// RegisteredOperatorReg is the owner's number when it differs from
 	// the broadcast one (public part only).
 	RegisteredOperatorReg *string `json:"registered_operator_reg"`
+	// Registration is the UA registration a bound aircraft's telemetry
+	// declared (trimmed, case kept); nil when it declared none. It is
+	// never the registration a Service Provider serves, which is the
+	// authorised intent's (04 §3.2 errata 2026-10-22).
+	Registration *string `json:"registration,omitempty"`
+	// IntentRegistration is the authorised intent's UA registration
+	// (Annex IV item 10) when it differs from Registration; nil
+	// otherwise.
+	IntentRegistration *string `json:"intent_registration,omitempty"`
 	// Mismatch is true for a registered serial with another operator's
-	// number, or serial_conflict (LESSONS G-02).
+	// number, serial_conflict (LESSONS G-02), or a declared UA
+	// registration that differs from the authorised intent's.
 	Mismatch bool `json:"mismatch"`
 	// RegistryUASID is the registry's aircraft id when a serial resolved
 	// to one; nil otherwise.
