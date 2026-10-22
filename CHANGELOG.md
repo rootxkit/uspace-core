@@ -33,14 +33,11 @@ Service Provider serves; the one the telemetry declares only validates
 against it, and a disagreement is a mismatch, never silently replaced.
 Additive: a new function, a new reason, two optional fields, and new
 vector cases; `ResolveBound` and every existing case answer as before.
-The knowledge vectors are re-synced from `uspace-lab@6866228` (lab
-branch `chore/WP-L4-vectors-registration-and-uom`: the head of
-rootxkit/uspace-lab#64 with lab #63's head, 71c5c18, merged in, so that
-one lab commit holds both pull requests' vectors byte for byte; no pull
-request is opened from it): new cases only, no gated header key
-changed, so the semver gate classifies the change as additive. The pin
-moves from `uspace-lab@71c5c18` to `uspace-lab@6866228`, and moves to
-lab main once both lab pull requests are merged; `utm_commit` stays
+The knowledge vectors are re-synced from `uspace-lab@b707dad`, the
+merge commit of rootxkit/uspace-lab#64 on lab `main` (lab #63 merged
+before it): new cases only, no gated header key changed, so the semver
+gate classifies the change as additive. The pin moves from
+`uspace-lab@71c5c18` to `uspace-lab@b707dad`; `utm_commit` stays
 `484cd22`. 704 cases in all (694 before).
 
 ### Added
