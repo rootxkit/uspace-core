@@ -211,7 +211,8 @@ func distinct(pts []core.LatLon) int {
 // the same limit, or uom spelt in another case (layerVariants), is
 // refused by name, and so is a layer with no ED-318 member at all: either
 // would otherwise be read as a zone from the surface to unlimited. Other
-// unknown members are kept in Extra.
+// unknown members are kept in Extra. Whether the zone's type allows a
+// layer without limits is judged per feature, by heights.
 func (p *parser) layer(v *value, where string) *Layer {
 	if v.kind != kindObject {
 		p.ps.add(where, "must be an object, not "+describe(v))
@@ -252,6 +253,41 @@ func (p *parser) layer(v *value, where string) *Layer {
 		return nil
 	}
 	return l
+}
+
+// heights refuses a zone whose layer states neither upper nor lower,
+// unless the zone is a NO_RESTRICTION information zone (owner decision
+// 2026-10-22, from the review of PR #54). Without either limit a zone is
+// read from the surface to unlimited, so a PROHIBITED, REQ_AUTHORIZATION,
+// CONDITIONAL or USPACE zone would bind every height, which no producer
+// can have meant; for an information zone that reading is harmless. The
+// layer may be absent, null, references only or uom only: all of them
+// state no limit. Each part of a GeometryCollection is judged with the
+// layer that applies to it (its own or the collection's), and the
+// problem names where that layer is, or would be.
+func (p *parser) heights(t core.ZoneType, g Geometry, where string) {
+	if t == core.ZoneNoRestriction {
+		return
+	}
+	if g.Type != GeometryCollection || g.Layer != nil {
+		p.stated(t, g.Layer, join(where, "layer"))
+		return
+	}
+	for i := range g.Geometries {
+		p.stated(t, g.Geometries[i].Layer, index(join(where, "geometries"), i)+".layer")
+	}
+}
+
+// stated refuses one layer that states neither upper nor lower for a zone
+// of type t (heights).
+func (p *parser) stated(t core.ZoneType, l *Layer, where string) {
+	const why = " zone needs a vertical limit, upper or lower; without one it would be read from the surface to unlimited. Only a NO_RESTRICTION zone may leave both out"
+	switch {
+	case l == nil:
+		p.ps.add(where, "missing: a "+string(t)+why)
+	case l.Upper == nil && l.Lower == nil:
+		p.ps.add(where, "states neither upper nor lower: a "+string(t)+why)
+	}
 }
 
 // limit reads one vertical limit and its reference. A value without a
