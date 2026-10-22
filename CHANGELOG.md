@@ -16,6 +16,41 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.9.0] (GCAA config)
+
+Additive to 1.8.0: the registration-number format is configuration as a
+whole, so a national answer to spec 08 Q5 can be applied without code.
+
+### Added
+
+- `regnum`: `Options` and `NewValidatorWith(Options)`: the
+  registration-number format as a whole is configuration (spec 08 Q5,
+  pending GCAA): the pattern, the secret separator (`SecretSep`, default
+  `DefaultSecretSep` = `-`) and the secret length (`SecretLen`, default
+  `DefaultSecretLen` = 3). Under a format the EU default does not match,
+  a system can now strip that format's own secret part instead of keeping
+  it (G-04). The zero `Options` is today's format and returns the same
+  validator the package-level functions use; `NewValidator(pattern)` is
+  `NewValidatorWith(Options{Pattern: pattern})`. A bad separator (not
+  printable ASCII, or a letter, digit or space) or length (outside
+  1..62) is a `*core.FieldError` naming `registration_secret`.
+  `Validator.SecretSep`, `SecretLen` and `HasChecksum` report the
+  effective values, for a system that issues numbers or derives an
+  intake rule from the same format. [GCAA config]
+- `regnum`: a checksum hook, off by default (AMC1 Art. 14(6), spec 09
+  §3). `Options.Checksum` (a `Checksum` func), when set, must accept a
+  number for `Validate` to accept it ("the check character does not
+  verify"); it runs after the pattern, and `PublicPart` does not consult
+  it, so a secret is stripped from a number with a bad check character as
+  well. `ChecksumByName` knows only `none` (and the empty name): no
+  algorithm is written until the national format is decided, and any
+  other name is refused naming `registration_checksum`. [GCAA config]
+
+Nothing that exists changes its output: the package-level functions,
+`NewValidator` and the registration vectors run under the same default
+format, and nothing exported was removed or renamed. No vector changed;
+`uspace-lab@3946517` remains the pin.
+
 ## [1.8.0] (DP details)
 
 Additive to 1.7.0: an identification that was not judged. A Display
