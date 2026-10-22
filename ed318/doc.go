@@ -44,18 +44,34 @@
 // # UNVERIFIED: the layer names and the circle radius unit
 //
 // The EUROCAE ED-318 text is not available to this project (spec 09
-// section 3). Two things this package reads are therefore UNVERIFIED
+// section 3). Three things this package reads are therefore UNVERIFIED
 // against the standard itself, and stay so until a licensed copy is
 // checked (owner decision on PR #16):
 //
 //   - UNVERIFIED: the names of a zone's vertical limits. They are the
 //     geometry's `layer` object with upper, upperReference, lower,
-//     lowerReference (AGL, AMSL or WGS84) and uom (m or ft), as the schema
-//     (Schema_LayeredGeoJSON.json) and uas_standards (VerticalLayer) both
-//     show them.
+//     lowerReference (AGL, AMSL or WGS84) and uom (m or ft), the table
+//     LayerMembers. Every public source read agrees (the list below),
+//     and none of them is the standard's text.
+//     ED-269's names for the same limits (upperLimit, lowerLimit,
+//     upperVerticalReference, lowerVerticalReference, uomDimensions with
+//     M or FT; sources 6 and 7 below) are the members of an ED-269 UASZoneAirspaceVolume, read by package
+//     ed269 and mapped by FromED269. Found inside an ED-318 layer they are
+//     refused by name (LayerVariants, UomVariants), never mapped (spec 06
+//     T9): kept as extras, a layer of them would be a zone from the
+//     surface to unlimited, and an uomDimensions beside upper would leave
+//     the limit read as metres. A layer with none of the five members is
+//     refused as empty for the same reason. Should the licensed text name
+//     the limits otherwise, the change is to the table and its vectors.
 //   - UNVERIFIED: an absent `uom` means metres. The schema says so for
-//     upper and lower ("If this member is not specified, the units should
-//     be assumed to be metres"); the EUROCAE text has not been checked.
+//     upper and lower (`"default": "m"`, and "If this member is not
+//     specified, the units should be assumed to be metres"); the EUROCAE
+//     text has not been checked. The sources disagree: uas_standards
+//     (VerticalLayer.uom is a required field) and Swiss V2 (`uom :
+//     MANDATORY`) make uom mandatory, against the schema's default. This
+//     package follows the schema, as above; every layer of the Swiss and
+//     German samples read gives its uom, so no producer read relies on
+//     the default.
 //   - UNVERIFIED: the unit of a circle's radius. A circle is a GeoJSON
 //     Point with an `extent` of subType Circle and a `radius`; neither the
 //     schema (Schema_GeoJSONGeometries.json, where radius is a bare
@@ -63,9 +79,38 @@
 //     is always in metres (owner decision on PR #16), following GeoJSON,
 //     whose distances are metres, and InterUSS practice (F3411 and F3548
 //     radii are metres, and the schema's own circle example is 3500 with a
-//     metres layer). The layer's uom governs the vertical limits only, so
+//     metres layer). LayeredGeoJSON (extent.radius "expressed in metres")
+//     and Swiss V2 (HorizontalExtent.radius, "Distance, in metres") say
+//     the same. The layer's uom governs the vertical limits only, so
 //     a circle is accepted whatever it says. A radius that is not finite,
 //     not above 0, or above MaxCircleRadiusM (1000 km) is refused.
+//
+// The public sources of the layer, read for the check of 2026-10-22:
+//
+//  1. The schema: https://github.com/UASGeoZones/ED-318
+//     schema/Schema_LayeredGeoJSON.json at
+//     e98b292c5665a04989d62e32fd93829f161a89a9 (2025-05-21), the commit
+//     interuss/monitoring's interfaces/ed318 submodule pins. Every layer
+//     member optional; uom m or ft, default m.
+//  2. https://github.com/interuss/uas_standards
+//     src/uas_standards/eurocae_ed318.py at
+//     6e182f43ec960b3bccf131c9006ff9979dd8a56e: VerticalLayer and
+//     Layered (interuss/uas_standards #34 and #36, in releases from
+//     v4.1.0 of 2025-10-01). upper, lower and uom required.
+//  3. The LayeredGeoJSON specification, the origin of the layer:
+//     https://github.com/LayeredGeoJSON/LayeredGeoJSON-Specification
+//     README.md at 0acc0b5 (2023-11-16).
+//  4. The Swiss FOCA INTERLIS model V2, a national profile:
+//     https://models.geo.admin.ch/BAZL/UASGeographicalZone_V2.ili
+//     (VERSION "2026-06-29"), CLASS VerticalLayer.
+//  5. The German DFS ED-318 sample:
+//     https://dipul.bund.de/drohnenhersteller/de/beispieldatened318.zip
+//     (234 of 234 layers read carry the five names and uom m).
+//  6. ED-269's names: uas_standards src/uas_standards/eurocae_ed269.py
+//     at the commit of 2, UASZoneAirspaceVolume (UomDimensions M, FT).
+//  7. ED-269 national data: the Cyprus DCA file
+//     https://drones.gov.cy/wp-content/uploads/2025/05/CYP_GeoZones_06_05_25.json
+//     ("ver 06MAY25"), 141 of 141 volumes with uomDimensions M.
 //
 // Free-text members the schema leaves unbounded are bounded at
 // MaxFreeTextChars characters.
@@ -97,7 +142,9 @@
 // this release, with a problem that names it, never imported part by
 // part, owner decision on PR #16); a
 // position with a third (altitude) member; a layer given both on a
-// collection and on its members; a shape across the antimeridian.
+// collection and on its members; an ED-269 name inside a layer
+// (LayerVariants) or an ED-269 unit as its uom (UomVariants); a layer
+// with none of ED-318's members; a shape across the antimeridian.
 //
 // # Writing
 //
