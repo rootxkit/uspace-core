@@ -148,12 +148,7 @@
 // collection and on its members; an ED-269 name inside a layer, or uom
 // spelt in another case (LayerVariants), or an ED-269 unit as its uom
 // (UomVariants); a layer
-// with none of ED-318's members; a zone of any type but NO_RESTRICTION
-// whose layer states neither upper nor lower (absent, null, references
-// only or uom only), which would be read from the surface to unlimited
-// (owner decision 2026-10-22; a NO_RESTRICTION zone is information only,
-// so unlimited is harmless there and accepted, as the base's TSN001); a
-// shape across the antimeridian.
+// with none of ED-318's members; a shape across the antimeridian.
 //
 // # Writing
 //

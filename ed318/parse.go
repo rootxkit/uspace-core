@@ -235,11 +235,6 @@ func (p *parser) feature(v *value, path string) *Feature {
 		p.ps.add(join(path, "geometry"), "missing: a UAS zone feature needs a geometry")
 	} else if g, ok := p.geometry(geom, join(path, "geometry"), false); ok {
 		f.Geometry = g
-		// A zone's type is known only when its properties were read
-		// whole; otherwise they are refused already.
-		if f.Properties.Type != "" {
-			p.heights(f.Properties.Type, g, join(path, "geometry"))
-		}
 	}
 	return f
 }

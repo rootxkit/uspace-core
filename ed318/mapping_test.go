@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -204,14 +203,9 @@ func TestFromED269Refusals(t *testing.T) {
 		"extended clash":    {mutate(func(z *ed269.GeoZone) { z.ExtendedProperties = json.RawMessage(`{"ed269":1}`) }), "en", "features[0].extendedProperties.ed269"},
 		"bad restriction":   {mutate(func(z *ed269.GeoZone) { z.Restriction = "REQ_AUTHORIZATION" }), "en", "features[0].restriction"},
 		"two volumes":       {mutate(func(z *ed269.GeoZone) { z.Geometry = append(z.Geometry, z.Geometry[0]) }), "en", "features[0].geometry"},
-		"no limits": {mutate(func(z *ed269.GeoZone) {
-			z.Restriction = "PROHIBITED"
-			z.Geometry = slices.Clone(z.Geometry) // the base shares the slice
-			z.Geometry[0].LowerLimit, z.Geometry[0].UpperLimit = nil, nil
-		}), "en", "features[0].geometry.layer"},
-		"no lang":     {base, "", "lang"},
-		"long lang":   {base, "en-GB-x", "lang"},
-		"no document": {nil, "en", "$"},
+		"no lang":           {base, "", "lang"},
+		"long lang":         {base, "en-GB-x", "lang"},
+		"no document":       {nil, "en", "$"},
 	}
 	for name, c := range cases {
 		_, err := FromED269(c.doc, Metadata{}, c.lang)
@@ -225,15 +219,6 @@ func TestFromED269Refusals(t *testing.T) {
 	fc, err := FromED269(base, Metadata{Issued: &issued}, "en")
 	if err != nil || fc.Metadata == nil || fc.Metadata.Issued.Text != issued.Text {
 		t.Errorf("base zone: %v, %+v", err, fc)
-	}
-	// The twin of "no limits": a NO_RESTRICTION zone without limits maps.
-	free := mutate(func(z *ed269.GeoZone) {
-		z.Restriction = "NO_RESTRICTION"
-		z.Geometry = slices.Clone(z.Geometry) // the base shares the slice
-		z.Geometry[0].LowerLimit, z.Geometry[0].UpperLimit = nil, nil
-	})
-	if fc, err := FromED269(free, Metadata{}, "en"); err != nil || fc.Features[0].Geometry.Layer.Upper != nil {
-		t.Errorf("NO_RESTRICTION without limits: %v", err)
 	}
 }
 
