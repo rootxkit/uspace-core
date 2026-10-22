@@ -68,6 +68,41 @@
       "why": "A layer with none of upper, upperReference, lower, lowerReference and uom states no vertical limit, and would be read as a zone from the surface to unlimited. The base's TSN001, a layer of references without limits, is the accepted twin."
     },
     {
+      "name": "refuse-prohibited-zone-layer-without-limits",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/1/geometry/layer", "value": {"upperReference": "AMSL", "lowerReference": "AGL", "uom": "ft"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[1].geometry.layer", "reason_contains": "states neither upper nor lower"}},
+      "why": "A layer of references and a unit states neither upper nor lower, so a PROHIBITED zone with it would be read from the surface to unlimited and would bind every height, which no producer can have meant. Every zone type but NO_RESTRICTION needs upper or lower (owner decision 2026-10-22); the refusal names the layer, never guesses a limit (06 T9). The base's TSD001, with upper and lower, is the accepted twin, and accept-prohibited-zone-with-upper-only the twin with upper alone."
+    },
+    {
+      "name": "refuse-prohibited-zone-without-layer",
+      "kind": "parse",
+      "patch": [{"op": "remove", "path": "/features/1/geometry/layer"}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[1].geometry.layer", "reason_contains": "missing: a PROHIBITED zone needs a vertical limit"}},
+      "why": "A geometry with no layer states no vertical limit either (the schema makes the layer optional): a PROHIBITED zone without one is refused as refuse-prohibited-zone-layer-without-limits is. accept-no-restriction-zone-without-layer is the twin of the exception."
+    },
+    {
+      "name": "accept-prohibited-zone-with-upper-only",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/1/geometry/layer", "value": {"upper": 2500, "upperReference": "AMSL", "uom": "ft"}}],
+      "expected": {"accepted": true, "export": "$document"},
+      "why": "One stated limit is enough: a PROHIBITED zone with upper and no lower is from the surface to its upper, and is accepted and written back equal by value. The presence twin of refuse-prohibited-zone-layer-without-limits."
+    },
+    {
+      "name": "accept-no-restriction-zone-without-layer",
+      "kind": "parse",
+      "patch": [{"op": "remove", "path": "/features/4/geometry/layer"}],
+      "expected": {"accepted": true, "export": "$document"},
+      "why": "A NO_RESTRICTION zone is published for information only, so reading it from the surface to unlimited is harmless: with no layer it is accepted and written back without one, as the base's TSN001 (references without limits) is. The exception's twin of refuse-prohibited-zone-without-layer."
+    },
+    {
+      "name": "refuse-uom-in-upper-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/2/geometry/layer", "value": {"upper": 600, "upperReference": "WGS84", "lower": 0, "lowerReference": "AGL", "UOM": "ft"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[2].geometry.layer.UOM", "reason_contains": "ED-318 writes uom"}},
+      "why": "JSON member names are case-sensitive, and every source read names the unit uom (schema Schema_LayeredGeoJSON.json, uas_standards VerticalLayer). Kept as an unknown member, UOM would leave the layer without a uom, and the 600 ft ceiling its producer meant would be read as 600 m. Each spelling of uom that differs in case only (UOM, Uom, UoM, ...) is refused by name, as ED-269's uomDimensions is (owner decision 2026-10-22); other unknown members are still kept. The base's TSD001, with uom ft, is the accepted twin."
+    },
+    {
       "name": "refuse-no-zone-authority",
       "kind": "parse",
       "patch": [{"op": "replace", "path": "/features/4/properties/zoneAuthority", "value": []}],
