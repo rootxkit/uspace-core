@@ -3,6 +3,7 @@ package ed318
 import (
 	"encoding/json"
 	"maps"
+	"strings"
 	"time"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -198,44 +199,111 @@ var ed269LayerNames = map[string]string{
 	"uomDimensions":          LayerKeyUom,
 }
 
-// uomSpellings maps each spelling of uom that differs from it in case
-// only (UOM, Uom, UoM and the rest) to uom. JSON member names are
-// case-sensitive and every source read names the member uom (doc.go), so
-// a producer that spells it otherwise has made a mistake that would
-// leave a limit in feet read as metres (owner decision 2026-10-22, from
-// the review of PR #54).
-var uomSpellings = map[string]string{
-	"Uom": LayerKeyUom,
-	"uOm": LayerKeyUom,
-	"uoM": LayerKeyUom,
-	"UOm": LayerKeyUom,
-	"UoM": LayerKeyUom,
-	"uOM": LayerKeyUom,
-	"UOM": LayerKeyUom,
+// caseSpelt is the layer members whose spellings that differ from them
+// in ASCII letter case only (UOM, Uom, Upper, LOWER, UpperReference,
+// lowerreference and the rest; caseSpellings) are refused inside a
+// layer: all five. JSON member names are case-sensitive and every source
+// read names the members as LayerMembers does (doc.go), so a producer
+// that spells one otherwise has made a mistake that would silently lose
+// a vertical bound: kept as an extra, an Upper leaves the layer read as
+// lower to unlimited, a Lower as the surface to upper, and a UOM a limit
+// in feet read as metres (owner decisions 2026-10-22 for uom, from the
+// review of PR #54, and 2026-10-23 for the other four).
+var caseSpelt = []string{LayerKeyUpper, LayerKeyUpperReference, LayerKeyLower, LayerKeyLowerReference, LayerKeyUom}
+
+// caseSpellings is every spelling of member that differs from it in
+// ASCII letter case only, member itself not among them: 2^n - 1 of them
+// for n letters (7 for uom, 31 for upper, 16383 for upperReference).
+func caseSpellings(member string) []string {
+	var letters []int
+	for i := range len(member) {
+		if lowerASCII(member[i]) != upperASCII(member[i]) {
+			letters = append(letters, i)
+		}
+	}
+	out := make([]string, 0, 1<<len(letters)-1)
+	for mask := 1; mask < 1<<len(letters); mask++ {
+		b := []byte(member)
+		for bit, i := range letters {
+			if mask&(1<<bit) != 0 {
+				if b[i] == lowerASCII(b[i]) {
+					b[i] = upperASCII(b[i])
+				} else {
+					b[i] = lowerASCII(b[i])
+				}
+			}
+		}
+		out = append(out, string(b))
+	}
+	return out
 }
 
-// layerVariants maps each known name that is not ED-318's, found where a
-// layer member belongs, to the ED-318 name it stands for: ED-269's names
-// (ed269LayerNames) and the case spellings of uom (uomSpellings). Inside
-// an ED-318 layer they are refused by name, never read as their ED-318
-// counterpart and never kept as extras: kept, a layer of them would be a
-// zone from the surface to unlimited, and an uomDimensions or a UOM
-// beside upper would leave the limit read as metres. Any other unknown
+// caseSpelling reports the member of caseSpelt that k spells in another
+// case: k differs from it in ASCII letter case only and is not it.
+func caseSpelling(k string) (string, bool) {
+	for _, m := range caseSpelt {
+		if k != m && equalFoldASCII(k, m) {
+			return m, true
+		}
+	}
+	return "", false
+}
+
+// equalFoldASCII reports whether a and b are equal but for ASCII letter
+// case. Unlike strings.EqualFold it folds no other character, so it
+// matches exactly what caseSpellings enumerates.
+func equalFoldASCII(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range len(a) {
+		if lowerASCII(a[i]) != lowerASCII(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerASCII(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
+}
+
+func upperASCII(c byte) byte {
+	if 'a' <= c && c <= 'z' {
+		return c - ('a' - 'A')
+	}
+	return c
+}
+
+// layerVariant reports the ED-318 name that k stands for when k is a
+// known name that is not ED-318's, found where a layer member belongs:
+// one of ED-269's names (ed269LayerNames), or a member spelt in another
+// case (caseSpelt). Inside an ED-318 layer they are refused by name,
+// never read as their ED-318 counterpart and never kept as extras: kept,
+// a layer of them would be a zone from the surface to unlimited, an
+// uomDimensions or a UOM beside upper would leave the limit read as
+// metres, and an Upper or a Lower would lose its bound. Any other unknown
 // member is kept as an extra: the schema leaves the layer open.
-var layerVariants = func() map[string]string {
-	out := maps.Clone(ed269LayerNames)
-	maps.Copy(out, uomSpellings)
-	return out
-}()
+func layerVariant(k string) (string, bool) {
+	if canonical, ok := ed269LayerNames[k]; ok {
+		return canonical, true
+	}
+	return caseSpelling(k)
+}
 
 // variantReason is why a variant is refused, naming the ED-318 member it
 // stands for.
-func variantReason(variant string) string {
-	canonical := layerVariants[variant]
+func variantReason(variant, canonical string) string {
 	if _, ok := ed269LayerNames[variant]; ok {
 		return "is ED-269's name; ED-318 writes " + canonical
 	}
-	return "is not ED-318's spelling; ED-318 writes " + canonical + ", in lower case (member names are case-sensitive)"
+	if canonical == strings.ToLower(canonical) {
+		return "is not ED-318's spelling; ED-318 writes " + canonical + ", in lower case (member names are case-sensitive)"
+	}
+	return "is not ED-318's spelling; ED-318 writes " + canonical + " (member names are case-sensitive)"
 }
 
 // uomVariants maps ED-269's spelling of a unit (UomDimensions, upper
@@ -247,9 +315,19 @@ var uomVariants = map[string]string{
 
 // LayerVariants is the known names that are not ED-318's, each with the
 // ED-318 layer member it stands for (a new map on each call): ED-269's
-// names for the limits, and the spellings of uom that differ from it in
-// case only. Parse refuses each of them inside a layer by name.
-func LayerVariants() map[string]string { return maps.Clone(layerVariants) }
+// names for the limits, and every spelling of each of the five members
+// that differs from it in ASCII letter case only (32835 of them, most
+// for upperReference and lowerReference). Parse refuses each of them
+// inside a layer by name.
+func LayerVariants() map[string]string {
+	out := maps.Clone(ed269LayerNames)
+	for _, m := range caseSpelt {
+		for _, s := range caseSpellings(m) {
+			out[s] = m
+		}
+	}
+	return out
+}
 
 // UomVariants is ED-269's spelling of each unit with ED-318's (a new map
 // on each call). Parse refuses them as a layer's uom.

@@ -668,21 +668,39 @@ func TestLayerNameTable(t *testing.T) {
 		t.Fatalf("members %v", members)
 	}
 	vs := LayerVariants()
-	if len(ed269LayerNames) != 5 || len(uomSpellings) != 7 || len(vs) != 12 {
-		t.Fatalf("variants %v", vs)
+	// 5 ED-269 names, and 2^n - 1 case spellings of each member of n
+	// letters: 31 + 16383 + 31 + 16383 + 7.
+	if len(ed269LayerNames) != 5 || len(vs) != 5+31+16383+31+16383+7 {
+		t.Fatalf("%d variants", len(vs))
+	}
+	if !slices.Equal(caseSpelt, members) {
+		t.Errorf("case spellings refused for %v, members %v", caseSpelt, members)
 	}
 	for v, c := range vs {
 		if !slices.Contains(members, c) || slices.Contains(members, v) {
 			t.Errorf("variant %q -> %q", v, c)
 		}
+		got, ok := layerVariant(v)
+		if !ok || got != c {
+			t.Errorf("variant %q -> %q in the table, %q %v to the parser", v, c, got, ok)
+		}
+		if _, ed269 := ed269LayerNames[v]; !ed269 && !strings.EqualFold(v, c) {
+			t.Errorf("variant %q -> %q is neither ED-269's name nor a case spelling", v, c)
+		}
 	}
 	if !slices.Equal(slices.Sorted(maps.Values(ed269LayerNames)), slices.Sorted(slices.Values(members))) {
 		t.Errorf("not every member has its ED-269 name: %v", ed269LayerNames)
 	}
-	// Every case spelling of uom but uom itself, and nothing else.
-	for v, c := range uomSpellings {
-		if c != LayerKeyUom || !strings.EqualFold(v, LayerKeyUom) || vs[v] != LayerKeyUom {
-			t.Errorf("uom spelling %q -> %q", v, c)
+	// Every case spelling of each member but the member itself, and
+	// nothing else (allCaseSpellings is the test's own enumeration).
+	for _, m := range members {
+		for _, s := range allCaseSpellings(m) {
+			if vs[s] != m {
+				t.Errorf("%s spelling %q -> %q", m, s, vs[s])
+			}
+		}
+		if _, ok := vs[m]; ok {
+			t.Errorf("%s is its own variant", m)
 		}
 	}
 	for v, c := range UomVariants() {
@@ -692,8 +710,9 @@ func TestLayerNameTable(t *testing.T) {
 	}
 	// The functions hand out copies: changing one changes no parse.
 	LayerVariants()["upperLimit"] = "x"
+	LayerVariants()["Upper"] = "x"
 	LayerMembers()[0] = "x"
-	if layerVariants["upperLimit"] != LayerKeyUpper || layerFields[0] != LayerKeyUpper {
+	if c, _ := layerVariant("upperLimit"); c != LayerKeyUpper || layerFields[0] != LayerKeyUpper || LayerVariants()["Upper"] != LayerKeyUpper {
 		t.Fatal("the table was changed through a copy")
 	}
 
@@ -727,12 +746,24 @@ func exportedLayerKeys(t *testing.T, fc *FeatureCollection, i int) []string {
 	return slices.Sorted(maps.Keys(doc.Features[i].Geometry.Layer))
 }
 
-// Each variant inside a layer (an ED-269 name, or uom in another case) is
-// refused by name, with its path and the ED-318 name in the reason: in
-// place of its member, and beside the canonical members (where kept as an
-// extra it would change nothing the zone says, which is the danger).
+// Each variant inside a layer (an ED-269 name, or a member in another
+// case) is refused by name, with its path and the ED-318 name in the
+// reason: in place of its member, and beside the canonical members (where
+// kept as an extra it would change nothing the zone says, which is the
+// danger). Every ED-269 name, and two case spellings of each member (all
+// upper case, and the first letter upper); TestLayerCaseRefused parses
+// every case spelling.
 func TestLayerVariantRefused(t *testing.T) {
-	for variant, canonical := range LayerVariants() {
+	sample := maps.Clone(ed269LayerNames)
+	for _, m := range LayerMembers() {
+		sample[strings.ToUpper(m)] = m
+		sample[strings.ToUpper(m[:1])+m[1:]] = m
+	}
+	vs := LayerVariants()
+	for variant, canonical := range sample {
+		if vs[variant] != canonical {
+			t.Fatalf("%s is not a variant of %s in LayerVariants", variant, canonical)
+		}
 		value := canonicalLayer()[canonical]
 		why := "is ED-269's name; ED-318 writes " + canonical
 		switch {
@@ -740,7 +771,15 @@ func TestLayerVariantRefused(t *testing.T) {
 			value = "FT"
 		case canonical == LayerKeyUom:
 			value = UomFeet
-			why = "is not ED-318's spelling; ED-318 writes uom, in lower case"
+			why = "is not ED-318's spelling; ED-318 writes uom, in lower case (member names are case-sensitive)"
+		case canonical == LayerKeyUpper || canonical == LayerKeyLower:
+			if _, ed269 := ed269LayerNames[variant]; !ed269 {
+				why = "is not ED-318's spelling; ED-318 writes " + canonical + ", in lower case (member names are case-sensitive)"
+			}
+		default:
+			if _, ed269 := ed269LayerNames[variant]; !ed269 {
+				why = "is not ED-318's spelling; ED-318 writes " + canonical + " (member names are case-sensitive)"
+			}
 		}
 		t.Run(variant+" in place", func(t *testing.T) {
 			l := canonicalLayer()
@@ -912,5 +951,131 @@ func TestLayerUomCaseRefused(t *testing.T) {
 	got := fc.Features[0].Geometry.Layer
 	if *got.UpperM() != 300*core.FeetToMetres || got.Extra["units"] == nil {
 		t.Errorf("uom ft: upper %v m, extra %v", *got.UpperM(), got.Extra)
+	}
+}
+
+// allCaseSpellings is every spelling of s that differs from it in ASCII
+// letter case only, s itself not among them, enumerated here
+// independently of caseSpellings.
+func allCaseSpellings(s string) []string {
+	out := []string{""}
+	for _, r := range s {
+		lower, upper := strings.ToLower(string(r)), strings.ToUpper(string(r))
+		var next []string
+		for _, p := range out {
+			next = append(next, p+lower)
+			if upper != lower {
+				next = append(next, p+upper)
+			}
+		}
+		out = next
+	}
+	return slices.DeleteFunc(out, func(v string) bool { return v == s })
+}
+
+// caseDiff is how many bytes a and b, of one length, differ in.
+func caseDiff(a, b string) int {
+	n := 0
+	for i := range len(a) {
+		if a[i] != b[i] {
+			n++
+		}
+	}
+	return n
+}
+
+// Every spelling of every layer member that differs from it in case only
+// (Upper, LOWER, UpperReference, lowerreference, UOM, ...; 32835 in all)
+// is refused by name at its path, in place of the member and beside it:
+// kept as an extra, an Upper would leave a layer that gives its ceiling
+// read as lower to unlimited, which over-extends a zone whose ceiling
+// bounds where a service applies (owner decision 2026-10-23). The
+// presence side: the canonical layer is accepted with its limits, and an
+// unknown member that is not a case spelling of a member (units, uppers,
+// upperRef, UpperLimit) is still kept as an extra.
+func TestLayerCaseRefused(t *testing.T) {
+	d := baseDocument(t)
+	d["features"] = d["features"].([]any)[:1]
+	geom(t, d, 0)["layer"] = "LAYER"
+	tmpl, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parse := func(layer map[string]any) (*FeatureCollection, *ed269.Problems) {
+		l, err := json.Marshal(layer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return Parse(bytes.Replace(tmpl, []byte(`"LAYER"`), l, 1), Limits{})
+	}
+	if fc, probs := parse(canonicalLayer()); probs != nil || *fc.Features[0].Geometry.Layer.UpperM() != 300 {
+		t.Fatalf("the canonical layer: %v", probs)
+	}
+	failures := 0
+	for _, m := range LayerMembers() {
+		why := "is not ED-318's spelling; ED-318 writes " + m
+		if m == strings.ToLower(m) {
+			why += ", in lower case"
+		}
+		why += " (member names are case-sensitive)"
+		spellings := allCaseSpellings(m)
+		if len(spellings) != 1<<len(m)-1 {
+			t.Fatalf("%s: %d spellings", m, len(spellings))
+		}
+		// Every spelling is what the parser takes for a variant of m; the
+		// parse itself runs for every spelling of upper, lower and uom,
+		// and for those of the references that differ from them in one
+		// letter or in all but one (a full parse of each of their 16383
+		// spellings costs seconds and adds nothing the lookup does not).
+		var parsed []string
+		for _, s := range spellings {
+			if c, ok := layerVariant(s); !ok || c != m {
+				if failures++; failures <= 20 {
+					t.Errorf("%s: the parser takes it for %q %v", s, c, ok)
+				}
+			}
+			if diff := caseDiff(s, m); len(m) <= 5 || diff == 1 || diff >= len(m)-1 {
+				parsed = append(parsed, s)
+			}
+		}
+		for _, s := range parsed {
+			in := canonicalLayer()
+			value := in[m]
+			delete(in, m)
+			in[s] = value
+			beside := canonicalLayer()
+			beside[s] = value
+			for name, l := range map[string]map[string]any{"in place": in, "beside": beside} {
+				fc, probs := parse(l)
+				if fc == nil && problemEnds(probs, "features[0].geometry.layer."+s, why) {
+					continue
+				}
+				if failures++; failures <= 20 {
+					t.Errorf("%s %s: accepted %v, problems %v", s, name, fc != nil, probs)
+				}
+			}
+		}
+	}
+	if failures > 20 {
+		t.Errorf("%d failures in all", failures)
+	}
+
+	l := canonicalLayer()
+	near := []string{"units", "uppers", "upperRef", "UpperLimit", "lowerRef", "Uom_", "upper "}
+	for _, k := range near {
+		l[k] = true
+	}
+	fc, probs := parse(l)
+	if probs != nil {
+		t.Fatal(probs)
+	}
+	got := fc.Features[0].Geometry.Layer
+	for _, k := range near {
+		if got.Extra[k] == nil {
+			t.Errorf("%q was not kept: %v", k, got.Extra)
+		}
+	}
+	if *got.UpperM() != 300 || *got.LowerM() != 0 || got.UpperReference != core.RefWGS84 || got.LowerReference != core.RefAGL {
+		t.Errorf("limits %v %s, %v %s", *got.UpperM(), got.UpperReference, *got.LowerM(), got.LowerReference)
 	}
 }

@@ -60,10 +60,12 @@
 //     refused by name (LayerVariants, UomVariants), never mapped (spec 06
 //     T9): kept as extras, a layer of them would be a zone from the
 //     surface to unlimited, and an uomDimensions beside upper would leave
-//     the limit read as metres. So are the spellings of uom that differ
-//     from it in case only (UOM, Uom, UoM and the rest; LayerVariants):
-//     member names are case-sensitive and no source spells it otherwise.
-//     A layer with none of the five members is
+//     the limit read as metres. So are the spellings of each of the five
+//     members that differ from it in case only (Upper, LOWER,
+//     UpperReference, lowerreference, UOM and the rest; LayerVariants):
+//     member names are case-sensitive and no source spells them
+//     otherwise, and kept as an extra an Upper would leave the layer read
+//     as lower to unlimited. A layer with none of the five members is
 //     refused as empty for the same reason. Should the licensed text name
 //     the limits otherwise, the change is to the table and its vectors.
 //   - UNVERIFIED: an absent `uom` means metres. The schema says so for
@@ -145,8 +147,9 @@
 // this release, with a problem that names it, never imported part by
 // part, owner decision on PR #16); a
 // position with a third (altitude) member; a layer given both on a
-// collection and on its members; an ED-269 name inside a layer, or uom
-// spelt in another case (LayerVariants), or an ED-269 unit as its uom
+// collection and on its members; an ED-269 name inside a layer, or a
+// layer member spelt in another case (LayerVariants), or an ED-269 unit
+// as its uom
 // (UomVariants); a layer
 // with none of ED-318's members; a shape across the antimeridian.
 //
