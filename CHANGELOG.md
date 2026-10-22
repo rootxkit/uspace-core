@@ -23,55 +23,38 @@ for a behaviour change the line sits under the heading of the next major
   commit on lab `main` (docs/RELEASING.md section 3.1). No vector file
   changed: the files are byte-identical at both commits. [ED-318 layer]
 
-## [1.11.0] (ED-318 layer limits)
+## [1.11.0] (ED-318 uom spelling)
 
-Minor to 1.10.0: two follow-ups from the review of PR #54 (owner
-decision 2026-10-22). A zone that restricts and states no vertical
-limit is refused instead of read as a zone from the surface to
-unlimited, and `uom` spelt in another case inside a layer is refused by
-name instead of kept as an extra. No public ED-318 source or sample in
-`ed318/testdata`, and no zone of the authority's base collection,
-states neither limit on a type other than NO_RESTRICTION, and no
-existing vector case's `input` or `expected` changed. The minor follows
-1.10.0's precedent for a refusal of input that was silently misread.
-The knowledge vectors are re-synced from `uspace-lab@db96a14` (lab
-branch `docs/WP-L4-ed318-layer-heights`): new cases only, no header key
-changed, so the semver gate classifies the change as additive. The pin
-moves from `uspace-lab@cc9f5a8` to `uspace-lab@db96a14`; `utm_commit`
-stays `484cd22`. 698 cases in all (693 before).
+Minor to 1.10.0: `uom` spelt in another case inside an ED-318 layer is
+refused by name instead of kept as an extra, which left the layer with
+no `uom` and a ceiling in feet read as metres (owner decision
+2026-10-22, from the review of PR #54). A zone without `upper` and
+`lower` stays valid and applies at every height, as
+`zones_vertical.json` defines it (owner decision 2026-10-23). No public
+ED-318 source or sample in `ed318/testdata` spells `uom` otherwise, and
+no existing vector case's `input` or `expected` changed. The minor
+follows 1.10.0's precedent for a refusal of input that was silently
+misread. The knowledge vectors are re-synced from `uspace-lab@71c5c18`
+(lab branch `docs/WP-L4-ed318-layer-heights`): one new case, no header
+key changed, so the semver gate classifies the change as additive. The
+pin moves from `uspace-lab@cc9f5a8` to `uspace-lab@71c5c18`;
+`utm_commit` stays `484cd22`. 694 cases in all (693 before).
 
 ### Added
 
-- vectors: ed318_roundtrip.json (EUROCAE ED-318 JSON schema Schema_LayeredGeoJSON.json at e98b292, uas_standards VerticalLayer at 6e182f4; spec 06 T9): five new cases (25 to 30),
-  `refuse-prohibited-zone-layer-without-limits`,
-  `refuse-prohibited-zone-without-layer`,
-  `accept-prohibited-zone-with-upper-only`,
-  `accept-no-restriction-zone-without-layer` and
-  `refuse-uom-in-upper-case-inside-layer`, each the accepted base with
-  one patch; the base's TSD001 (upper and lower, `uom` ft) and TSN001
-  (NO_RESTRICTION, references without limits) are the other accepted
-  twins. [ED-318 layer limits]
+- vectors: ed318_roundtrip.json (EUROCAE ED-318 JSON schema Schema_LayeredGeoJSON.json at e98b292, uas_standards VerticalLayer at 6e182f4; spec 06 T9): one new case (25 to 26),
+  `refuse-uom-in-upper-case-inside-layer`, the accepted base with one
+  patch; the base's TSD001 (`uom` ft) is its accepted twin.
+  [ED-318 uom spelling]
 
 ### Fixed
 
-- `ed318`: `Parse` refuses a zone of type PROHIBITED, REQ_AUTHORIZATION,
-  CONDITIONAL or USPACE whose layer states neither `upper` nor `lower`,
-  whether the layer is absent, null, references only or `uom` only, at
-  the layer's JSON path (`features[1].geometry.layer`: "states neither
-  upper nor lower: a PROHIBITED zone needs a vertical limit, ..." or
-  "missing: a PROHIBITED zone needs a vertical limit, ..."). Each part
-  of a GeometryCollection is judged with the layer that applies to it,
-  named at the collection's or the member's path. One limit is enough.
-  A NO_RESTRICTION zone may still state neither: it is information
-  only, so unlimited is harmless. `FromED269` re-parses its output, so
-  an ED-269 zone of those types without limits is refused there too.
-  [ED-318 layer limits]
 - `ed318`: `LayerVariants()` also holds the seven spellings of `uom`
   that differ from it in case only (`UOM`, `Uom`, `UoM`, `uOM`, `uOm`,
   `uoM`, `UOm`), each mapped to `uom`; `Parse` refuses them inside a
   layer by name ("is not ED-318's spelling; ED-318 writes uom, in lower
   case"). ED-269's names keep their reason. Other unknown members are
-  still kept. [ED-318 layer limits]
+  still kept. [ED-318 uom spelling]
 
 ## [1.10.0] (ED-318 layer)
 
