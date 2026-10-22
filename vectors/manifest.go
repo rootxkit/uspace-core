@@ -13,7 +13,7 @@ type Entry struct {
 // here. A new file in uspace-lab is added here with its owning package,
 // never run "somewhere".
 var Manifest = []Entry{
-	{"alert_lifecycle.json", "alerting", 42},
+	{"alert_lifecycle.json", "alerting", 45},
 	{"cpa.json", "cpa", 37},
 	{"ed269_parse.json", "ed269", 54},
 	{"ed318_roundtrip.json", "ed318", 26},
@@ -34,6 +34,6 @@ var Manifest = []Entry{
 }
 
 // TotalCases is the number of cases across every file at the pinned lab
-// commit: 704, jwt_verify.json (WP-11) and ed318_roundtrip.json (WP-12)
+// commit: 707, jwt_verify.json (WP-11) and ed318_roundtrip.json (WP-12)
 // included. No file is local.
-const TotalCases = 704
+const TotalCases = 707

@@ -69,6 +69,11 @@ type aircraft struct {
 	held bool
 	// identUnidentified: the last identification heard said unidentified.
 	identUnidentified bool
+	// registrationMismatch: the last judged identification was a
+	// mismatch of the UA registration. While it is, a sample that
+	// compares no registration neither raises nor clears
+	// identification_mismatch (04 §3.2 errata 2026-10-23).
+	registrationMismatch bool
 	// pool is the eviction pool ac is in (poolNone while it holds an
 	// alert: it is never evicted), elem its place there.
 	pool int

@@ -130,8 +130,9 @@ type Identification struct {
 	// authorised intent's (04 §3.2 errata 2026-10-22).
 	Registration *string `json:"registration,omitempty"`
 	// IntentRegistration is the authorised intent's UA registration
-	// (Annex IV item 10) when it differs from Registration; nil
-	// otherwise.
+	// (Annex IV item 10) whenever Registration was compared with it
+	// (04 §3.2 errata 2026-10-23); nil when either was absent, so that
+	// RegistrationCompared tells a compared sample from an omission.
 	IntentRegistration *string `json:"intent_registration,omitempty"`
 	// Mismatch is true for a registered serial with another operator's
 	// number, serial_conflict (LESSONS G-02), or a declared UA
@@ -142,6 +143,15 @@ type Identification struct {
 	RegistryUASID *string `json:"registry_uas_id,omitempty"`
 	// Basis is the resolution basis; empty in vectors that predate it.
 	Basis IdentBasis `json:"basis,omitempty"`
+}
+
+// RegistrationCompared reports whether the identification compared a
+// declared UA registration with the authorised intent's (04 §3.2
+// errata 2026-10-23): both are present. A sample that compares none
+// says nothing about a registration mismatch. A nil identification
+// compared none.
+func (id *Identification) RegistrationCompared() bool {
+	return id != nil && id.Registration != nil && id.IntentRegistration != nil
 }
 
 // Judged reports whether the identification was judged

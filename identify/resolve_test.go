@@ -316,9 +316,9 @@ func TestResolveBoundWith(t *testing.T) {
 		{"mismatch", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
 			core.IdentRegistered, core.ReasonRegistrationMismatch, true, ptr(declared), ptr(intended)},
 		{"agrees", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(intended), IntentRegistration: ptr(intended)},
-			core.IdentRegistered, core.ReasonSessionBinding, false, ptr(intended), nil},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr(intended), ptr(intended)},
 		{"agrees-trimmed-ascii-case", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr(" geo-ua-000123\t"), IntentRegistration: ptr(" " + intended + " ")},
-			core.IdentRegistered, core.ReasonSessionBinding, false, ptr("geo-ua-000123"), nil},
+			core.IdentRegistered, core.ReasonSessionBinding, false, ptr("geo-ua-000123"), ptr(intended)},
 		// Only ASCII folds: U+212A (Kelvin sign) is not K, U+017F (long s)
 		// is not s.
 		{"kelvin-sign-is-another-registration", reg, "d-active", identify.BoundInputs{DeclaredRegistration: ptr("GEO-UA-\u212a1"), IntentRegistration: ptr("GEO-UA-k1")},
@@ -339,7 +339,7 @@ func TestResolveBoundWith(t *testing.T) {
 		{"suspended-keeps-reason", reg, "d-uas-susp", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
 			core.IdentSuspended, core.ReasonUASSuspended, true, ptr(declared), ptr(intended)},
 		{"suspended-agrees", reg, "d-uas-susp", identify.BoundInputs{DeclaredRegistration: ptr(intended), IntentRegistration: ptr(intended)},
-			core.IdentSuspended, core.ReasonUASSuspended, false, ptr(intended), nil},
+			core.IdentSuspended, core.ReasonUASSuspended, false, ptr(intended), ptr(intended)},
 		{"owner-unknown-keeps-reason", reg, "d-owner-missing", identify.BoundInputs{DeclaredRegistration: ptr(declared), IntentRegistration: ptr(intended)},
 			core.IdentUnknownOperator, core.ReasonOwnerUnknown, true, ptr(declared), ptr(intended)},
 		// Not judged: the reason stays registry_unavailable, so nothing
@@ -371,6 +371,33 @@ func TestResolveBoundWith(t *testing.T) {
 				t.Errorf("reason %s without a mismatch, ResolveBound says %s", got.Reason, plain.Reason)
 			}
 		})
+	}
+}
+
+// TestRegistrationCompared: both registrations present is a comparison
+// (04 §3.2 errata 2026-10-23), whether they agree or not; either absent,
+// or a nil block, is none.
+func TestRegistrationCompared(t *testing.T) {
+	reg := registry()
+	for _, c := range []struct {
+		name string
+		in   identify.BoundInputs
+		want bool
+	}{
+		{"agrees", identify.BoundInputs{DeclaredRegistration: ptr("R1"), IntentRegistration: ptr("r1")}, true},
+		{"differs", identify.BoundInputs{DeclaredRegistration: ptr("R2"), IntentRegistration: ptr("R1")}, true},
+		{"none_declared", identify.BoundInputs{IntentRegistration: ptr("R1")}, false},
+		{"no_intent_registration", identify.BoundInputs{DeclaredRegistration: ptr("R1")}, false},
+		{"blank_declared", identify.BoundInputs{DeclaredRegistration: ptr(" "), IntentRegistration: ptr("R1")}, false},
+	} {
+		id := identify.ResolveBoundWith(reg, "d-active", c.in)
+		if got := id.RegistrationCompared(); got != c.want {
+			t.Errorf("%s: RegistrationCompared %v, want %v", c.name, got, c.want)
+		}
+	}
+	var none *core.Identification
+	if none.RegistrationCompared() {
+		t.Error("a nil block compared a registration")
 	}
 }
 

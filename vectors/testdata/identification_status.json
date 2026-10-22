@@ -1183,7 +1183,7 @@
     "registered_operator_reg": null,
     "drone_id": "00000000-0000-0000-0000-00000000000a",
     "registration": "GEO-UA-000123",
-    "intent_registration": null
+    "intent_registration": "GEO-UA-000123"
    },
    "why": "The telemetry declares the authorised intent's UA registration: recorded as declared, no mismatch, the reason unchanged.",
    "source": "spec 04 section 3.2 errata 2026-10-22",
@@ -1209,7 +1209,7 @@
     "registered_operator_reg": null,
     "drone_id": "00000000-0000-0000-0000-00000000000a",
     "registration": "geo-ua-000123",
-    "intent_registration": null
+    "intent_registration": "GEO-UA-000123"
    },
    "why": "Registrations compare trimmed and case-insensitively, as operator numbers do (U-01); the declared value is recorded trimmed, case kept.",
    "source": "spec 04 section 3.2 errata 2026-10-22",

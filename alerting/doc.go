@@ -18,7 +18,13 @@
 //     without an identification (or with one held as not judged:
 //     details_unavailable, and registry_unavailable under
 //     Config.HoldUnjudgedIdentification) neither refreshes nor shows
-//     false (C-04, C-09, hysteresis_rule). An active pair is judged on
+//     false (C-04, C-09, hysteresis_rule). After a registration mismatch,
+//     a sample that compares no UA registration (none declared, or no
+//     intent registration: core.Identification.RegistrationCompared) does
+//     not show identification_mismatch false either, though it keeps the
+//     identity fresh: an omission is no match; it clears once a declared
+//     registration matches, or the flight ends (04 §3.2 errata
+//     2026-10-23, counted as registration_not_compared). An active pair is judged on
 //     every sample of either aircraft wherever the other now is, so it is
 //     never shown false by falling outside the neighbour search. A
 //     resolved conflict carries both the last numbers that showed it true

@@ -198,10 +198,12 @@ type BoundInputs struct {
 }
 
 // ResolveBoundWith is ResolveBound with the UA registration rule of
-// 04 §3.2 (errata 2026-10-22). The declared registration is carried,
-// trimmed, as Registration. When both registrations are present and
-// differ (trimmed, ASCII letters case-insensitive, G-12), Mismatch is
-// set, IntentRegistration carries the intent's, and the reason becomes
+// 04 §3.2 (errata 2026-10-22, 2026-10-23). The declared registration is
+// carried, trimmed, as Registration, and the intent's as
+// IntentRegistration whenever both are present (they were compared:
+// core.Identification.RegistrationCompared). When they differ
+// (trimmed, ASCII letters case-insensitive, G-12), Mismatch is set and
+// the reason becomes
 // registration_mismatch where ResolveBound said session_binding; any
 // other reason, a standing problem or registry_unavailable, is kept
 // with the mismatch still flagged (as suspension outranks an operator
@@ -213,11 +215,14 @@ func ResolveBoundWith(reg Lookup, droneID string, in BoundInputs) core.Identific
 	id := ResolveBound(reg, droneID)
 	declared, intended := clean(in.DeclaredRegistration), clean(in.IntentRegistration)
 	id.Registration = declared
-	if declared == nil || intended == nil || registrationKey(*declared) == registrationKey(*intended) {
+	if declared == nil || intended == nil {
+		return id
+	}
+	id.IntentRegistration = intended
+	if registrationKey(*declared) == registrationKey(*intended) {
 		return id
 	}
 	id.Mismatch = true
-	id.IntentRegistration = intended
 	if id.Reason == core.ReasonSessionBinding {
 		id.Reason = core.ReasonRegistrationMismatch
 	}

@@ -235,9 +235,26 @@ func (m *Monitor) judgeMismatch(ac *aircraft, tr *Track, wallS float64, ev *Even
 	m.noteSeen(ac.identitySeenS)
 	key := keyOf(KindIdentificationMismatch, ac.id)
 	if !ident.Mismatch {
+		if ac.registrationMismatch && !ident.RegistrationCompared() {
+			// An omission is no match (04 §3.2 errata 2026-10-23): no
+			// declared registration, or no intent registration, after a
+			// registration mismatch says nothing about it. The identity
+			// stays fresh (the aircraft is identified); the alert is
+			// neither refreshed nor shown false, and clears once a
+			// declared registration matches, or the flight ends.
+			m.counters.Inc(CounterRegistrationNotCompared)
+			return
+		}
+		ac.registrationMismatch = false
 		m.showFalse(key, atS, nil, ev)
 		return
 	}
+	// A mismatch that compared the UA registration is the registration's:
+	// only a bound aircraft carries registrations, and a bound aircraft's
+	// only mismatch is its registration's (identify.ResolveBoundWith; the
+	// comparison is never made again here). An operator mismatch carries
+	// none.
+	ac.registrationMismatch = ident.RegistrationCompared()
 	m.refresh(raise{
 		key:      key,
 		kind:     KindIdentificationMismatch,
