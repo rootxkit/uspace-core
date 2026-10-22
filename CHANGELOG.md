@@ -16,6 +16,13 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Changed
+
+- vectors: the pin moves from `uspace-lab@f5e2a53` (the first commit of
+  lab PR #58) to `uspace-lab@cc9f5a8`, that pull request's merge
+  commit on lab `main` (docs/RELEASING.md section 3.1). No vector file
+  changed: the files are byte-identical at both commits. [ED-318 layer]
+
 ## [1.10.0] (ED-318 layer)
 
 Minor to 1.9.0: an ED-318 layer that does not say its vertical limits
