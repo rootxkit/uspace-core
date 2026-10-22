@@ -615,8 +615,21 @@ func TestTextListBound(t *testing.T) {
 // parseLayer0 parses the base with feature 0's layer replaced.
 func parseLayer0(t *testing.T, layer map[string]any) (*FeatureCollection, *ed269.Problems) {
 	t.Helper()
+	return parseLayerAt(t, 0, layer)
+}
+
+// parseLayerAt parses the base with feature i's layer replaced; a nil
+// layer is written as JSON null.
+func parseLayerAt(t *testing.T, i int, layer map[string]any) (*FeatureCollection, *ed269.Problems) {
+	t.Helper()
 	d := baseDocument(t)
-	geom(t, d, 0)["layer"] = layer
+	geom(t, d, i)["layer"] = layer
+	return parseDoc(t, d)
+}
+
+// parseDoc marshals and parses a document.
+func parseDoc(t *testing.T, d map[string]any) (*FeatureCollection, *ed269.Problems) {
+	t.Helper()
 	raw, err := json.Marshal(d)
 	if err != nil {
 		t.Fatal(err)
@@ -655,7 +668,7 @@ func TestLayerNameTable(t *testing.T) {
 		t.Fatalf("members %v", members)
 	}
 	vs := LayerVariants()
-	if len(vs) != 5 {
+	if len(ed269LayerNames) != 5 || len(uomSpellings) != 7 || len(vs) != 12 {
 		t.Fatalf("variants %v", vs)
 	}
 	for v, c := range vs {
@@ -663,8 +676,14 @@ func TestLayerNameTable(t *testing.T) {
 			t.Errorf("variant %q -> %q", v, c)
 		}
 	}
-	if !slices.Equal(slices.Sorted(maps.Values(vs)), slices.Sorted(slices.Values(members))) {
-		t.Errorf("not every member has its ED-269 name: %v", vs)
+	if !slices.Equal(slices.Sorted(maps.Values(ed269LayerNames)), slices.Sorted(slices.Values(members))) {
+		t.Errorf("not every member has its ED-269 name: %v", ed269LayerNames)
+	}
+	// Every case spelling of uom but uom itself, and nothing else.
+	for v, c := range uomSpellings {
+		if c != LayerKeyUom || !strings.EqualFold(v, LayerKeyUom) || vs[v] != LayerKeyUom {
+			t.Errorf("uom spelling %q -> %q", v, c)
+		}
 	}
 	for v, c := range UomVariants() {
 		if !slices.Contains(UomValues(), c) || slices.Contains(UomValues(), v) {
@@ -708,15 +727,20 @@ func exportedLayerKeys(t *testing.T, fc *FeatureCollection, i int) []string {
 	return slices.Sorted(maps.Keys(doc.Features[i].Geometry.Layer))
 }
 
-// Each ED-269 name inside a layer is refused by name, with its path and
-// the ED-318 name in the reason: in place of its member, and beside the
-// canonical members (where kept as an extra it would change nothing the
-// zone says, which is the danger).
+// Each variant inside a layer (an ED-269 name, or uom in another case) is
+// refused by name, with its path and the ED-318 name in the reason: in
+// place of its member, and beside the canonical members (where kept as an
+// extra it would change nothing the zone says, which is the danger).
 func TestLayerVariantRefused(t *testing.T) {
 	for variant, canonical := range LayerVariants() {
 		value := canonicalLayer()[canonical]
-		if canonical == LayerKeyUom {
+		why := "is ED-269's name; ED-318 writes " + canonical
+		switch {
+		case variant == "uomDimensions":
 			value = "FT"
+		case canonical == LayerKeyUom:
+			value = UomFeet
+			why = "is not ED-318's spelling; ED-318 writes uom, in lower case"
 		}
 		t.Run(variant+" in place", func(t *testing.T) {
 			l := canonicalLayer()
@@ -726,7 +750,7 @@ func TestLayerVariantRefused(t *testing.T) {
 			if fc != nil {
 				t.Fatal("accepted")
 			}
-			if !problemEnds(probs, "features[0].geometry.layer."+variant, "is ED-269's name; ED-318 writes "+canonical) {
+			if !problemEnds(probs, "features[0].geometry.layer."+variant, why) {
 				t.Errorf("no refusal of %s naming %s: %v", variant, canonical, probs)
 			}
 		})
@@ -750,7 +774,7 @@ func TestLayerOfED269NamesRefused(t *testing.T) {
 	_, probs := parseLayer0(t, map[string]any{
 		"upperLimit": 300, "upperVerticalReference": "AMSL", "lowerLimit": 0, "lowerVerticalReference": "AGL", "uomDimensions": "M",
 	})
-	for v, c := range LayerVariants() {
+	for v, c := range ed269LayerNames {
 		if !problemEnds(probs, "layer."+v, "ED-318 writes "+c) {
 			t.Errorf("%s not refused: %v", v, probs)
 		}
@@ -819,9 +843,10 @@ func TestLayerAbsentUomIsMetres(t *testing.T) {
 }
 
 // A layer with no ED-318 member is refused as empty, whether it is {} or
-// holds only unknown members; a layer with references and no limits is
-// accepted (the base's TSN001), and so is an unknown member beside the
-// ED-318 ones (TestExtrasKept).
+// holds only unknown members; a layer with references and no limits, or
+// a uom only, is not empty and is accepted on a NO_RESTRICTION zone (the
+// base's TSN001), and so is an
+// unknown member beside the ED-318 ones (TestExtrasKept).
 func TestLayerEmptyRefused(t *testing.T) {
 	for name, l := range map[string]map[string]any{
 		"empty":        {},
@@ -840,11 +865,11 @@ func TestLayerEmptyRefused(t *testing.T) {
 		"unknown beside":  {"upper": 300, "upperReference": "WGS84", "x_layer": true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fc, probs := parseLayer0(t, l)
+			fc, probs := parseLayerAt(t, 4, l)
 			if probs != nil {
 				t.Fatal(probs)
 			}
-			if _, kept := fc.Features[0].Geometry.Layer.Extra["x_layer"]; kept != (name == "unknown beside") {
+			if _, kept := fc.Features[4].Geometry.Layer.Extra["x_layer"]; kept != (name == "unknown beside") {
 				t.Errorf("extra kept %v", kept)
 			}
 		})
@@ -855,5 +880,37 @@ func TestLayerEmptyRefused(t *testing.T) {
 	raw, _ := json.Marshal(d)
 	if fc, probs := Parse(raw, Limits{}); fc != nil || !problemEnds(probs, "features[3].geometry.geometries[1].layer", "is empty") {
 		t.Errorf("member layer: accepted %v, problems %v", fc != nil, probs)
+	}
+}
+
+// uom spelt in another case (UOM, Uom, UoM, ...) is refused by name, in
+// place of uom and beside it, never kept as an extra that would leave a
+// limit in feet read as metres; uom itself is accepted and converts feet.
+// An unknown member that is not a variant is still kept (the schema
+// leaves the layer open).
+func TestLayerUomCaseRefused(t *testing.T) {
+	for _, v := range []string{"UOM", "Uom", "UoM", "uOM", "uOm", "uoM", "UOm"} {
+		l := canonicalLayer()
+		delete(l, LayerKeyUom)
+		l[v] = UomFeet
+		fc, probs := parseLayer0(t, l)
+		if fc != nil || !problemEnds(probs, "features[0].geometry.layer."+v, "is not ED-318's spelling; ED-318 writes uom, in lower case") {
+			t.Errorf("%s in place: accepted %v, problems %v", v, fc != nil, probs)
+		}
+		l[LayerKeyUom] = UomFeet
+		if fc, probs := parseLayer0(t, l); fc != nil || !problemEnds(probs, "layer."+v, "ED-318 writes uom") {
+			t.Errorf("%s beside uom: accepted %v, problems %v", v, fc != nil, probs)
+		}
+	}
+	l := canonicalLayer()
+	l[LayerKeyUom] = UomFeet
+	l["units"] = "ft"
+	fc, probs := parseLayer0(t, l)
+	if probs != nil {
+		t.Fatal(probs)
+	}
+	got := fc.Features[0].Geometry.Layer
+	if *got.UpperM() != 300*core.FeetToMetres || got.Extra["units"] == nil {
+		t.Errorf("uom ft: upper %v m, extra %v", *got.UpperM(), got.Extra)
 	}
 }

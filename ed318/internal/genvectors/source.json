@@ -68,6 +68,13 @@
       "why": "A layer with none of upper, upperReference, lower, lowerReference and uom states no vertical limit, and would be read as a zone from the surface to unlimited. The base's TSN001, a layer of references without limits, is the accepted twin."
     },
     {
+      "name": "refuse-uom-in-upper-case-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/2/geometry/layer", "value": {"upper": 600, "upperReference": "WGS84", "lower": 0, "lowerReference": "AGL", "UOM": "ft"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[2].geometry.layer.UOM", "reason_contains": "ED-318 writes uom"}},
+      "why": "JSON member names are case-sensitive, and every source read names the unit uom (schema Schema_LayeredGeoJSON.json, uas_standards VerticalLayer). Kept as an unknown member, UOM would leave the layer without a uom, and the 600 ft ceiling its producer meant would be read as 600 m. Each spelling of uom that differs in case only (UOM, Uom, UoM, ...) is refused by name, as ED-269's uomDimensions is (owner decision 2026-10-22); other unknown members are still kept. The base's TSD001, with uom ft, is the accepted twin."
+    },
+    {
       "name": "refuse-no-zone-authority",
       "kind": "parse",
       "patch": [{"op": "replace", "path": "/features/4/properties/zoneAuthority", "value": []}],

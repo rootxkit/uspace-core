@@ -184,23 +184,58 @@ func LayerMembers() []string {
 // call).
 func UomValues() []string { return []string{UomMetres, UomFeet} }
 
-// layerVariants maps each known name that is not ED-318's, found where a
-// layer member belongs, to the ED-318 name it stands for. They are
-// ED-269's names for the same limits, members of an ED-269
-// UASZoneAirspaceVolume (InterUSS uas_standards
+// ed269LayerNames maps ED-269's name for each vertical limit, found where
+// a layer member belongs, to the ED-318 name it stands for. They are the
+// members of an ED-269 UASZoneAirspaceVolume (InterUSS uas_standards
 // src/uas_standards/eurocae_ed269.py at
 // 6e182f43ec960b3bccf131c9006ff9979dd8a56e; the Cyprus DCA ED-269 file
-// CYP_GeoZones_06_05_25.json writes all five). Inside an ED-318 layer
-// they are refused by name, never read as their ED-318 counterpart and
-// never kept as extras: kept, a layer of them would be a zone from the
-// surface to unlimited, and an uomDimensions beside upper would leave
-// the limit read as metres.
-var layerVariants = map[string]string{
+// CYP_GeoZones_06_05_25.json writes all five).
+var ed269LayerNames = map[string]string{
 	"upperLimit":             LayerKeyUpper,
 	"upperVerticalReference": LayerKeyUpperReference,
 	"lowerLimit":             LayerKeyLower,
 	"lowerVerticalReference": LayerKeyLowerReference,
 	"uomDimensions":          LayerKeyUom,
+}
+
+// uomSpellings maps each spelling of uom that differs from it in case
+// only (UOM, Uom, UoM and the rest) to uom. JSON member names are
+// case-sensitive and every source read names the member uom (doc.go), so
+// a producer that spells it otherwise has made a mistake that would
+// leave a limit in feet read as metres (owner decision 2026-10-22, from
+// the review of PR #54).
+var uomSpellings = map[string]string{
+	"Uom": LayerKeyUom,
+	"uOm": LayerKeyUom,
+	"uoM": LayerKeyUom,
+	"UOm": LayerKeyUom,
+	"UoM": LayerKeyUom,
+	"uOM": LayerKeyUom,
+	"UOM": LayerKeyUom,
+}
+
+// layerVariants maps each known name that is not ED-318's, found where a
+// layer member belongs, to the ED-318 name it stands for: ED-269's names
+// (ed269LayerNames) and the case spellings of uom (uomSpellings). Inside
+// an ED-318 layer they are refused by name, never read as their ED-318
+// counterpart and never kept as extras: kept, a layer of them would be a
+// zone from the surface to unlimited, and an uomDimensions or a UOM
+// beside upper would leave the limit read as metres. Any other unknown
+// member is kept as an extra: the schema leaves the layer open.
+var layerVariants = func() map[string]string {
+	out := maps.Clone(ed269LayerNames)
+	maps.Copy(out, uomSpellings)
+	return out
+}()
+
+// variantReason is why a variant is refused, naming the ED-318 member it
+// stands for.
+func variantReason(variant string) string {
+	canonical := layerVariants[variant]
+	if _, ok := ed269LayerNames[variant]; ok {
+		return "is ED-269's name; ED-318 writes " + canonical
+	}
+	return "is not ED-318's spelling; ED-318 writes " + canonical + ", in lower case (member names are case-sensitive)"
 }
 
 // uomVariants maps ED-269's spelling of a unit (UomDimensions, upper
@@ -211,8 +246,9 @@ var uomVariants = map[string]string{
 }
 
 // LayerVariants is the known names that are not ED-318's, each with the
-// ED-318 layer member it stands for (a new map on each call). Parse
-// refuses each of them inside a layer.
+// ED-318 layer member it stands for (a new map on each call): ED-269's
+// names for the limits, and the spellings of uom that differ from it in
+// case only. Parse refuses each of them inside a layer by name.
 func LayerVariants() map[string]string { return maps.Clone(layerVariants) }
 
 // UomVariants is ED-269's spelling of each unit with ED-318's (a new map
