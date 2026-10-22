@@ -16,6 +16,62 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.9.0] (ED-318 layer)
+
+Minor to 1.8.0: an ED-318 layer that does not say its vertical limits
+in ED-318's names is refused instead of read as a zone from the surface
+to unlimited. `ed318.Parse` kept every member of a `layer` it did not
+know as an extra, so a layer written with ED-269's names parsed with
+no lower and no upper limit, and `uomDimensions: "FT"` beside `upper`
+left the limit read as metres. No public ED-318 source or national
+sample read writes those names inside a layer (ED-318 vertical-limit
+field-name check, 2026-10-22), and no existing vector case's `input`
+or `expected` changed: everything 1.8.0 accepted with ED-318's names
+is accepted and written back as before. The minor follows 1.4.0's
+precedent for a refusal of input that was silently mis-read (owner
+decision 2026-10-22). The knowledge vectors are re-synced from
+`uspace-lab@f5e2a53` (lab branch `docs/WP-L4-ed318-layer-names`): new
+cases only, no header key changed, so the semver gate classifies the
+change as additive. The pin moves from `uspace-lab@3946517` to
+`uspace-lab@f5e2a53`; `utm_commit` stays `484cd22`. 693 cases in all
+(690 before).
+
+### Added
+
+- `ed318`: one table of a layer's names. `LayerKeyUpper`,
+  `LayerKeyUpperReference`, `LayerKeyLower`, `LayerKeyLowerReference`
+  and `LayerKeyUom`, with `LayerMembers()` in the schema's order;
+  `UomValues()` (`m`, `ft`); `LayerVariants()`, ED-269's names
+  (`upperLimit`, `upperVerticalReference`, `lowerLimit`,
+  `lowerVerticalReference`, `uomDimensions`) each with the ED-318
+  member it stands for; `UomVariants()` (`M`, `FT` to `m`, `ft`). The
+  functions return copies. The parser reads, and the exporter writes,
+  these names only; a system that writes a layer itself checks its
+  names against `LayerMembers()`. [ED-318 layer]
+- vectors: ed318_roundtrip.json (EUROCAE ED-318 JSON schema Schema_LayeredGeoJSON.json at e98b292, uas_standards VerticalLayer and eurocae_ed269.py at 6e182f4; spec 06 T9): three new cases (22 to 25),
+  `refuse-ed269-names-inside-layer`, `refuse-ed269-unit-name-inside-layer`
+  and `refuse-empty-layer`, each the accepted base with one patch; the
+  base's TSD001 (`uom` ft) and TSN001 (references without limits) are
+  their accepted twins. [ED-318 layer]
+
+### Fixed
+
+- `ed318`: `Parse` refuses each of ED-269's names inside a `layer` at
+  its JSON path (`features[0].geometry.layer.upperLimit`: "is ED-269's
+  name; ED-318 writes upper"), and a `layer` with none of the five
+  ED-318 members (`{}`, or only unknown members) as empty. An ED-269
+  unit as the `uom` (`M`, `FT`) is refused as before, its reason now
+  also naming ED-318's spelling. Other unknown members beside the
+  ED-318 ones are kept, and a layer of references without limits is
+  accepted, as before. An absent `uom` is still metres (the schema's
+  default, UNVERIFIED), and `Export` still writes `uom` only when it
+  was given, so no published document's bytes change. [ED-318 layer]
+- `ed318`: the package doc cites each public source of the layer names
+  with its URL and commit or version, records that `uas_standards` and
+  the Swiss V2 model make `uom` mandatory against the schema's default,
+  and that LayeredGeoJSON and Swiss V2 give the circle radius in
+  metres. The status stays UNVERIFIED. [ED-318 layer]
+
 ## [1.8.0] (DP details)
 
 Additive to 1.7.0: an identification that was not judged. A Display
