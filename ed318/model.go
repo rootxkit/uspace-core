@@ -2,6 +2,7 @@ package ed318
 
 import (
 	"encoding/json"
+	"maps"
 	"time"
 
 	"github.com/rootxkit/uspace-core/core"
@@ -159,6 +160,64 @@ const (
 	UomMetres = "m"
 	UomFeet   = "ft"
 )
+
+// The members of a layer, ED-318's names for a zone's vertical limits
+// (UNVERIFIED against the EUROCAE text; the package doc names the
+// sources). This is the one table of them: the parser reads these and
+// no other, the exporter writes these, and a system that writes or reads
+// a layer itself compares its names with LayerMembers.
+const (
+	LayerKeyUpper          = "upper"
+	LayerKeyUpperReference = "upperReference"
+	LayerKeyLower          = "lower"
+	LayerKeyLowerReference = "lowerReference"
+	LayerKeyUom            = "uom"
+)
+
+// LayerMembers is ED-318's layer members in the schema's order (a new
+// slice on each call).
+func LayerMembers() []string {
+	return []string{LayerKeyUpper, LayerKeyUpperReference, LayerKeyLower, LayerKeyLowerReference, LayerKeyUom}
+}
+
+// UomValues is the units a layer's uom may take (a new slice on each
+// call).
+func UomValues() []string { return []string{UomMetres, UomFeet} }
+
+// layerVariants maps each known name that is not ED-318's, found where a
+// layer member belongs, to the ED-318 name it stands for. They are
+// ED-269's names for the same limits, members of an ED-269
+// UASZoneAirspaceVolume (InterUSS uas_standards
+// src/uas_standards/eurocae_ed269.py at
+// 6e182f43ec960b3bccf131c9006ff9979dd8a56e; the Cyprus DCA ED-269 file
+// CYP_GeoZones_06_05_25.json writes all five). Inside an ED-318 layer
+// they are refused by name, never read as their ED-318 counterpart and
+// never kept as extras: kept, a layer of them would be a zone from the
+// surface to unlimited, and an uomDimensions beside upper would leave
+// the limit read as metres.
+var layerVariants = map[string]string{
+	"upperLimit":             LayerKeyUpper,
+	"upperVerticalReference": LayerKeyUpperReference,
+	"lowerLimit":             LayerKeyLower,
+	"lowerVerticalReference": LayerKeyLowerReference,
+	"uomDimensions":          LayerKeyUom,
+}
+
+// uomVariants maps ED-269's spelling of a unit (UomDimensions, upper
+// case) to ED-318's.
+var uomVariants = map[string]string{
+	"M":  UomMetres,
+	"FT": UomFeet,
+}
+
+// LayerVariants is the known names that are not ED-318's, each with the
+// ED-318 layer member it stands for (a new map on each call). Parse
+// refuses each of them inside a layer.
+func LayerVariants() map[string]string { return maps.Clone(layerVariants) }
+
+// UomVariants is ED-269's spelling of each unit with ED-318's (a new map
+// on each call). Parse refuses them as a layer's uom.
+func UomVariants() map[string]string { return maps.Clone(uomVariants) }
 
 // Layer is a geometry's `layer` (ED-318 Schema_LayeredGeoJSON.json): the
 // vertical extent. Values are as written, in Uom ("m" or "ft"; absent

@@ -13,9 +13,9 @@ var (
 	pointFields      = []string{"type", "coordinates", "extent", "layer", "bbox"}
 	collectionGFlds  = []string{"type", "geometries", "layer", "bbox"}
 	extentFields     = []string{"subType", "radius"}
-	layerFields      = []string{"upper", "upperReference", "lower", "lowerReference", "uom"}
+	layerFields      = LayerMembers()
 	verticalRefs     = []string{"AGL", "AMSL", "WGS84"}
-	uomValues        = []string{UomMetres, UomFeet}
+	uomValues        = UomValues()
 	unsupportedTypes = []string{"LineString", "MultiPoint", "MultiLineString"}
 )
 
@@ -207,21 +207,38 @@ func distinct(pts []core.LatLon) int {
 	return len(seen)
 }
 
-// layer reads a geometry's vertical layer.
+// layer reads a geometry's vertical layer. A member named as ED-269 names
+// the same limit (layerVariants) is refused by name, and so is a layer
+// with no ED-318 member at all: either would otherwise be read as a zone
+// from the surface to unlimited. Other unknown members are kept in Extra.
 func (p *parser) layer(v *value, where string) *Layer {
 	if v.kind != kindObject {
 		p.ps.add(where, "must be an object, not "+describe(v))
 		return nil
 	}
 	before := p.ps.count()
+	members := 0
+	for _, k := range v.keys {
+		if canonical, ok := layerVariants[k]; ok {
+			p.ps.add(join(where, k), "is ED-269's name; ED-318 writes "+canonical)
+		}
+		if slices.Contains(layerFields, k) {
+			members++
+		}
+	}
+	if members == 0 && p.ps.count() == before {
+		p.ps.add(where, "is empty: it has none of upper, upperReference, lower, lowerReference, uom, so it states no vertical limit; a zone's layer gives its vertical limits")
+	}
 	l := &Layer{Extra: extras(v, layerFields)}
-	if u := v.get("uom"); present(u) {
-		if s, ok := p.requiredEnum(u, join(where, "uom"), uomValues); ok {
+	if u := v.get(LayerKeyUom); present(u) {
+		if canonical, ok := uomVariants[u.s]; ok && u.kind == kindString {
+			p.ps.add(join(where, LayerKeyUom), quote(u.s)+" is not one of m, ft: it is ED-269's spelling; ED-318 writes "+canonical)
+		} else if s, ok := p.requiredEnum(u, join(where, LayerKeyUom), uomValues); ok {
 			l.Uom = &s
 		}
 	}
-	l.Upper, l.UpperReference = p.limit(v, where, "upper", "upperReference")
-	l.Lower, l.LowerReference = p.limit(v, where, "lower", "lowerReference")
+	l.Upper, l.UpperReference = p.limit(v, where, LayerKeyUpper, LayerKeyUpperReference)
+	l.Lower, l.LowerReference = p.limit(v, where, LayerKeyLower, LayerKeyLowerReference)
 	if p.ps.count() > before {
 		return nil
 	}

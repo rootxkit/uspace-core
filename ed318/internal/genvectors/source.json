@@ -47,6 +47,27 @@
       "why": "A vertical limit is judged in its datum (LESSONS D-01); a value without AGL, AMSL or WGS84 cannot be judged."
     },
     {
+      "name": "refuse-ed269-names-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/0/geometry/layer", "value": {"upperLimit": 300, "upperVerticalReference": "WGS84", "lowerLimit": 0, "lowerVerticalReference": "AGL", "uomDimensions": "M"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[0].geometry.layer.upperLimit", "reason_contains": "ED-318 writes upper"}},
+      "why": "upperLimit, upperVerticalReference, lowerLimit, lowerVerticalReference and uomDimensions are ED-269's names for the limits of a UASZoneAirspaceVolume (uas_standards eurocae_ed269.py); ED-318 writes them as the layer's upper, upperReference, lower, lowerReference and uom (schema Schema_LayeredGeoJSON.json, uas_standards VerticalLayer). Kept as unknown members, this layer would be a zone from the surface to unlimited; it is refused by name, never mapped (06 T9)."
+    },
+    {
+      "name": "refuse-ed269-unit-name-inside-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/2/geometry/layer", "value": {"upper": 600, "upperReference": "WGS84", "lower": 0, "lowerReference": "AGL", "uomDimensions": "FT"}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[2].geometry.layer.uomDimensions", "reason_contains": "ED-318 writes uom"}},
+      "why": "A layer whose unit is given under ED-269's name uomDimensions has no ED-318 uom, and an absent uom is metres (schema default): kept, the 600 ft ceiling its producer meant would be read as 600 m. The unit's name is refused, never guessed (06 T9). The base's TSD001, with uom ft, is the accepted twin."
+    },
+    {
+      "name": "refuse-empty-layer",
+      "kind": "parse",
+      "patch": [{"op": "replace", "path": "/features/4/geometry/layer", "value": {}}],
+      "expected": {"accepted": false, "must_include": {"field_endswith": "features[4].geometry.layer", "reason_contains": "is empty"}},
+      "why": "A layer with none of upper, upperReference, lower, lowerReference and uom states no vertical limit, and would be read as a zone from the surface to unlimited. The base's TSN001, a layer of references without limits, is the accepted twin."
+    },
+    {
       "name": "refuse-no-zone-authority",
       "kind": "parse",
       "patch": [{"op": "replace", "path": "/features/4/properties/zoneAuthority", "value": []}],
