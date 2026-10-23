@@ -23,6 +23,44 @@ for a behaviour change the line sits under the heading of the next major
   commit on lab `main` (docs/RELEASING.md section 3.1). No vector file
   changed: the files are byte-identical at both commits. [ED-318 layer]
 
+## [1.13.0] (ED-318 layer case)
+
+Minor to 1.12.0: `upper`, `lower`, `upperReference` and
+`lowerReference` spelt in another case inside an ED-318 layer are refused by name, as `uom` spelt so has been
+since 1.11.0, instead of kept as extras. Kept, an `Upper` left the
+layer with no ceiling, read as lower to unlimited, which over-extends a
+zone whose ceiling bounds where a service applies (owner decision
+2026-10-23). A zone without heights stays valid and applies at every
+height, and other unknown members are still kept. No public ED-318
+source or sample in `ed318/testdata` spells a member otherwise, and no
+existing vector case's `input` or `expected` changed. The knowledge
+vectors are re-synced from `uspace-lab@d83c91f` (lab branch
+`fix/ed318-layer-case`, with lab main merged in): four new cases, no header key changed, so the
+semver gate classifies the change as additive. The pin moves from
+`uspace-lab@450daf4` to `uspace-lab@d83c91f`; `utm_commit` stays
+`484cd22`. 711 cases in all (707 before).
+
+### Added
+
+- vectors: ed318_roundtrip.json (EUROCAE ED-318 JSON schema Schema_LayeredGeoJSON.json at e98b292, uas_standards VerticalLayer at 6e182f4; spec 06 T9): four new cases (26 to 30),
+  `refuse-upper-in-another-case-inside-layer`,
+  `refuse-lower-in-another-case-inside-layer`,
+  `refuse-upper-reference-in-another-case-inside-layer` and
+  `refuse-lower-reference-in-another-case-inside-layer`, each the
+  accepted base with one patch. [ED-318 layer case]
+
+### Fixed
+
+- `ed318`: `LayerVariants()` holds every spelling of each of the five
+  layer members that differs from it in ASCII letter case only (32835,
+  the seven of `uom` among them), each mapped to its member; `Parse`
+  refuses them inside a layer by name ("is not ED-318's spelling;
+  ED-318 writes upperReference (member names are case-sensitive)", and
+  ", in lower case" for `upper`, `lower` and `uom`, whose reason is
+  unchanged). The table is built on each call to `LayerVariants`; the
+  parser matches by rule and holds no table. ED-269's names keep their
+  reason. Other unknown members are still kept. [ED-318 layer case]
+
 ## [1.12.0] (UA registration)
 
 Minor to 1.11.0: the UA registration of a bound aircraft enters
