@@ -823,6 +823,99 @@ func TestUnjudgedIdentificationHoldsMismatch(t *testing.T) {
 	}
 }
 
+// regIdent is a bound aircraft's identification with its UA
+// registrations (04 §3.2 errata 2026-10-23).
+func regIdent(declared, intended *string, mismatch bool) *core.Identification {
+	reason := core.ReasonSessionBinding
+	if mismatch {
+		reason = core.ReasonRegistrationMismatch
+	}
+	return &core.Identification{Status: core.IdentRegistered, Reason: reason, Mismatch: mismatch, Registration: declared, IntentRegistration: intended}
+}
+
+// TestRegistrationMismatchHeldWhileNotCompared: after a registration
+// mismatch, samples that compare no registration (none declared, or no
+// intent registration) neither raise nor clear identification_mismatch,
+// longer than the hysteresis and than StaleAfterS: the identity stays
+// fresh, the omission is no match (04 §3.2 errata 2026-10-23). Each is
+// counted. The alert then clears resolved on a matching sample, or on
+// the flight's end (Drop).
+func TestRegistrationMismatchHeldWhileNotCompared(t *testing.T) {
+	declared, intended := ptr("GEO-UA-0999"), ptr("GEO-UA-0001")
+	mismatch := regIdent(declared, intended, true)
+	matched := regIdent(intended, intended, false)
+	for _, c := range []struct {
+		name string
+		next *core.Identification
+	}{
+		{"none_declared", regIdent(nil, nil, false)},
+		{"no_intent_registration", regIdent(declared, nil, false)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, false)
+			wantEvents(t, "raise", m.Observe(identAt(0, 0, mismatch), 0), []string{"identification_mismatch:A"}, nil)
+			for s := 1.0; s <= 20; s++ {
+				wantEvents(t, "held", m.Observe(identAt(0, s, c.next), s), nil, nil)
+			}
+			if n := m.Counters().Get(CounterRegistrationNotCompared); n != 20 {
+				t.Fatalf("%s %d, want 20", CounterRegistrationNotCompared, n)
+			}
+			var cleared []string
+			for s := 21.0; s <= 26; s++ {
+				_, cl := kinds(m.Observe(identAt(0, s, matched), s))
+				cleared = append(cleared, cl...)
+			}
+			if !slices.Equal(cleared, []string{"identification_mismatch:A=resolved"}) {
+				t.Fatalf("cleared %v", cleared)
+			}
+		})
+	}
+	t.Run("flight_ends", func(t *testing.T) {
+		m := holdMonitor(t, false)
+		m.Observe(identAt(0, 0, mismatch), 0)
+		m.Observe(identAt(0, 5, regIdent(nil, nil, false)), 5)
+		wantEvents(t, "drop", m.Drop("A", ClearFlightEnded, 6), nil, []string{"identification_mismatch:A=flight_ended"})
+	})
+}
+
+// TestOmissionClearsWhatIsNotARegistrationMismatch: the hold is the
+// registration's alone. After an operator mismatch, or once a matching
+// registration was declared, a sample that compares no registration
+// shows the mismatch false as before and it clears resolved (presence
+// twins of TestRegistrationMismatchHeldWhileNotCompared).
+func TestOmissionClearsWhatIsNotARegistrationMismatch(t *testing.T) {
+	intended := ptr("GEO-UA-0001")
+	omitted := regIdent(nil, nil, false)
+	for _, c := range []struct {
+		name  string
+		first []*core.Identification
+	}{
+		{"operator_mismatch", []*core.Identification{ident(core.IdentUnknownOperator, core.ReasonOperatorMismatch, true)}},
+		{"after_a_match", []*core.Identification{regIdent(ptr("GEO-UA-0999"), intended, true), regIdent(intended, intended, false)}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := holdMonitor(t, false)
+			var cleared []string
+			s := 0.0
+			for _, id := range c.first {
+				_, cl := kinds(m.Observe(identAt(0, s, id), s))
+				cleared = append(cleared, cl...)
+				s++
+			}
+			for ; s <= 8; s++ {
+				_, cl := kinds(m.Observe(identAt(0, s, omitted), s))
+				cleared = append(cleared, cl...)
+			}
+			if !slices.Equal(cleared, []string{"identification_mismatch:A=resolved"}) {
+				t.Fatalf("cleared %v", cleared)
+			}
+			if n := m.Counters().Get(CounterRegistrationNotCompared); n != 0 {
+				t.Fatalf("%s %d, want 0", CounterRegistrationNotCompared, n)
+			}
+		})
+	}
+}
+
 func TestMismatchSurvivesLandingButNotDrop(t *testing.T) {
 	m := NewMonitor(DefaultConfig())
 	a := at("A", 0, 0, 0)

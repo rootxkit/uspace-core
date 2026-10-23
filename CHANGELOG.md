@@ -25,9 +25,8 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [1.13.0] (ED-318 layer case)
 
-Minor to 1.11.0 (1.12.0 is the UA registration release, PR #57): `upper`,
-`lower`, `upperReference` and `lowerReference` spelt in another case
-inside an ED-318 layer are refused by name, as `uom` spelt so has been
+Minor to 1.12.0: `upper`, `lower`, `upperReference` and
+`lowerReference` spelt in another case inside an ED-318 layer are refused by name, as `uom` spelt so has been
 since 1.11.0, instead of kept as extras. Kept, an `Upper` left the
 layer with no ceiling, read as lower to unlimited, which over-extends a
 zone whose ceiling bounds where a service applies (owner decision
@@ -35,11 +34,11 @@ zone whose ceiling bounds where a service applies (owner decision
 height, and other unknown members are still kept. No public ED-318
 source or sample in `ed318/testdata` spells a member otherwise, and no
 existing vector case's `input` or `expected` changed. The knowledge
-vectors are re-synced from `uspace-lab@819ac0d` (lab branch
-`fix/ed318-layer-case`): four new cases, no header key changed, so the
+vectors are re-synced from `uspace-lab@d83c91f` (lab branch
+`fix/ed318-layer-case`, with lab main merged in): four new cases, no header key changed, so the
 semver gate classifies the change as additive. The pin moves from
-`uspace-lab@71c5c18` to `uspace-lab@819ac0d`; `utm_commit` stays
-`484cd22`. 698 cases in all (694 before).
+`uspace-lab@450daf4` to `uspace-lab@d83c91f`; `utm_commit` stays
+`484cd22`. 711 cases in all (707 before).
 
 ### Added
 
@@ -61,6 +60,66 @@ semver gate classifies the change as additive. The pin moves from
   unchanged). The table is built on each call to `LayerVariants`; the
   parser matches by rule and holds no table. ED-269's names keep their
   reason. Other unknown members are still kept. [ED-318 layer case]
+
+## [1.12.0] (UA registration)
+
+Minor to 1.11.0: the UA registration of a bound aircraft enters
+identification judging (spec 04 section 3.2 errata 2026-10-22, owner
+decision 2026-10-22 on uspace-ussp PLAN section 15 Q41, option 1). The
+authorised intent's registration is the only source of the one a
+Service Provider serves; the one the telemetry declares only validates
+against it, and a disagreement is a mismatch, never silently replaced.
+Additive: a new function, a new reason, two optional fields, and new
+vector cases; `ResolveBound` and every existing case answer as before.
+The owner's follow-up of 2026-10-23 (review of this release's pull
+request) is in it: an omission of the registration never clears a
+registration mismatch. The knowledge vectors are re-synced from
+`uspace-lab@450daf4`, the head of rootxkit/uspace-lab#67 (on lab main's
+`b707dad`, the merge of lab #64), until it merges: new cases only
+against this module's main, no gated header key changed, so the semver
+gate classifies the change as additive. The pin moves from
+`uspace-lab@71c5c18`; `utm_commit` stays `484cd22`. 707 cases in all
+(694 before).
+
+### Added
+
+- `identify`: `ResolveBoundWith(reg, droneID, BoundInputs)`, with
+  `BoundInputs{DeclaredRegistration, IntentRegistration}`. It is
+  `ResolveBound` plus the registration rule: the declared registration
+  is carried, trimmed, as `Registration`, and the intent's as
+  `IntentRegistration` whenever both are present (they were compared);
+  when they differ (trimmed, ASCII letters case-insensitive, G-12)
+  `Mismatch` is set and the reason becomes `registration_mismatch`
+  where `ResolveBound` said `session_binding`. Any other reason (a standing problem, or
+  `registry_unavailable`) is kept with the mismatch still flagged. With
+  zero inputs it is `ResolveBound`. [UA registration]
+- `core`: `ReasonRegistrationMismatch` (`registration_mismatch`),
+  judged; `Identification.Registration` and
+  `Identification.IntentRegistration`, optional (`omitempty`), so a
+  block without them encodes as before;
+  `Identification.RegistrationCompared()`, both present. [UA registration]
+- `alerting`: after a registration mismatch, a sample that compares no
+  UA registration (none declared, or no intent registration) neither
+  raises nor clears `identification_mismatch`; the identity stays
+  fresh, and the alert clears once a declared registration matches the
+  intent's, or the flight ends (`Drop`). Counted as
+  `CounterRegistrationNotCompared` (`registration_not_compared`). An
+  operator mismatch is not held (owner decision 2026-10-23).
+  [UA registration]
+- vectors: alert_lifecycle.json (spec 04 section 3.2 errata 2026-10-23): three new cases, owner ussp,
+  `registration-mismatch-held-while-none-declared`,
+  `registration-mismatch-held-without-an-intent-registration` and their
+  twin `registration-mismatch-clears-when-the-registration-matches`.
+  [UA registration]
+- vectors: identification_status.json (spec 04 section 3.2 errata 2026-10-22; Implementing Regulation (EU) 2021/664 Annex IV item 10): ten new `bound` cases (45 to 54) with the inputs
+  `declared_registration` and `intent_registration`: agrees, agrees
+  ignoring case and spaces, mismatch, mismatch not yet projected,
+  mismatch under a suspended UAS and not in the registry (reason kept,
+  mismatch flagged), a Kelvin-sign look-alike, declared without an
+  intent registration, the intent's without a declared one, and a blank
+  declared one; the agreeing cases carry the intent's registration
+  (errata 2026-10-23). The vector test also checks that a bound case
+  without them gives `ResolveBound`'s answer. [UA registration]
 
 ## [1.11.0] (ED-318 uom spelling)
 

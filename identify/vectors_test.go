@@ -2,6 +2,7 @@ package identify_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -61,6 +62,10 @@ type vecIdentInput struct {
 	RegistryOverride *vecRegistry `json:"registry_override"`
 	RemoteID         *vecRemoteID `json:"remote_id"`
 	DroneID          *string      `json:"drone_id"`
+	// DeclaredRegistration and IntentRegistration are a bound case's UA
+	// registrations (04 §3.2 errata 2026-10-22).
+	DeclaredRegistration *string `json:"declared_registration"`
+	IntentRegistration   *string `json:"intent_registration"`
 }
 
 type vecIdentExpected struct {
@@ -71,6 +76,8 @@ type vecIdentExpected struct {
 	Mismatch              bool    `json:"mismatch"`
 	RegisteredOperatorReg *string `json:"registered_operator_reg"`
 	DroneID               *string `json:"drone_id"`
+	Registration          *string `json:"registration"`
+	IntentRegistration    *string `json:"intent_registration"`
 }
 
 func TestVectorsIdentificationStatus(t *testing.T) {
@@ -118,7 +125,15 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 			if in.DroneID == nil {
 				t.Fatal("bound case without drone_id")
 			}
-			got = identify.ResolveBound(reg, *in.DroneID)
+			got = identify.ResolveBoundWith(reg, *in.DroneID, identify.BoundInputs{
+				DeclaredRegistration: in.DeclaredRegistration, IntentRegistration: in.IntentRegistration,
+			})
+			if in.DeclaredRegistration == nil && in.IntentRegistration == nil {
+				// With zero inputs ResolveBoundWith is ResolveBound.
+				if plain := identify.ResolveBound(reg, *in.DroneID); !reflect.DeepEqual(plain, got) {
+					t.Errorf("ResolveBound %+v, ResolveBoundWith with no inputs %+v", plain, got)
+				}
+			}
 			wantBasis = core.BasisAuthenticated
 		case "serial_conflict":
 			if in.Serial == nil {
@@ -146,11 +161,13 @@ func TestVectorsIdentificationStatus(t *testing.T) {
 		}
 		vectors.EqualStrPtr(t, "registered_operator_reg", got.RegisteredOperatorReg, exp.RegisteredOperatorReg)
 		vectors.EqualStrPtr(t, "drone_id", got.RegistryUASID, exp.DroneID)
+		vectors.EqualStrPtr(t, "registration", got.Registration, exp.Registration)
+		vectors.EqualStrPtr(t, "intent_registration", got.IntentRegistration, exp.IntentRegistration)
 		if got.Basis != wantBasis {
 			t.Errorf("basis %q, want %q", got.Basis, wantBasis)
 		}
 	})
-	want := map[string]int{"broadcast": 29, "remote_id_block": 6, "bound": 7, "serial_conflict": 1, "details_unavailable": 1}
+	want := map[string]int{"broadcast": 29, "remote_id_block": 6, "bound": 17, "serial_conflict": 1, "details_unavailable": 1}
 	for k, n := range want {
 		if ran[k] != n {
 			t.Errorf("kind %s: ran %d cases, want %d", k, ran[k], n)
