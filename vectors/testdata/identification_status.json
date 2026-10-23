@@ -1,5 +1,5 @@
 {
- "description": "Network identification (U-02): every track resolved against the registry to registered, suspended, unknown_operator or unidentified, with a stable reason code and a mismatch flag. fixtures.registry is the projection every case reads unless the case gives input.registry_override. input.kind: 'broadcast' (serial + operator ID), 'remote_id_block' (a direct Remote ID observation's identity), 'bound' (a track whose aircraft an authenticated binding names), 'serial_conflict', 'details_unavailable' (a Display Provider flight whose Service Provider details have not been fetched: nothing to resolve, operator_reg as given). An identification alert is raised for statuses {unidentified, unknown_operator} inside PROHIBITED or REQ_AUTHORISATION zones when the identification is judged (details_unavailable is not, spec 04 section 3.2); a mismatch raises identification_mismatch anywhere.",
+ "description": "Network identification (U-02): every track resolved against the registry to registered, suspended, unknown_operator or unidentified, with a stable reason code and a mismatch flag. fixtures.registry is the projection every case reads unless the case gives input.registry_override. input.kind: 'broadcast' (serial + operator ID), 'remote_id_block' (a direct Remote ID observation's identity), 'bound' (a track whose aircraft an authenticated binding names; it may give declared_registration, the UA registration its telemetry declares, and intent_registration, its authorised intent's, and its expected value then gives registration and intent_registration, spec 04 section 3.2 errata 2026-10-22), 'serial_conflict', 'details_unavailable' (a Display Provider flight whose Service Provider details have not been fetched: nothing to resolve, operator_reg as given). An identification alert is raised for statuses {unidentified, unknown_operator} inside PROHIBITED or REQ_AUTHORISATION zones when the identification is judged (details_unavailable is not, spec 04 section 3.2); a mismatch raises identification_mismatch anywhere.",
  "source": [
   "utm gateway/tests/test_identification.py",
   "utm gateway/identification.py",
@@ -1162,6 +1162,266 @@
    },
    "why": "Bound, but the aircraft's owner is not in the projection: the binding proves which aircraft it is, not that its owner is in good standing. As for a broadcast (owner-not-in-projection): unknown_operator, owner_unknown.",
    "decision": "A bound aircraft whose owner is missing resolves owner_unknown, as a broadcast does (uspace-core PR #9 review). utm said registered."
+  },
+  {
+   "name": "bound-registration-agrees",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": "GEO-UA-000123",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "session_binding",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": "GEO-UA-000123",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "The telemetry declares the authorised intent's UA registration: recorded as declared, no mismatch, the reason unchanged.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-agrees-ignoring-case-and-spaces",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": " geo-ua-000123 ",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "session_binding",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": "geo-ua-000123",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "Registrations compare trimmed and case-insensitively, as operator numbers do (U-01); the declared value is recorded trimmed, case kept.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-mismatch",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "registration_mismatch",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": true,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "The telemetry declares another registration than the authorised intent's: mismatch, registered, reason registration_mismatch, both values reported. The intent's is the one served; nothing is silently replaced.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-mismatch-not-yet-projected",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-000000000063",
+    "declared_registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "registration_mismatch",
+    "serial": null,
+    "operator_reg": null,
+    "mismatch": true,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-000000000063",
+    "registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "Bound, not yet projected (registered on the binding): a registration disagreement is still reported.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-mismatch-under-suspended-uas",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000b",
+    "declared_registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "suspended",
+    "reason": "uas_suspended",
+    "serial": "1581F5FKD229400B",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": true,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000b",
+    "registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "A standing problem outranks the registration: status suspended, reason uas_suspended, and the mismatch is still flagged with both values (as suspended-outranks-operator-id-mismatch-still-flagged).",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-mismatch-not-in-registry",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-000000000011",
+    "declared_registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "unknown_operator",
+    "reason": "not_in_registry",
+    "serial": "SN-ORPHAN",
+    "operator_reg": null,
+    "mismatch": true,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-000000000011",
+    "registration": "GEO-UA-000999",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "why": "Bound but not in the registry: unknown_operator, not_in_registry kept, the mismatch still flagged.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-look-alike-is-a-mismatch",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": "GEO-UA-K00123",
+    "intent_registration": "GEO-UA-K00123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "registration_mismatch",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": true,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": "GEO-UA-K00123",
+    "intent_registration": "GEO-UA-K00123"
+   },
+   "why": "Only ASCII letters fold (LESSONS G-12): the Kelvin sign is not K, so this is another registration and a mismatch.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-declared-without-intent",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": "GEO-UA-000999",
+    "intent_registration": null
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "session_binding",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": "GEO-UA-000999",
+    "intent_registration": null
+   },
+   "why": "A registration declared with no intent registration to compare is recorded, judged against nothing: no mismatch. It is never a source of the served registration.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-intent-without-declared",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": null,
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "session_binding",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": null,
+    "intent_registration": null
+   },
+   "why": "Telemetry that declares no registration does not disagree with the intent: no mismatch, nothing recorded.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
+  },
+  {
+   "name": "bound-registration-blank-declared-is-absent",
+   "owner": [
+    "ussp"
+   ],
+   "input": {
+    "kind": "bound",
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "declared_registration": "   ",
+    "intent_registration": "GEO-UA-000123"
+   },
+   "expected": {
+    "status": "registered",
+    "reason": "session_binding",
+    "serial": "1581F5FKD229400A",
+    "operator_reg": "GEOabcd1234efgh",
+    "mismatch": false,
+    "registered_operator_reg": null,
+    "drone_id": "00000000-0000-0000-0000-00000000000a",
+    "registration": null,
+    "intent_registration": null
+   },
+   "why": "A blank declared registration is no registration: no mismatch.",
+   "source": "spec 04 section 3.2 errata 2026-10-22",
+   "decision": "Spec 04 section 3.2 calls an authenticated binding 'session_binding'; utm's relay binding is one (uspace-core PR #9, PLAN section 11 gap 5). The authorised intent is the only source of a flight's UA registration; one its telemetry declares only validates against it, and a disagreement is a mismatch reported through identification, never silently replaced (spec 04 section 3.2 errata 2026-10-22, owner decision 2026-10-22 on uspace-ussp PLAN section 15 Q41). utm had no UA registration."
   },
   {
    "name": "serial-conflict",

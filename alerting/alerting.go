@@ -131,6 +131,11 @@ const (
 	// with their default (a NaN, infinite or negative time, an unknown
 	// severity) or found unusable (a cpa.Policy Evaluate refuses).
 	CounterConfigInvalid = "config_invalid"
+	// CounterRegistrationNotCompared counts samples, after a registration
+	// mismatch, that compared no UA registration (none declared, or no
+	// intent registration): they neither raised nor cleared
+	// identification_mismatch (04 §3.2 errata 2026-10-23).
+	CounterRegistrationNotCompared = "registration_not_compared"
 )
 
 // Config holds the monitor's thresholds; they are data (INV-03). Start

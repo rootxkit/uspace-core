@@ -62,6 +62,13 @@
 // owner_unknown: a binding proves identity, not standing. A nil Lookup is Unavailable (registry_unavailable), for a
 // bound track too: a session binding proves who the aircraft is, not that
 // its registration is valid.
+// ResolveBoundWith adds the UA registration (04 §3.2 errata 2026-10-22,
+// 2026-10-23): the authorised intent's is the only source of the
+// registration served, the one the telemetry declares only validates
+// against it. When both are present it carries both (they were
+// compared); when they differ it sets mismatch and says
+// registration_mismatch in place of session_binding; the status stays
+// registered, and any other reason is kept with the mismatch flagged.
 // DetailsUnavailable is an F3411 network flight whose Service Provider
 // details were not fetched: unidentified / details_unavailable, never
 // no_serial, which means the source was asked. It and registry_unavailable
