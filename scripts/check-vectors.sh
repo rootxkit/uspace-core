@@ -23,16 +23,21 @@ for lf in $local_files; do excludes+=("--exclude=$lf"); done
 # through the environment: never in the remote URL, the command line or
 # the clone's .git/config, so neither git's messages nor a process
 # listing carry it. Whatever git prints is redacted anyway.
+# uspace-lab is private (since 2026-10-24), so without a token the fetch
+# fails. The token is CROSS_REPO_READ_TOKEN (the CI secret every rootxkit
+# repository reads its siblings with); LAB_READ_TOKEN, the older name, is
+# still read when that is unset.
+token="${CROSS_REPO_READ_TOKEN:-${LAB_READ_TOKEN:-}}"
 basic=""
-if [[ -n "${LAB_READ_TOKEN:-}" ]]; then
-  basic="$(printf 'x-access-token:%s' "$LAB_READ_TOKEN" | base64 | tr -d '\r\n')"
+if [[ -n "$token" ]]; then
+  basic="$(printf 'x-access-token:%s' "$token" | base64 | tr -d '\r\n')"
   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.${repo}.extraheader" \
     GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
 fi
 redact() {
   local s="$1"
-  if [[ -n "${LAB_READ_TOKEN:-}" ]]; then
-    s="${s//"$LAB_READ_TOKEN"/<redacted>}"
+  if [[ -n "$token" ]]; then
+    s="${s//"$token"/<redacted>}"
     s="${s//"$basic"/<redacted>}"
   fi
   printf '%s' "$s"
@@ -46,6 +51,12 @@ if ! ( git -C "$tmp" init -q && git -C "$tmp" remote add origin "$repo" \
        && git -C "$tmp" checkout -q FETCH_HEAD -- "$path" ) 2>"$tmp/err"; then
   err="$(redact "$(tr '\n' ' ' < "$tmp/err")")"
   echo "unverified: could not fetch uspace-lab@${commit:0:12} (${err:0:200})"
+  if [[ -z "$token" ]]; then
+    echo "unverified: no CROSS_REPO_READ_TOKEN; uspace-lab is private and cannot be read without it"
+    if [[ "${REQUIRE_LAB:-0}" == "1" && "${GITHUB_ACTIONS:-}" == "true" ]]; then
+      echo "::error title=CROSS_REPO_READ_TOKEN is not set::the vendored vectors must be compared with the private uspace-lab; add the repository secret CROSS_REPO_READ_TOKEN (fine-grained token, Contents: read)"
+    fi
+  fi
   if [[ "${REQUIRE_LAB:-0}" == "1" ]]; then exit 1; fi
   exit 0
 fi

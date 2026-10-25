@@ -177,8 +177,10 @@ jobs:
         # Offline sha256 check always; the online diff against uspace-lab at
         # the pinned commit is required on main and best-effort elsewhere
         # (a fork without the token reports "unverified", never "ok").
+        # uspace-lab is private: the read token is the repository secret
+        # CROSS_REPO_READ_TOKEN; on main its absence is an error naming it.
         env:
-          LAB_READ_TOKEN: ${{ secrets.LAB_READ_TOKEN }}
+          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           REQUIRE_LAB: ${{ github.ref == 'refs/heads/main' && '1' || '0' }}
         run: scripts/check-vectors.sh
       - name: run every vector test
@@ -338,13 +340,30 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: read access to the private rootxkit repositories
+        # uspace-lab (the release gate's vector diff) and this module
+        # itself (consumer-check.sh fetches the tag with GOPRIVATE, straight
+        # from git) are private since 2026-10-24. From here on git reaches
+        # https://github.com/rootxkit/ with the read token as an HTTP
+        # header (masked, never in a URL or on a command line); without
+        # the secret the tag stops here, naming it.
+        env:
+          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+        run: |
+          if [ -z "$CROSS_REPO_READ_TOKEN" ]; then
+            echo "::error title=CROSS_REPO_READ_TOKEN is not set::the release gate and consumer-check.sh read private rootxkit repositories; add the repository secret CROSS_REPO_READ_TOKEN (fine-grained token, Contents: read)"
+            exit 1
+          fi
+          b64="$(printf 'x-access-token:%s' "$CROSS_REPO_READ_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$b64"
+          printf '[http "https://github.com/rootxkit/"]\n\textraheader = AUTHORIZATION: basic %s\n' "$b64" >> "$HOME/.gitconfig"
       - name: release gate
         # The tag matches the top CHANGELOG heading, nothing is left under
         # Unreleased, the module path fits the major, local_files is empty
         # from v1, every manifest file has a vector test, and the vendored
         # vectors match the lab pin.
         env:
-          LAB_READ_TOKEN: ${{ secrets.LAB_READ_TOKEN }}
+          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
         run: scripts/release-check.sh "$GITHUB_REF_NAME"
       - name: the published module runs its vectors from a consumer
         run: scripts/consumer-check.sh "$GITHUB_REF_NAME"

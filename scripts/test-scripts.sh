@@ -93,7 +93,7 @@ WRAP
 
 runvec() { # runvec DIR [ENV...]: run check-vectors.sh in DIR with ENV
   local d="$1"; shift
-  (cd "$d" && env PATH="$d/bin:$PATH" "$@" bash scripts/check-vectors.sh 2>&1)
+  (cd "$d" && env -u CROSS_REPO_READ_TOKEN -u LAB_READ_TOKEN -u GITHUB_ACTIONS PATH="$d/bin:$PATH" "$@" bash scripts/check-vectors.sh 2>&1)
 }
 
 r="$(vecfix vec-token)"; recgit "$r" real
@@ -104,6 +104,17 @@ absent vec-token-not-in-argv "$token" "$(grep '^argv:' "$r/git.log")"
 check vec-token-as-header pass 0 "config: http.https://127.0.0.1:9/lab.git.extraheader=AUTHORIZATION: basic $basic" "$(cat "$r/git.log")"
 check vec-clone-config-logged pass 0 "localconfig: [remote \"origin\"]" "$(cat "$r/git.log")"
 absent vec-token-not-in-clone-config "$token" "$(grep '^localconfig:' "$r/git.log")"
+
+r="$(vecfix vec-cross-token)"; recgit "$r" real
+rc=0; out="$(runvec "$r" CROSS_REPO_READ_TOKEN="$token" LAB_READ_TOKEN=tok-OLD-name)" || rc=$?
+check vec-cross-token-unreachable pass "$rc" "unverified: could not fetch" "$out"
+absent vec-cross-token-not-printed "$token" "$out"
+check vec-cross-token-as-header pass 0 "config: http.https://127.0.0.1:9/lab.git.extraheader=AUTHORIZATION: basic $basic" "$(cat "$r/git.log")"
+absent vec-cross-token-no-hint "no CROSS_REPO_READ_TOKEN" "$out"
+
+r="$(vecfix vec-no-token-ci)"; recgit "$r" real
+rc=0; out="$(runvec "$r" REQUIRE_LAB=1 GITHUB_ACTIONS=true)" || rc=$?
+check vec-no-token-ci fail "$rc" "::error title=CROSS_REPO_READ_TOKEN is not set::" "$out"
 
 r="$(vecfix vec-token-required)"; recgit "$r" real
 rc=0; out="$(runvec "$r" LAB_READ_TOKEN="$token" REQUIRE_LAB=1)" || rc=$?
