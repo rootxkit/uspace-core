@@ -361,9 +361,10 @@ jobs:
         # The tag matches the top CHANGELOG heading, nothing is left under
         # Unreleased, the module path fits the major, local_files is empty
         # from v1, every manifest file has a vector test, and the vendored
-        # vectors match the lab pin.
-        env:
-          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+        # vectors match the lab pin. No token here: the step above already
+        # gives git the read header for https://github.com/rootxkit/, and
+        # check-vectors.sh adding its own as well sent two Authorization
+        # headers, which GitHub refuses with a 400 (the v1.14.0 tag run).
         run: scripts/release-check.sh "$GITHUB_REF_NAME"
       - name: the published module runs its vectors from a consumer
         run: scripts/consumer-check.sh "$GITHUB_REF_NAME"
