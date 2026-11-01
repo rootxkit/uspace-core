@@ -16,6 +16,18 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+### Added
+
+- `timeplace.PlaceAnchored`, `Anchor`, `AnchorPolicy`,
+  `DefaultAnchorPolicy`, `Anchored` and `AnchorNote`: the batch rule
+  plus a per-source anchor, so input a stalled reader drains late is
+  placed by the source's own time base and a row placed more than
+  `BacklogAfterS` behind its read is flagged backlog (T-04, T-11,
+  SC-15). The semantics are the USSP operator-telemetry ingest's
+  anchor; the authority's Remote ID ingest needs them (lab SC-15 found
+  it stamping a late batch with its read time). Additive: no existing
+  function or vector changes. [SC-15]
+
 ### Changed
 
 - vectors: the pin moves from `uspace-lab@f5e2a53` (the first commit of
