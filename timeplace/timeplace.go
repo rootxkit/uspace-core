@@ -281,3 +281,179 @@ func Times(p Placement, rxTS time.Time, backlog bool) core.Times {
 	}
 	return t
 }
+
+// AnchorPolicy holds the bounds of PlaceAnchored (T-04, T-11).
+//
+// The zero value is not a usable policy: with no backlog bound every row
+// placed behind its read is history. Start from DefaultAnchorPolicy.
+type AnchorPolicy struct {
+	// BacklogAfterS: a row placed further than this behind the read of
+	// its delivery is history (backlog, T-04), even when the source did
+	// not say so (T-11's backstop). It is also how late, by the anchor, a
+	// delivery may be and still relearn the anchor. Default 10 s.
+	BacklogAfterS float64
+	// AnchorMaxAgeS is how long the clock relation learnt from a
+	// source's timely deliveries places its later deliveries before it
+	// may be relearnt. Default 60 s.
+	AnchorMaxAgeS float64
+	// ToleranceS is how far apart two read offsets (read time - source
+	// time of the newest row) may be and still be one offset: a source
+	// whose deliveries keep one offset that the anchor calls late has
+	// changed its clock, not stalled. Default 1 s.
+	ToleranceS float64
+}
+
+// DefaultAnchorPolicy returns the defaults of the USSP's operator
+// telemetry ingest: 10 s backlog bound, 60 s anchor age, 1 s tolerance.
+func DefaultAnchorPolicy() AnchorPolicy {
+	return AnchorPolicy{BacklogAfterS: 10, AnchorMaxAgeS: 60, ToleranceS: 1}
+}
+
+// Anchor is the clock relation of one source's timely deliveries: the
+// source time of its newest row, where that row was placed on our
+// clock, and when (read time) the relation was learnt. A nil *Anchor is
+// none learnt yet. The caller keeps one per source (one receiver, one
+// client) and replaces it with Anchored.Next after every delivery; an
+// Anchor is never changed in place, so it is safe to share.
+type Anchor struct {
+	ts, placed, learnt time.Time
+	// candOff is the read offset (read - newest source time) the
+	// source's unflagged deliveries have kept, within the tolerance,
+	// since candSince while the anchor placed them more than the backlog
+	// bound behind their read. Kept for AnchorMaxAgeS, it replaces the
+	// anchor (a clock that stepped back).
+	candOff   time.Duration
+	candSince time.Time
+	hasCand   bool
+}
+
+// AnchorNote says what a delivery did to the anchor besides moving it
+// forward; the caller counts it. Empty when nothing of note happened.
+type AnchorNote string
+
+const (
+	// AnchorNoteNone is a delivery that did nothing of note.
+	AnchorNoteNone AnchorNote = ""
+	// AnchorNoteKept is an anchor past AnchorMaxAgeS that was not
+	// relearnt, because the delivery was later by it than the backlog
+	// bound: that may be late input, not a clock change.
+	AnchorNoteKept AnchorNote = "anchor_kept"
+	// AnchorNoteRelearnt is an anchor replaced by a source that kept one
+	// read offset over AnchorMaxAgeS while the anchor called it late: a
+	// clock change, since a stall reads many deliveries at one read time.
+	AnchorNoteRelearnt AnchorNote = "anchor_relearnt"
+)
+
+// Anchored is the placement of one delivery by PlaceAnchored.
+type Anchored struct {
+	// CapturedAt[i] is where row i sits on our clock.
+	CapturedAt []time.Time
+	// Backlog[i] is true when row i is history: the delivery was flagged,
+	// or the row is placed more than BacklogAfterS behind the read.
+	Backlog []bool
+	// ByAnchor counts the rows the anchor placed earlier than the batch
+	// rule would have (input read late).
+	ByAnchor int
+	// Clamped counts PlaceBatch's spacing clamps.
+	Clamped int
+	// Note says what happened to the anchor.
+	Note AnchorNote
+	// Next is the source's anchor after this delivery.
+	Next *Anchor
+}
+
+// PlaceAnchored places the rows of one delivery of one source that this
+// system read at readAt, whose source times are ts (the source's own
+// clock), so that input read late (a stalled reader, input held in the
+// operating system or a proxy) is placed by the source's own time base,
+// not by the read (T-11, SC-15), and is flagged backlog (T-04). flagged
+// is the source's own word that the delivery is history (a replay); a
+// flagged delivery never teaches the anchor. The rules are the USSP
+// operator-telemetry ingest's:
+//
+//  1. the batch rule, PlaceBatch(readAt, ts, maxSpacing): readAt - (newest
+//     ts - its ts), so the source's clock error cancels within the
+//     delivery;
+//  2. the anchor, the placement of the source's newest unflagged row: a
+//     row is never placed later than anchor.placed + (ts - anchor.ts).
+//     The anchor carries the smallest delay seen, so the rule only ever
+//     moves a row earlier;
+//  3. AnchorMaxAgeS after it was learnt from a row it did not move, the
+//     anchor may be relearnt, which follows a source clock that drifted
+//     or stepped; it is not relearnt from a delivery it places more than
+//     BacklogAfterS behind its read, because that may be late input
+//     (AnchorNoteKept). Unflagged deliveries the anchor places that late
+//     but that keep one read offset (within ToleranceS) for AnchorMaxAgeS
+//     of reads are a clock change, not a stall, and replace the anchor
+//     (AnchorNoteRelearnt);
+//  4. backlog: flagged, or placed more than BacklogAfterS behind readAt.
+//
+// A delivery is judged by its newest row; the others ride on it by their
+// spacing. It never fails: an empty delivery returns the anchor
+// unchanged and no rows. It is pure and safe for concurrent use.
+func PlaceAnchored(readAt time.Time, ts []time.Time, flagged bool, maxSpacing time.Duration, a *Anchor, pol AnchorPolicy) Anchored {
+	out := Anchored{Next: a}
+	if len(ts) == 0 {
+		return out
+	}
+	out.CapturedAt, out.Clamped = PlaceBatch(readAt, ts, maxSpacing)
+	newest, newestTS := 0, ts[0]
+	for i, t := range ts {
+		if t.After(newestTS) {
+			newest, newestTS = i, t
+		}
+	}
+	backlogAfter, maxAge, tol := seconds(pol.BacklogAfterS), seconds(pol.AnchorMaxAgeS), seconds(pol.ToleranceS)
+	byAnchor := func(a *Anchor, t time.Time) time.Time { return a.placed.Add(t.Sub(a.ts)) }
+	if !flagged && a != nil {
+		c := *a // the caller's anchor is replaced, never changed in place
+		a = &c
+		if readAt.Sub(byAnchor(a, newestTS)) <= backlogAfter {
+			a.hasCand = false // the anchor agrees with the read
+		} else {
+			off := readAt.Sub(newestTS)
+			if d := off - a.candOff; !a.hasCand || d > tol || d < -tol {
+				a.candOff, a.candSince, a.hasCand = off, readAt, true
+			} else if readAt.Sub(a.candSince) >= maxAge {
+				a, out.Note = nil, AnchorNoteRelearnt
+			}
+		}
+	}
+	if !flagged && a != nil && readAt.Sub(a.learnt) > maxAge {
+		// Relearn unless the old relation says this delivery is late.
+		if readAt.Sub(byAnchor(a, newestTS)) > backlogAfter {
+			out.Note = AnchorNoteKept
+		} else {
+			a = nil
+		}
+	}
+	out.Backlog = make([]bool, len(ts))
+	moved := false
+	for i := range ts {
+		if a != nil {
+			if t := byAnchor(a, ts[i]); t.Before(out.CapturedAt[i]) {
+				out.CapturedAt[i] = t
+				out.ByAnchor++
+				if i == newest {
+					moved = true
+				}
+			}
+		}
+		out.Backlog[i] = flagged || readAt.Sub(out.CapturedAt[i]) > backlogAfter
+	}
+	out.Next = a
+	if flagged {
+		return out
+	}
+	if a == nil || !newestTS.Before(a.ts) {
+		n := &Anchor{ts: newestTS, placed: out.CapturedAt[newest], learnt: readAt}
+		if a != nil {
+			n.candOff, n.candSince, n.hasCand = a.candOff, a.candSince, a.hasCand
+			if moved {
+				n.learnt = a.learnt // carried: the relation is the old one
+			}
+		}
+		out.Next = n
+	}
+	return out
+}

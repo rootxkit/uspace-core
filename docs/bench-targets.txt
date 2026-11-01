@@ -15,6 +15,7 @@ BenchmarkTileElevation      300
 BenchmarkUndulation         300
 BenchmarkPlaceBroadcast     500
 BenchmarkPlaceNetwork       500
+BenchmarkPlaceAnchored      1000
 BenchmarkTrackerTake        3000
 BenchmarkSelectAltitude     200
 BenchmarkApplies            1000

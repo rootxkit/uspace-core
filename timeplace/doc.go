@@ -1,5 +1,5 @@
 // Package timeplace places a record in time on the ingest clock (LESSONS
-// T-01, T-02, T-07, T-08, T-12).
+// T-01, T-02, T-04, T-07, T-08, T-11, T-12).
 //
 // Every record carries three times (core.Times): ts on the source's
 // clock, rx_ts on ours, and captured_at, where the record sits on our
@@ -53,6 +53,22 @@
 // PlaceBatch places each row of a batch at rx_ts - (newest ts - its ts),
 // clamping a spacing that is negative or longer than the bound (120 s in
 // the lessons) and counting the clamps.
+//
+// # Input read late (T-04, T-11)
+//
+// A reader that stalls and then drains what waited for it (in the
+// operating system, a proxy or a queue) reads old input at once, and the
+// batch rule alone would stamp it with the read. PlaceAnchored is the
+// batch rule plus the anchor of the USSP's operator-telemetry ingest: the
+// placement of the source's newest unflagged row, carrying the smallest
+// delay seen, past which no later row is placed. A row is then placed by
+// the source's own time base, and a row placed more than BacklogAfterS
+// behind the read is backlog, as is every row of a delivery the source
+// flagged. AnchorMaxAgeS after it was learnt the anchor follows a drifted
+// or stepped source clock: a timely delivery relearns it, a delivery it
+// calls late keeps it (AnchorNoteKept), and one read offset kept over
+// AnchorMaxAgeS of reads replaces it (AnchorNoteRelearnt). The caller
+// keeps one Anchor per source; the function is pure.
 //
 // # Missing times (T-12)
 //
