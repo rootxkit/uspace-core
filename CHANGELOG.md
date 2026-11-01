@@ -16,6 +16,13 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.14.0] (SC-15 late placement)
+
+Minor to 1.13.0: `timeplace.PlaceAnchored` places input that a stalled
+reader drains late by the source's own time base and flags it backlog
+(T-04, T-11, SC-15). Additive: no existing function, behaviour or
+vector changes.
+
 ### Added
 
 - `timeplace.PlaceAnchored`, `Anchor`, `AnchorPolicy`,
