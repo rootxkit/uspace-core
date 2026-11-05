@@ -24,7 +24,8 @@ GOVULNCHECK_VERSION   ?= v1.8.0
 
 .PHONY: all build vet fmt fmt-check lint tools staticcheck test race cover vectors \
         check-vectors sync-vectors fuzz-smoke bench tidy secrets vulncheck geoid \
-        semver-gate release-gates script-tests consumer-check release-check ci clean
+        semver-gate release-gates script-tests consumer-check check-generated \
+        release-check ci clean
 
 all: ci
 
@@ -118,6 +119,11 @@ script-tests:
 # to fetch it from GitHub instead of replacing it with this checkout).
 consumer-check:
 	GO=$(GO) scripts/consumer-check.sh $(VERSION)
+
+# Regenerate the f3411 and f3548 types in a scratch copy and diff them
+# against the committed ones (needs the network; CI does not run it).
+check-generated:
+	GO=$(GO) scripts/check-generated.sh
 
 # What the tag job checks before a release: make release-check TAG=v1.0.0
 release-check:
