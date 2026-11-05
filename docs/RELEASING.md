@@ -236,6 +236,7 @@ checks, by their exact names:
 | `build, vet, fmt, lint` | ci | formatting, vet, staticcheck, golangci-lint, `go mod tidy` |
 | `test with the race detector` | ci | `go test -race -shuffle=on ./...` |
 | `knowledge vectors` | ci | every vector test, SHA256SUMS, the lab diff |
+| `knowledge vectors on linux/arm64` | ci | the vectors and grid loaders where the compiler fuses multiply-adds |
 | `fuzz smoke` | ci | every decoder's fuzz target |
 | `gitleaks` | ci | secrets (`06 §4`) |
 | `semver-gate` | semver-gate | the vector rule of `00 §6.3` |
@@ -255,6 +256,9 @@ Also set:
 Not required, on purpose:
 
 - `benchmarks (reported, not gated)`: noisy runners; design budgets.
+- `grid loaders on macos-latest` and `grid loaders on windows-latest`
+  (`grid loaders on ${{ matrix.os }}`): reported; the race job is the
+  gate, and these show which loader path ran on each platform.
 - `govulncheck`: it fails on a newly published advisory whatever the
   pull request changes; it still runs on every pull request and on
   `main`, and a finding is fixed in its own pull request.
