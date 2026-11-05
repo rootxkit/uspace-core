@@ -2,7 +2,7 @@
 // (knowledge/vectors/*.json, vendored at a pinned commit under testdata/)
 // and gives tests a strict decoder, owner filtering and tolerance helpers.
 //
-// The 16 files pin the safety behaviour of every judgement in this module
+// The 18 files pin the safety behaviour of every judgement in this module
 // (00 §6 hard rule). Each package runs its own file(s) in a *_test.go named
 // vectors_test.go; the manifest in manifest.go says which package owns
 // which file and how many cases it holds, and TestManifest fails when a
