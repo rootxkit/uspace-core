@@ -340,18 +340,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: read access to the private rootxkit repositories
-        # uspace-lab (the release gate's vector diff) and this module
-        # itself (consumer-check.sh fetches the tag with GOPRIVATE, straight
-        # from git) are private since 2026-10-24. From here on git reaches
-        # https://github.com/rootxkit/ with the read token as an HTTP
-        # header (masked, never in a URL or on a command line); without
-        # the secret the tag stops here, naming it.
+      - name: read access to the private uspace-lab
+        # uspace-lab (the release gate's vector diff) is private. From here
+        # on git reaches https://github.com/rootxkit/ with the read token
+        # as an HTTP header (masked, never in a URL or on a command line);
+        # without the secret the tag stops here, naming it. This module is
+        # public; consumer-check.sh sets GOPRIVATE only so the tag is
+        # fetched straight from git, not from a proxy that may not have it.
         env:
           CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
         run: |
           if [ -z "$CROSS_REPO_READ_TOKEN" ]; then
-            echo "::error title=CROSS_REPO_READ_TOKEN is not set::the release gate and consumer-check.sh read private rootxkit repositories; add the repository secret CROSS_REPO_READ_TOKEN (fine-grained token, Contents: read)"
+            echo "::error title=CROSS_REPO_READ_TOKEN is not set::the release gate reads the private uspace-lab; add the repository secret CROSS_REPO_READ_TOKEN (fine-grained token, Contents: read)"
             exit 1
           fi
           b64="$(printf 'x-access-token:%s' "$CROSS_REPO_READ_TOKEN" | base64 | tr -d '\n')"
