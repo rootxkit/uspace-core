@@ -93,9 +93,9 @@ vector cases; `ResolveBound` and every existing case answer as before.
 The owner's follow-up of 2026-10-23 (review of this release's pull
 request) is in it: an omission of the registration never clears a
 registration mismatch. The knowledge vectors are re-synced from
-`uspace-lab@450daf4`, the head of rootxkit/uspace-lab#67 (on lab main's
-`b707dad`, the merge of lab #64), until it merges: new cases only
-against this module's main, no gated header key changed, so the semver
+`uspace-lab@450daf4`, a lab change not yet on lab main when this was
+released: new cases only against this module's main, no gated header
+key changed, so the semver
 gate classifies the change as additive. The pin moves from
 `uspace-lab@71c5c18`; `utm_commit` stays `484cd22`. 707 cases in all
 (694 before).
