@@ -16,6 +16,8 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+- Licensed under Apache-2.0 (`LICENSE`); no code change.
+
 ## [1.14.0] (SC-15 late placement)
 
 Minor to 1.13.0: `timeplace.PlaceAnchored` places input that a stalled
