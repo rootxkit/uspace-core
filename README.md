@@ -25,3 +25,9 @@ make fuzz-smoke bench  # decoders fuzzed; hot functions timed
 ```
 
 Go 1.27. No cgo. Module path `github.com/rootxkit/uspace-core`.
+
+## Licence
+
+Apache License 2.0 ([`LICENSE`](LICENSE)), copyright 2026 chikox.
+The published ED-318 examples in `ed318/testdata/published/` keep their
+own MIT licence ([`LICENSE-ED-318`](ed318/testdata/published/LICENSE-ED-318)).
