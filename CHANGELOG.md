@@ -18,106 +18,105 @@ for a behaviour change the line sits under the heading of the next major
 
 - Licensed under Apache-2.0 (`LICENSE`); no code change.
 
-Three safety behaviours from the 2026-11-12 review. The two under
-Changed alter what a judgement returns for some input with no
-signature change, which `docs/RELEASING.md` section 1 classes as a
-major even though no vector case changed. The third, `GroundTrust`,
-is additive and off by default, because switching it on by default
-changes the expected result of an existing vector case; it is listed
-under Planned for 2.0.0. No vector file changed and no case was added:
-the lab cases that pin the new behaviours are still owed
-(`docs/RELEASING.md` section 3.1). Each entry says what a consumer
-must do.
+Three safety behaviours from the 2026-11-12 review, each additive and
+off by default: no existing function, default or judgement changes, and
+no vector file or vector test changes, so this is a minor
+(`docs/RELEASING.md` section 1). A system gets none of the three until
+it opts in. The lab cases that pin them are owed with the default
+changes (Planned for 2.0.0).
 
-### Changed
+### Consumers must
 
-- `rid.DefaultSettings().MaxGapS` is 9 s, from 3 s. The 3 s silence
-  bound was below the 4 s `IdentifyWithinS` hold, and the hold restarts
-  when a silent address is forgotten, so a transmitter heard less often
-  than every 3 s was never published, identified or not: twenty
-  Locations 3.5 s apart gave no observation, and with one message per
-  frame (Bluetooth 4 legacy advertising) the Basic ID was forgotten
-  before the next Location arrived. 9 s is three of the standard's 3 s
-  static periods, at or above the hold and below `IdentityTTLS` (15 s),
-  so a silence still forgets an identity before its TTL would. A
-  transmitter heard at least once every 9 s is now published; one heard
-  less often is still not, and is counted (below). A Location completed
-  by a later Basic ID can now be up to 9 s old instead of 3 s; its
-  `Observation.RxTS` is the receive time of the frame that carried the
-  Location, as before. The known limit I-07 (another aircraft taking
-  over an address within `MaxGapS` joins the old serial until its own
-  Basic ID arrives) widens from 3 s to 9 s, still bounded by
-  `IdentityTTLS`. `rid_identity.json` is unchanged and passes under
-  both values; its vector test runs it under the file's own 3 s.
-  **Consumers:** one that builds its tracker from `DefaultSettings()`
-  or `Settings{}` gets the new bound on upgrade; one that sets
-  `MaxGapS` itself (3 s copied into its configuration) keeps the defect
-  until it raises the value: call `Settings.Validate` at start-up and
-  refuse to start on an error. Place observations by `RxTS`, never by
-  the time `Take` returned them. [review 2026-11-12]
-- `zones.JudgeVertical` raises a warning, instead of returning
-  `NotEvaluated`, for an aircraft with no usable altitude (nil, not
-  finite, or `AltSource` none) inside a PROHIBITED or REQ_AUTHORIZATION
-  zone that has a limit needing a height. The aircraft is horizontally
-  inside a restricted volume and possibly inside it; until now that was
-  silent (`zone_checks_not_evaluated`), while an unknown ground or
-  geoid for the same zone warned (S-37), so knowing less said less. A
-  missing geoid, which leaves `rid.SelectAltitude` with no altitude, or
-  a broadcast altitude of "unknown" switched every such zone off for
-  that aircraft. The raise is told apart from a judged incursion three
-  ways: its severity is warning, never the zone's critical;
-  `Result.AltitudeUnknown` and `Detail.AltitudeUnknown`
-  (`altitude_unknown`) are true with `vertical_known` false; and
-  `Result.Reasons` is `no_altitude`. `LimitNotJudged`, `NotJudged` and
-  `zone_limits_not_judged` keep their meaning (a missing ground or
-  geoid) and are not set; the raise is counted as
-  `zone_altitude_unknown`. It applies to the two types that already
-  warn for an unjudged limit. CONDITIONAL and USPACE zones stay
-  `NotEvaluated` with `no_altitude`, as an unjudged limit leaves them
-  (a warning would exceed their severity at info), and so does a zone
-  whose type is not a `core.ZoneType`. A zone with no limit needing a
-  height, and the horizontal test, are unchanged: nothing is raised for
-  an aircraft outside the zone horizontally. In `alerting.Monitor` the
-  zone alert is raised as a warning whose detail carries
-  `altitude_unknown: true`, with `identification` beside it for an
-  unidentified aircraft in an incident zone (its detail carries the
-  flag too). A zone alert already active from a judgement that had an
-  altitude is held, as before, not downgraded: losing the altitude
-  never turns a critical into a warning. `zones_vertical.json` and
-  `alert_lifecycle.json` are unchanged and pass; no case covers this
-  input. **Consumers:** code that switches on `Result` must not read a
-  `Raise` with `AltitudeUnknown` as an incursion; render
-  `altitude_unknown` as "possibly inside, altitude unknown" in both
-  languages; expect new warning alerts (and `identification` alerts)
-  for aircraft without an altitude over restricted zones, most of all
-  where the geoid is missing; export `zone_altitude_unknown`, and note
-  that `zone_checks_not_evaluated` falls by the same amount.
-  [review 2026-11-12]
+Every system that runs a Remote ID tracker or an `alerting.Monitor`
+adds these three lines, and exports the four counters:
+
+```go
+tracker := rid.NewTracker(rid.RecommendedSettings())
+cfg.ZonePolicy.WarnAltitudeUnknown = true
+cfg.GroundTrust = alerting.DefaultGroundTrust()
+```
+
+- **Tracker.** A system that reads its `rid.Settings` from
+  configuration instead raises `MaxGapS` to 9 s there, calls
+  `Settings.Validate()` at start-up and refuses to start on an error.
+  It places observations by `Observation.RxTS`, never by the time
+  `Take` returned them: a Location completed by a later Basic ID can be
+  up to 9 s old. Export `held_forgotten`.
+- **Zones.** Render `altitude_unknown: true` on a zone or
+  identification alert as "possibly inside, altitude unknown" in both
+  languages; code that switches on `zones.Result` must not read a
+  `Raise` with `AltitudeUnknown` as an incursion. Expect new warning
+  (and `identification`) alerts for aircraft without an altitude over
+  restricted zones, most of all where the geoid is missing. Export
+  `zone_altitude_unknown`; `zone_checks_not_evaluated` falls by the
+  same amount.
+- **Ground.** Pass a known ground in `Track.Env` where there is a
+  terrain model and a velocity where the source has one: the bounds
+  compare nothing they are not given. Export
+  `ground_status_contradicted`, `ground_status_contradicted_speed` and
+  `ground_status_contradicted_height`.
 
 ### Added
 
-- `rid.Settings.Validate`: refuses, with a `*core.FieldError` naming
-  `MaxGapS`, settings whose `MaxGapS` is below `IdentifyWithinS` after
-  defaulting. `NewTracker` keeps the settings it is given (the vectors
-  pin 3 s and 4 s), so the caller validates. [review 2026-11-12]
+- `rid.RecommendedSettings()` (15 s, 9 s, 4 s, 50000) and
+  `rid.Settings.Validate()`. `DefaultSettings()` keeps `MaxGapS` 3 s,
+  below the 4 s `IdentifyWithinS` hold; the hold restarts when a silent
+  address is forgotten, so under the defaults a transmitter heard less
+  often than every 3 s is never published, identified or not: twenty
+  Locations 3.5 s apart give no observation, and with one message per
+  frame (Bluetooth 4 legacy advertising) the Basic ID is forgotten
+  before the next Location arrives. The recommended 9 s is three of the
+  standard's 3 s static periods, at or above the hold and below
+  `IdentityTTLS`, so a silence still forgets an identity before its TTL
+  would. Under it a transmitter heard at least once every 9 s is
+  published; one heard less often is still not, and is counted. The
+  known limit I-07 (another aircraft taking over an address within
+  `MaxGapS` joins the old serial until its own Basic ID arrives) widens
+  from 3 s to 9 s for a system that opts in, still bounded by
+  `IdentityTTLS`. `Validate` refuses, with a `*core.FieldError` naming
+  `MaxGapS`, a gap below the hold; `DefaultSettings()` fails it by
+  design until 2.0.0, which is how a system still on the defaults finds
+  out. `NewTracker` keeps the settings it is given. [review 2026-11-12]
 - `rid.CounterHeldForgotten` (`held_forgotten`): held Locations dropped
   unpublished because their address fell silent for longer than
   `MaxGapS`. Until now these were visible only as `silences`, which
-  counts every departure. **Consumers:** export it; a rate above zero
-  is aircraft heard and never shown. [review 2026-11-12]
-- `zones.Result.AltitudeUnknown`, `zones.Detail.AltitudeUnknown`
-  (`altitude_unknown`, omitted unless set) and
-  `zones.CounterZoneAltitudeUnknown` (`zone_altitude_unknown`), for the
-  raise above. [review 2026-11-12]
+  counts every departure. Counted under any settings; no observation
+  changes. [review 2026-11-12]
+- `zones.Policy.WarnAltitudeUnknown`, with `zones.Result.AltitudeUnknown`,
+  `zones.Detail.AltitudeUnknown` (`altitude_unknown`, omitted unless
+  set) and `zones.CounterZoneAltitudeUnknown`
+  (`zone_altitude_unknown`). Without the flag, `JudgeVertical` returns
+  `NotEvaluated` with `no_altitude`, as before, for an aircraft with no
+  usable altitude (nil, not finite, or `AltSource` none) inside a zone
+  that has a limit needing a height: silent, while an unknown ground or
+  geoid for the same zone warns (S-37), so a missing geoid, which
+  leaves `rid.SelectAltitude` with no altitude, or a broadcast altitude
+  of "unknown" switches every such zone off for that aircraft. With the
+  flag, a PROHIBITED or REQ_AUTHORIZATION zone raises instead, told
+  apart from a judged incursion three ways: the severity is warning,
+  never the zone's critical; `Result.AltitudeUnknown` and
+  `altitude_unknown` are true with `vertical_known` false; and
+  `Result.Reasons` is `no_altitude`. `LimitNotJudged`, `NotJudged` and
+  `zone_limits_not_judged` keep their meaning (a missing ground or
+  geoid) and are not set. CONDITIONAL and USPACE zones stay
+  `NotEvaluated`, as an unjudged limit leaves them (a warning would
+  exceed their severity at info), and so does a zone whose type is not
+  a `core.ZoneType`. Nothing is raised for an aircraft outside the zone
+  horizontally. `alerting.Monitor` takes the flag through
+  `Config.ZonePolicy`: the zone alert is raised as a warning carrying
+  `altitude_unknown: true`, with `identification` beside it for an
+  unidentified aircraft in an incident zone (its detail carries the
+  flag too), and a zone alert already active from a judgement that had
+  an altitude is held, as before, not downgraded. [review 2026-11-12]
 - `alerting.Config.GroundTrust` (`GroundTrust{MaxSpeedMS,
   MaxHeightAGLM}`) and `alerting.DefaultGroundTrust()` (3 m/s, 50 m): a
   sample that says it is not flying (`Track.Flying` false) is believed
-  only while its own numbers do not contradict it. Until now such a
-  sample was a landing whatever else it said: it cleared every alert of
-  the aircraft but `identification_mismatch` and took it out of the
+  only while its own numbers do not contradict it. Without bounds such
+  a sample is a landing whatever else it says: it clears every alert of
+  the aircraft but `identification_mismatch` and takes it out of the
   conflict, zone and height checks, and for Remote ID the status is a
-  nibble the transmitter chooses. A track declaring ground at 15 m/s
-  through a PROHIBITED zone raised nothing. With a bound set, a sample
+  nibble the transmitter chooses, so a track declaring ground at 15 m/s
+  through a PROHIBITED zone raises nothing. With a bound set, a sample
   whose speed (the magnitude of `VNMS`, `VEMS`, `VDMS`) is above
   `MaxSpeedMS`, or whose height over known ground (a geodetic or
   network altitude less `Track.Env.GroundM`) is above `MaxHeightAGLM`,
@@ -127,29 +126,26 @@ must do.
   consistent sample is a landing as before. Not caught: a hover below
   `MaxHeightAGLM`, or a track with no velocity and no usable height.
   Caught without a flight: a transmitter that says ground while carried
-  in a vehicle faster than `MaxSpeedMS`. The zero value, which
-  `DefaultConfig()` keeps, is the 1.x behaviour, so no existing
-  judgement changes; a field at zero or +Inf leaves that evidence out,
-  and a NaN or negative field is replaced by the default bound and
-  counted as `config_invalid`. **Consumers:** the protection is off
-  until a system sets `cfg.GroundTrust = alerting.DefaultGroundTrust()`
-  (or its own bounds from configuration); do so in every monitor that
-  takes Remote ID or any status it does not control, pass a known
-  ground in `Track.Env` where there is a terrain model, pass a velocity
-  where the source has one, and export `ground_status_contradicted`.
-  [review 2026-11-12]
+  in a vehicle faster than `MaxSpeedMS`. A field at zero or +Inf leaves
+  that evidence out, and a NaN or negative field is replaced by the
+  default bound and counted as `config_invalid`. [review 2026-11-12]
 
 ### Planned for 2.0.0
 
+The three opt-ins become the defaults. Each changes what a judgement
+returns for existing callers, so each starts in the lab and waits for
+the next major (`docs/RELEASING.md` section 3):
+
+- `rid`: `DefaultSettings()` becomes `RecommendedSettings()` (`MaxGapS`
+  9 s). `rid_identity.json` states the 3 s default in its description
+  and its cases pass under both values.
+- `zones`: `DefaultPolicy().WarnAltitudeUnknown` becomes true. No case
+  of `zones_vertical.json` or `alert_lifecycle.json` covers the input.
 - `alerting`: `DefaultConfig().GroundTrust` becomes
   `DefaultGroundTrust()`. That changes the expected result of
   `alert_lifecycle.json#on-the-ground-raises-nothing` (two aircraft
   that say not flying, 20 m apart, with 10 m/s closing velocities raise
-  nothing today and would raise a conflict), so it starts in the lab
-  and waits for the next major (`docs/RELEASING.md` section 3). The
-  two entries under Changed above belong under the same `## [2.0.0]`
-  heading if the release is cut as a major; the first pull request
-  that adds that heading moves them.
+  nothing today and would raise a conflict).
 
 ## [1.14.0] (SC-15 late placement)
 

@@ -158,8 +158,9 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 // judgedWithAltitude reports whether the zone alert key is active from a
 // judgement that had the aircraft's altitude: a confirmed incursion, or
 // one inside the pressure band or with an unjudged limit. A later sample
-// with no altitude holds such an alert, as every sample without one did
-// to 1.14.0; it refreshes only an alert that an unknown altitude raised.
+// with no altitude holds such an alert, as every sample without one does
+// without the policy flag; it refreshes only an alert that an unknown
+// altitude raised.
 func (m *Monitor) judgedWithAltitude(key string) bool {
 	s, ok := m.active[key]
 	return ok && s.Detail[detailAltitudeUnknown] != true

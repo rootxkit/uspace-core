@@ -784,7 +784,7 @@ func TestZoneAltitudeUnknownTwins(t *testing.T) {
 }
 
 // A confirmed incursion is not downgraded by losing the altitude: the
-// critical alert is held, as to 1.14.0, neither refreshed nor cleared.
+// critical alert is held, as without the flag, neither refreshed nor cleared.
 // An altitude-unknown warning is upgraded when the altitude arrives and
 // confirms it, and resolved when the altitude shows the aircraft above
 // the zone.
