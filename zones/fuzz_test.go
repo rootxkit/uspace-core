@@ -124,6 +124,24 @@ func FuzzJudgeVertical(f *testing.F) {
 		if r.NotEvaluated && r.Reasons == 0 {
 			t.Fatalf("not evaluated without a reason: %+v", r)
 		}
+		// An unknown altitude warns, flagged as such and as nothing else,
+		// in the zones that warn for something unknown, and only there
+		// (review 2026-11-12 F2).
+		if r.AltitudeUnknown {
+			d := r.Raise
+			if d == nil || d.Severity != core.SeverityWarning || r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonNoAltitude) ||
+				d.Detail.AltitudeUnknown == nil || !*d.Detail.AltitudeUnknown || d.Detail.VerticalKnown == nil || *d.Detail.VerticalKnown {
+				t.Fatalf("altitude unknown without its warning and flags: %+v (raise %+v)", r, r.Raise)
+			}
+			if _, _, ok := altitude(ac); ok || !warnsUnjudged(z.Type) {
+				t.Fatalf("altitude unknown for a %s zone and altitude %v %q: %+v", z.Type, altM, ac.AltSource, r)
+			}
+		} else if r.Raise != nil && r.Raise.Detail.AltitudeUnknown != nil {
+			t.Fatalf("detail flagged altitude unknown, result not: %+v", r.Raise.Detail)
+		}
+		if r.NotEvaluated && warnsUnjudged(z.Type) && r.Reasons == ReasonsOf(ReasonNoAltitude) {
+			t.Fatalf("%s zone silent for an unknown altitude: %+v", z.Type, r)
+		}
 		// Z-09 with S-37: a PROHIBITED or REQ_AUTHORIZATION zone is never
 		// silent because a height reference is missing; it warns.
 		missingOnly := r.Reasons&^ReasonsOf(ReasonNoTerrain, ReasonGroundUnknown, ReasonNoGeoid) == 0

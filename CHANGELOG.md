@@ -51,6 +51,44 @@ a consumer must do.
   until it raises the value: call `Settings.Validate` at start-up and
   refuse to start on an error. Place observations by `RxTS`, never by
   the time `Take` returned them. [review 2026-11-12]
+- `zones.JudgeVertical` raises a warning, instead of returning
+  `NotEvaluated`, for an aircraft with no usable altitude (nil, not
+  finite, or `AltSource` none) inside a PROHIBITED or REQ_AUTHORIZATION
+  zone that has a limit needing a height. The aircraft is horizontally
+  inside a restricted volume and possibly inside it; until now that was
+  silent (`zone_checks_not_evaluated`), while an unknown ground or
+  geoid for the same zone warned (S-37), so knowing less said less. A
+  missing geoid, which leaves `rid.SelectAltitude` with no altitude, or
+  a broadcast altitude of "unknown" switched every such zone off for
+  that aircraft. The raise is told apart from a judged incursion three
+  ways: its severity is warning, never the zone's critical;
+  `Result.AltitudeUnknown` and `Detail.AltitudeUnknown`
+  (`altitude_unknown`) are true with `vertical_known` false; and
+  `Result.Reasons` is `no_altitude`. `LimitNotJudged`, `NotJudged` and
+  `zone_limits_not_judged` keep their meaning (a missing ground or
+  geoid) and are not set; the raise is counted as
+  `zone_altitude_unknown`. It applies to the two types that already
+  warn for an unjudged limit. CONDITIONAL and USPACE zones stay
+  `NotEvaluated` with `no_altitude`, as an unjudged limit leaves them
+  (a warning would exceed their severity at info), and so does a zone
+  whose type is not a `core.ZoneType`. A zone with no limit needing a
+  height, and the horizontal test, are unchanged: nothing is raised for
+  an aircraft outside the zone horizontally. In `alerting.Monitor` the
+  zone alert is raised as a warning whose detail carries
+  `altitude_unknown: true`, with `identification` beside it for an
+  unidentified aircraft in an incident zone (its detail carries the
+  flag too). A zone alert already active from a judgement that had an
+  altitude is held, as before, not downgraded: losing the altitude
+  never turns a critical into a warning. `zones_vertical.json` and
+  `alert_lifecycle.json` are unchanged and pass; no case covers this
+  input. **Consumers:** code that switches on `Result` must not read a
+  `Raise` with `AltitudeUnknown` as an incursion; render
+  `altitude_unknown` as "possibly inside, altitude unknown" in both
+  languages; expect new warning alerts (and `identification` alerts)
+  for aircraft without an altitude over restricted zones, most of all
+  where the geoid is missing; export `zone_altitude_unknown`, and note
+  that `zone_checks_not_evaluated` falls by the same amount.
+  [review 2026-11-12]
 
 ### Added
 
@@ -63,6 +101,10 @@ a consumer must do.
   `MaxGapS`. Until now these were visible only as `silences`, which
   counts every departure. **Consumers:** export it; a rate above zero
   is aircraft heard and never shown. [review 2026-11-12]
+- `zones.Result.AltitudeUnknown`, `zones.Detail.AltitudeUnknown`
+  (`altitude_unknown`, omitted unless set) and
+  `zones.CounterZoneAltitudeUnknown` (`zone_altitude_unknown`), for the
+  raise above. [review 2026-11-12]
 
 ## [1.14.0] (SC-15 late placement)
 
