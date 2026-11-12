@@ -662,6 +662,190 @@ func TestZoneLimitNotJudgedWarns(t *testing.T) {
 	}
 }
 
+// bandedTo1500 is the vertical band of a zone from the surface to 1500 m
+// AMSL, like a control zone's.
+const bandedTo1500 = `"lowerVerticalReference":"AMSL","upperVerticalReference":"AMSL","lowerLimit":0,"upperLimit":1500,`
+
+// noAltitudeAt is at() with no usable altitude: what a Remote ID
+// aircraft broadcasting "unknown" delivers, or one whose geodetic
+// altitude has no geoid to convert it.
+func noAltitudeAt(id string, northM, tS float64) Track {
+	a := at(id, northM, 0, tS)
+	a.AltAMSLM, a.AltSource = nil, core.AltNone
+	return a
+}
+
+// warnMonitor is zoneMonitor with ZonePolicy.WarnAltitudeUnknown set.
+func warnMonitor(t *testing.T, zs ...*zones.Zone) *Monitor {
+	t.Helper()
+	cfg := DefaultConfig()
+	cfg.Zones = zs
+	cfg.ZonePolicy.WarnAltitudeUnknown = true
+	return NewMonitor(cfg)
+}
+
+// The 1.x default, pinned as it is: DefaultConfig does not warn for an
+// unknown altitude, so an aircraft with none inside a PROHIBITED zone
+// that has a vertical limit raises nothing for 30 s and is counted as
+// zone_checks_not_evaluated (review 2026-11-12 F2). Changing it is a
+// major; TestZoneAltitudeUnknownWarns is the same input with the flag.
+func TestZoneAltitudeUnknownIsSilentByDefault(t *testing.T) {
+	if DefaultConfig().ZonePolicy.WarnAltitudeUnknown {
+		t.Fatal("DefaultConfig warns for an unknown altitude: a changed default is a major")
+	}
+	m := zoneMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	for s := 0.0; s < 30; s++ {
+		wantEvents(t, "inside, no altitude", m.Observe(noAltitudeAt("A", 0, s), s), nil, nil)
+	}
+	c := m.Counters()
+	if c.Get(CounterZoneNotEvaluated) != 30 || c.Get(zones.CounterZoneAltitudeUnknown) != 0 || len(m.Active()) != 0 {
+		t.Fatalf("counters %v, active %+v, want 30 checks not evaluated and nothing active", c.Snapshot(), m.Active())
+	}
+	// A confirmed incursion is still held, not cleared, when the
+	// altitude is lost.
+	m = zoneMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	wantEvents(t, "confirmed", m.Observe(at("A", 0, 0, 0), 0), []string{"zone:GEO:P:A"}, nil)
+	for s := 1.0; s <= 6; s++ {
+		wantEvents(t, "altitude lost", m.Observe(noAltitudeAt("A", 0, s), s), nil, nil)
+	}
+	if a := m.Active(); len(a) != 1 || a[0].Severity != core.SeverityCritical || a[0].LastTrueS != 0 {
+		t.Fatalf("active %+v, want the critical held as raised", a)
+	}
+}
+
+// With ZonePolicy.WarnAltitudeUnknown, an aircraft horizontally inside a
+// PROHIBITED or REQ_AUTHORISATION zone that has a vertical limit, with
+// no usable altitude, raises a warning that says so: possibly inside,
+// never the confirmed incursion.
+func TestZoneAltitudeUnknownWarns(t *testing.T) {
+	for _, restriction := range []string{"PROHIBITED", "REQ_AUTHORISATION"} {
+		t.Run(restriction, func(t *testing.T) {
+			m := warnMonitor(t, polygonZone(t, "P", restriction, bandedTo1500))
+			ev := m.Observe(noAltitudeAt("A", 0, 0), 0)
+			wantEvents(t, "inside, no altitude", ev, []string{"zone:GEO:P:A"}, nil)
+			d := ev.Raised[0].Detail
+			if ev.Raised[0].Severity != core.SeverityWarning || d["altitude_unknown"] != true || d["vertical_known"] != false {
+				t.Fatalf("raised %+v, want a warning with altitude_unknown true and vertical_known false", ev.Raised[0])
+			}
+			if _, ok := d["limit_not_judged"]; ok {
+				t.Fatalf("detail %v says limit_not_judged: that names a missing ground or geoid", d)
+			}
+			// Refreshed silently while it lasts, and counted each time.
+			for s := 1.0; s <= 29; s++ {
+				wantEvents(t, "still inside", m.Observe(noAltitudeAt("A", 0, s), s), nil, nil)
+			}
+			c := m.Counters()
+			if c.Get(zones.CounterZoneAltitudeUnknown) != 30 || c.Get(CounterZoneNotEvaluated) != 0 {
+				t.Fatalf("counters %v, want 30 zone_altitude_unknown and nothing silent", c.Snapshot())
+			}
+			if a := m.Active(); len(a) != 1 || a[0].LastTrueS != 29 {
+				t.Fatalf("active %+v, want the one alert last true at 29", a)
+			}
+			// Leaving the zone horizontally shows it false: resolved.
+			var cleared []string
+			for s := 30.0; s <= 34; s++ {
+				_, cl := kinds(m.Observe(noAltitudeAt("A", 5000, s), s))
+				cleared = append(cleared, cl...)
+			}
+			if !slices.Equal(cleared, []string{"zone:GEO:P:A=resolved"}) {
+				t.Fatalf("left the zone: cleared %v", cleared)
+			}
+		})
+	}
+}
+
+// The absence pairs: nothing is raised for an aircraft with no altitude
+// outside the zone horizontally, or inside a zone that does not warn for
+// something unknown; and with an altitude the same position is judged,
+// critical inside the band and clear above it.
+func TestZoneAltitudeUnknownTwins(t *testing.T) {
+	m := warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	wantEvents(t, "outside horizontally", m.Observe(noAltitudeAt("A", 5000, 0), 0), nil, nil)
+	if n := m.Counters().Get(zones.CounterZoneAltitudeUnknown); n != 0 {
+		t.Fatalf("zone_altitude_unknown = %d outside the zone", n)
+	}
+
+	m = warnMonitor(t, polygonZone(t, "C", "CONDITIONAL", bandedTo1500))
+	wantEvents(t, "conditional", m.Observe(noAltitudeAt("A", 0, 0), 0), nil, nil)
+	if c := m.Counters(); c.Get(CounterZoneNotEvaluated) != 1 || c.Get(zones.CounterZoneAltitudeUnknown) != 0 {
+		t.Fatalf("conditional: counters %v", c.Snapshot())
+	}
+
+	m = warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	ev := m.Observe(at("A", 0, 0, 0), 0) // 550 m AMSL, geodetic
+	wantEvents(t, "inside with an altitude", ev, []string{"zone:GEO:P:A"}, nil)
+	if _, flagged := ev.Raised[0].Detail["altitude_unknown"]; flagged || ev.Raised[0].Severity != core.SeverityCritical {
+		t.Fatalf("judged incursion %+v, want critical and unflagged", ev.Raised[0])
+	}
+	m = warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	above := at("A", 0, 0, 0)
+	above.AltAMSLM = ptr(2000.0)
+	wantEvents(t, "above the band", m.Observe(above, 0), nil, nil)
+}
+
+// A confirmed incursion is not downgraded by losing the altitude: the
+// critical alert is held, as without the flag, neither refreshed nor cleared.
+// An altitude-unknown warning is upgraded when the altitude arrives and
+// confirms it, and resolved when the altitude shows the aircraft above
+// the zone.
+func TestZoneAltitudeUnknownNeverReplacesAJudgement(t *testing.T) {
+	m := warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	wantEvents(t, "confirmed", m.Observe(at("A", 0, 0, 0), 0), []string{"zone:GEO:P:A"}, nil)
+	for s := 1.0; s <= 6; s++ {
+		wantEvents(t, "altitude lost", m.Observe(noAltitudeAt("A", 0, s), s), nil, nil)
+	}
+	if a := m.Active(); len(a) != 1 || a[0].Severity != core.SeverityCritical || a[0].LastTrueS != 0 || a[0].ShownFalse {
+		t.Fatalf("active %+v, want the critical held as raised", a)
+	}
+	if n := m.Counters().Get(zones.CounterZoneAltitudeUnknown); n != 6 {
+		t.Fatalf("zone_altitude_unknown = %d, want the 6 held samples counted", n)
+	}
+
+	m = warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	wantEvents(t, "possibly inside", m.Observe(noAltitudeAt("A", 0, 0), 0), []string{"zone:GEO:P:A"}, nil)
+	ev := m.Observe(at("A", 0, 0, 1), 1)
+	wantEvents(t, "altitude arrives inside", ev, []string{"zone:GEO:P:A"}, nil)
+	if _, flagged := ev.Raised[0].Detail["altitude_unknown"]; flagged || ev.Raised[0].Severity != core.SeverityCritical {
+		t.Fatalf("confirmed %+v, want critical and unflagged", ev.Raised[0])
+	}
+
+	m = warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	m.Observe(noAltitudeAt("A", 0, 0), 0)
+	var cleared []string
+	for s := 1.0; s <= 5; s++ {
+		above := at("A", 0, 0, s)
+		above.AltAMSLM = ptr(2000.0)
+		_, cl := kinds(m.Observe(above, s))
+		cleared = append(cleared, cl...)
+	}
+	if !slices.Equal(cleared, []string{"zone:GEO:P:A=resolved"}) {
+		t.Fatalf("altitude arrives above the zone: cleared %v", cleared)
+	}
+}
+
+// An unidentified aircraft possibly inside an incident zone raises
+// identification too, as an unjudged limit does, and that alert says the
+// altitude is unknown.
+func TestZoneAltitudeUnknownIdentification(t *testing.T) {
+	m := warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	a := noAltitudeAt("A", 0, 0)
+	a.Identification = ident(core.IdentUnidentified, core.ReasonNoSerial, false)
+	ev := m.Observe(a, 0)
+	wantEvents(t, "unidentified, no altitude", ev, []string{"zone:GEO:P:A", "identification:GEO:P:A"}, nil)
+	if ev.Raised[1].Detail["altitude_unknown"] != true {
+		t.Fatalf("identification detail %v, want altitude_unknown true", ev.Raised[1].Detail)
+	}
+	// Twin: with an altitude the identification alert carries no flag.
+	m = warnMonitor(t, polygonZone(t, "P", "PROHIBITED", bandedTo1500))
+	b := at("A", 0, 0, 0)
+	b.Identification = ident(core.IdentUnidentified, core.ReasonNoSerial, false)
+	ev = m.Observe(b, 0)
+	wantEvents(t, "unidentified, judged", ev, []string{"zone:GEO:P:A", "identification:GEO:P:A"}, nil)
+	if _, flagged := ev.Raised[1].Detail["altitude_unknown"]; flagged {
+		t.Fatalf("identification detail %v flagged", ev.Raised[1].Detail)
+	}
+}
+
 func TestZoneContainmentErrorHolds(t *testing.T) {
 	good := polygonZone(t, "Z", "PROHIBITED", "")
 	m := zoneMonitor(t, good)

@@ -11,7 +11,8 @@
 //
 //   - its Basic ID was heard within IdentityTTLS (15 s);
 //   - the address has not been silent for longer than MaxGapS (3 s). After
-//     such a silence everything known about it is dropped (silences);
+//     such a silence everything known about it is dropped (silences), a
+//     Location still held for an identity included (held_forgotten);
 //   - no other Basic ID of the same ID type has arrived from the address
 //     since. If one has, everything known about it is dropped, System and
 //     Operator ID too (identity_changes). A second ID type is another
@@ -41,6 +42,19 @@
 // unidentified track is not merged: it goes stale. Each Location is
 // published once (R-13); a repeated Basic ID, Operator ID or System
 // message publishes nothing.
+//
+// The hold runs inside the (receiver, address) state, so it restarts
+// when a silence longer than MaxGapS drops the state: MaxGapS must not
+// be below IdentifyWithinS (Settings.Validate), or a transmitter heard
+// less often than every MaxGapS is never published at all. That is the
+// case of DefaultSettings in 1.x (3 s under a 4 s hold), kept because a
+// changed default is a major: a system runs RecommendedSettings (9 s),
+// under which a transmitter heard at least once every 9 s is published,
+// within 4 s plus one gap of the first frame; one heard less often is
+// not, and each Location dropped that way is counted (held_forgotten).
+// A held Location that a later Basic ID completes can be up to MaxGapS
+// old: Observation.RxTS is the receive time of the frame that carried
+// the Location, so the caller places it at its true age.
 //
 // DroneID of an identified aircraft is AircraftID: uuid5 of NamespaceUUID
 // and "<id_type>:<ua_id>", exactly utm's ids, the same across receivers

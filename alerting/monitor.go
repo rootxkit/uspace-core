@@ -187,8 +187,11 @@ func (m *Monitor) Tracked() int { return len(m.aircraft) }
 //  2. Flying (C-05): a flying sample with a valid position is paired with
 //     its neighbours and judged against the zones and the height limit.
 //     A sample saying not flying clears the aircraft's alerts as landed
-//     (except identification_mismatch); an unknown flying state holds
-//     them, and they go stale if no flying sample follows.
+//     (except identification_mismatch), unless Config.GroundTrust is set
+//     and the sample's own speed or height contradicts it: then it is
+//     judged as a flying sample (ground_status_contradicted). An unknown
+//     flying state holds the alerts, and they go stale if no flying
+//     sample follows.
 //  3. Identity (G-02): identification_mismatch on every admitted sample.
 //  4. Staleness: aircraft and identities not heard for StaleAfterS are
 //     dropped and their alerts cleared as stale (evidence outranks

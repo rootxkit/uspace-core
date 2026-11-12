@@ -33,7 +33,14 @@
 //     A PROHIBITED or REQ_AUTHORISATION zone with a limit it cannot judge
 //     (AGL without the ground, WGS84 without the geoid; S-37) warns with
 //     limit_not_judged (Z-09); a CONDITIONAL zone with one is not
-//     evaluated, since a warning would exceed an info zone's severity. A pressure altitude is widened by
+//     evaluated, since a warning would exceed an info zone's severity.
+//     An aircraft that has no usable altitude when a limit needs one
+//     is not evaluated (no_altitude). Under Policy.WarnAltitudeUnknown,
+//     off by default in 1.x, the same two types warn instead, with
+//     altitude_unknown and vertical_known false
+//     (Result.AltitudeUnknown): it is inside horizontally and possibly
+//     inside, which is said and never raised as the zone's own
+//     critical; every other zone is still not evaluated then. A pressure altitude is widened by
 //     Policy.PressureUncertaintyM each way (R-09): inside as indicated
 //     keeps the severity, inside only the widened band warns (capped at
 //     the zone's own severity: an info zone stays info), both flagged
@@ -46,14 +53,16 @@
 // Lifting a REQ_AUTHORISATION zone for an aircraft authorised there is
 // the caller's concern (U-05); nothing lifts PROHIBITED.
 //
-// Every Result is exactly one of raised, not evaluated (with its Reasons:
+// Every Result is exactly one of raised (flagged LimitNotJudged or
+// AltitudeUnknown when it is a warning for something unknown), not
+// evaluated (with its Reasons:
 // every reference that was missing), or judged clear, and is never clear
 // because something was unknown: a
 // non-finite altitude, ground or undulation is unknown, a non-finite
 // limit makes the zone not evaluated, and an invalid pressure margin is
 // unbounded. Result.Count adds the outcome to core.Counters as
-// zone_checks_not_evaluated, zone_limits_not_judged or
-// height_checks_not_evaluated (E-09).
+// zone_checks_not_evaluated, zone_limits_not_judged,
+// zone_altitude_unknown or height_checks_not_evaluated (E-09).
 //
 // Thresholds (the pressure margin, the conditional severity, the height
 // limit) are Policy fields with DefaultPolicy (INV-03). The judgements

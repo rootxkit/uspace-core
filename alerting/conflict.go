@@ -7,6 +7,7 @@ import (
 	"github.com/rootxkit/uspace-core/core"
 	"github.com/rootxkit/uspace-core/cpa"
 	"github.com/rootxkit/uspace-core/geodesy"
+	"github.com/rootxkit/uspace-core/zones"
 )
 
 // Conflict counter names.
@@ -34,8 +35,9 @@ func (m *Monitor) judge(ac *aircraft, tr *Track, wallS float64, ev *Events) {
 		// track is neither refreshed nor dropped, so its alerts are held
 		// and go stale unless a flying sample follows.
 		m.counters.Inc(CounterFlyingUnknown)
-	case !*tr.Flying:
-		// Disarmed, or declared on the ground: a landing (C-14).
+	case !*tr.Flying && !m.groundContradicted(tr):
+		// Disarmed, or declared on the ground, and nothing in the sample
+		// says otherwise where Config.GroundTrust asks: a landing (C-14).
 		if ac.hasTrack {
 			m.stopTrack(ac)
 		}
@@ -46,6 +48,40 @@ func (m *Monitor) judge(ac *aircraft, tr *Track, wallS float64, ev *Events) {
 		m.judgeFlying(ac, tr, wallS, ev)
 	}
 	m.judgeMismatch(ac, tr, wallS, ev)
+}
+
+// groundContradicted reports whether a sample that says it is not flying
+// shows a speed above Config.GroundTrust.MaxSpeedMS or, with a vertical
+// position and known ground, a height above
+// Config.GroundTrust.MaxHeightAGLM, and counts it: the status is the
+// sender's claim and is not taken on its word against the sample's own
+// numbers. Such a sample is judged as flying. A bound at zero is not
+// set, and a speed or height that is not known (NaN, a pressure
+// altitude, no ground) contradicts nothing.
+func (m *Monitor) groundContradicted(tr *Track) bool {
+	g := m.cfg.GroundTrust
+	bySpeed, byHeight := false, false
+	if g.MaxSpeedMS > 0 {
+		speedMS := math.Sqrt(tr.VNMS*tr.VNMS + tr.VEMS*tr.VEMS + tr.VDMS*tr.VDMS)
+		bySpeed = speedMS > g.MaxSpeedMS
+	}
+	if g.MaxHeightAGLM > 0 && verticalKnown(tr) && tr.Env.Ground == zones.GroundKnown && core.IsFinite(tr.Env.GroundM) {
+		// AMSL less the AMSL ground elevation: a height over the ground,
+		// compared with a bound over the ground (D-01).
+		heightAGLM := *tr.AltAMSLM - tr.Env.GroundM
+		byHeight = heightAGLM > g.MaxHeightAGLM
+	}
+	if !bySpeed && !byHeight {
+		return false
+	}
+	m.counters.Inc(CounterGroundContradicted)
+	if bySpeed {
+		m.counters.Inc(CounterGroundContradictedSpeed)
+	}
+	if byHeight {
+		m.counters.Inc(CounterGroundContradictedHeight)
+	}
+	return true
 }
 
 // notMismatch selects every alert but identification_mismatch, which is

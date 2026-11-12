@@ -107,20 +107,141 @@ func TestConditionalSeverityFromPolicy(t *testing.T) {
 	isClear(t, "no restriction", r)
 }
 
+// noAltitude is every way an aircraft has no usable altitude.
+var noAltitude = map[string]Aircraft{
+	"nil altitude":            {AltSource: core.AltNone},
+	"source none with value":  {AltAMSLM: f64(600), AltSource: core.AltNone},
+	"NaN altitude":            {AltAMSLM: f64(math.NaN()), AltSource: core.AltGeodetic},
+	"+Inf altitude":           {AltAMSLM: f64(math.Inf(1)), AltSource: core.AltGeodetic},
+	"-Inf pressure altitude":  {AltAMSLM: f64(math.Inf(-1)), AltSource: core.AltPressure},
+	"nil altitude, geodetic":  {AltSource: core.AltGeodetic},
+	"nil altitude, no source": {},
+}
+
+// warnPolicy is DefaultPolicy with WarnAltitudeUnknown set.
+func warnPolicy() Policy {
+	pol := DefaultPolicy()
+	pol.WarnAltitudeUnknown = true
+	return pol
+}
+
+// Under Policy.WarnAltitudeUnknown a PROHIBITED or REQ_AUTHORIZATION
+// zone with a limit that needs a height is never silent for an aircraft
+// with no usable altitude: it warns "possibly inside, altitude unknown"
+// (review 2026-11-12 F2). The twins: with an altitude it is judged,
+// inside at the zone's own severity with no flag and outside clear.
+func TestNoAltitudeWarnsInRestrictedZones(t *testing.T) {
+	pol := warnPolicy()
+	for _, zt := range []core.ZoneType{core.ZoneProhibited, core.ZoneReqAuthorization} {
+		own, _ := Severity(zt, pol)
+		for zname, z := range map[string]*Zone{
+			"AMSL band":    zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL)),
+			"AMSL ceiling": zoneOf(zt, nil, limit(1500, core.RefAMSL)),
+			"AGL ceiling":  zoneOf(zt, limit(0, core.RefAGL), limit(120, core.RefAGL)),
+			"WGS84 floor":  zoneOf(zt, limit(100, core.RefWGS84), nil),
+		} {
+			for acname, ac := range noAltitude {
+				name := string(zt) + ", " + zname + ", " + acname
+				// The ground and the geoid are known or not: neither
+				// matters without an altitude to compare.
+				for _, env := range []Env{noTerrain, ground500} {
+					r := JudgeVertical(z, ac, env, pol)
+					d := raised(t, name, r, core.SeverityWarning).Detail
+					if !r.AltitudeUnknown || r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonNoAltitude) {
+						t.Errorf("%s: result %+v, want altitude unknown for no_altitude only", name, r)
+					}
+					if d.AltitudeUnknown == nil || !*d.AltitudeUnknown || d.VerticalKnown == nil || *d.VerticalKnown {
+						t.Errorf("%s: detail %+v, want altitude_unknown true and vertical_known false", name, d)
+					}
+					if d.LimitNotJudged != nil || d.NotJudged != nil || d.WithinBand != nil || d.HeightAGLM != nil || d.AltHAEM != nil {
+						t.Errorf("%s: detail %+v claims a judgement that was not made", name, d)
+					}
+					if d.Identifier != "Z" || d.Restriction != string(z.Restriction) {
+						t.Errorf("%s: detail %+v does not name the zone", name, d)
+					}
+					var c core.Counters
+					r.Count(&c)
+					if c.Get(CounterZoneAltitudeUnknown) != 1 || c.Get(CounterZoneNotEvaluated) != 0 || c.Get(CounterZoneLimitNotJudged) != 0 {
+						t.Errorf("%s: counters %v, want zone_altitude_unknown only", name, c.Snapshot())
+					}
+				}
+			}
+		}
+		// Twins: a judged incursion is never flagged altitude unknown.
+		band := zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
+		in := JudgeVertical(band, geodetic(600), noTerrain, pol)
+		if d := raised(t, string(zt)+" at 600 m", in, own).Detail; in.AltitudeUnknown || d.AltitudeUnknown != nil || in.Reasons != 0 {
+			t.Errorf("%s at 600 m: %+v flagged altitude unknown", zt, in)
+		}
+		isClear(t, string(zt)+" at 900 m", JudgeVertical(band, geodetic(900), noTerrain, pol))
+	}
+}
+
+// The flag off is the 1.x result, exactly: DefaultPolicy does not set
+// it, and every zone type with a limit that needs a height is not
+// evaluated for no_altitude, counted as zone_checks_not_evaluated and
+// flagged nowhere. Changing this default is a major.
+func TestNoAltitudeIsNotEvaluatedByDefault(t *testing.T) {
+	pol := DefaultPolicy()
+	if pol.WarnAltitudeUnknown {
+		t.Fatal("DefaultPolicy sets WarnAltitudeUnknown: a changed default is a major (docs/RELEASING.md section 1)")
+	}
+	for _, zt := range []core.ZoneType{core.ZoneProhibited, core.ZoneReqAuthorization, core.ZoneConditional, core.ZoneUSpace} {
+		for zname, z := range map[string]*Zone{
+			"AMSL band":   zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL)),
+			"AGL ceiling": zoneOf(zt, limit(0, core.RefAGL), limit(120, core.RefAGL)),
+		} {
+			for acname, ac := range noAltitude {
+				name := string(zt) + ", " + zname + ", " + acname
+				r := JudgeVertical(z, ac, ground500, pol)
+				if r != (Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonNoAltitude)}) {
+					t.Errorf("%s: got %+v (raise %+v), want exactly not evaluated for no_altitude", name, r, r.Raise)
+				}
+				var c core.Counters
+				r.Count(&c)
+				if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneAltitudeUnknown) != 0 {
+					t.Errorf("%s: counters %v", name, c.Snapshot())
+				}
+			}
+		}
+	}
+}
+
+// Zones that do not warn for something unknown stay not evaluated
+// without an altitude even under WarnAltitudeUnknown (a warning would
+// exceed a CONDITIONAL or USPACE zone at info), and NO_RESTRICTION stays
+// clear.
+func TestNoAltitudeElsewhereIsNotEvaluated(t *testing.T) {
+	pol := warnPolicy()
+	for _, zt := range []core.ZoneType{core.ZoneConditional, core.ZoneUSpace} {
+		z := zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
+		for name, ac := range noAltitude {
+			r := JudgeVertical(z, ac, ground500, pol)
+			notEvaluated(t, string(zt)+", "+name, r, ReasonNoAltitude)
+			if r.AltitudeUnknown {
+				t.Errorf("%s, %s: flagged altitude unknown without a raise", zt, name)
+			}
+			var c core.Counters
+			r.Count(&c)
+			if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneAltitudeUnknown) != 0 {
+				t.Errorf("%s, %s: counters %v", zt, name, c.Snapshot())
+			}
+		}
+	}
+	free := zoneOf(core.ZoneNoRestriction, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
+	isClear(t, "no restriction", JudgeVertical(free, Aircraft{}, ground500, pol))
+	// An invalid limit is the zone's fault, not the aircraft's: not
+	// evaluated for invalid_zone, with or without an altitude.
+	bad := zoneOf(core.ZoneProhibited, nil, limit(math.NaN(), core.RefAMSL))
+	notEvaluated(t, "NaN limit", JudgeVertical(bad, Aircraft{}, ground500, pol), ReasonInvalidZone)
+}
+
 func TestNoAltitude(t *testing.T) {
 	banded := zoneOf(core.ZoneProhibited, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
 	unbounded := zoneOf(core.ZoneProhibited, nil, nil)
 	floorAtGround := zoneOf(core.ZoneProhibited, limit(0, core.RefAGL), nil)
 	pol := DefaultPolicy()
-	for name, ac := range map[string]Aircraft{
-		"nil altitude":            {AltSource: core.AltNone},
-		"source none with value":  {AltAMSLM: f64(600), AltSource: core.AltNone},
-		"NaN altitude":            {AltAMSLM: f64(math.NaN()), AltSource: core.AltGeodetic},
-		"+Inf altitude":           {AltAMSLM: f64(math.Inf(1)), AltSource: core.AltGeodetic},
-		"-Inf pressure altitude":  {AltAMSLM: f64(math.Inf(-1)), AltSource: core.AltPressure},
-		"nil altitude, geodetic":  {AltSource: core.AltGeodetic},
-		"nil altitude, no source": {},
-	} {
+	for name, ac := range noAltitude {
 		r := JudgeVertical(banded, ac, ground500, pol)
 		notEvaluated(t, name, r, ReasonNoAltitude)
 		var c core.Counters

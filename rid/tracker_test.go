@@ -1,12 +1,14 @@
 package rid
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rootxkit/uspace-core/core"
 	"github.com/rootxkit/uspace-core/odid"
 )
 
@@ -423,5 +425,198 @@ func TestPublishedLocationReplacedIsNotCounted(t *testing.T) {
 	}
 	if got := tr.Counters().Get(CounterHeldReplaced); got != 0 {
 		t.Errorf("held_replaced %d, want 0", got)
+	}
+}
+
+// takeEvery feeds n frames spacingS apart, built by msgs(i), and returns
+// the observations published.
+func takeEvery(tr *Tracker, n int, spacingS float64, msgs func(i int) []odid.Message) []*Observation {
+	var out []*Observation
+	for i := range n {
+		if o := tr.Take(frame(float64(i)*spacingS, msgs(i)...)); o != nil {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// The 1.x default, pinned as it is: MaxGapS 3 below IdentifyWithinS 4
+// publishes nothing from twenty Locations 3.5 s apart, and only
+// held_forgotten shows that they were heard (review 2026-11-12 F1). The
+// presence twin: the same default publishes a transmitter heard every
+// second. Changing either is a major (docs/RELEASING.md section 1).
+func TestDefaultSettingsNeverPublishARarelyHeardTransmitter(t *testing.T) {
+	every := func(int) []odid.Message { return []odid.Message{loc(41.7)} }
+	tr := NewTracker(DefaultSettings())
+	if got := takeEvery(tr, 20, 3.5, every); len(got) != 0 {
+		t.Fatalf("%d observations under the 1.x default, want 0 (a changed default is a major)", len(got))
+	}
+	c := tr.Counters()
+	if c.Get(CounterSilences) != 19 || c.Get(CounterHeldForgotten) != 19 || c.Get(CounterUnidentified) != 0 {
+		t.Errorf("counters %v, want 19 silences and 19 held Locations forgotten", c.Snapshot())
+	}
+	tr = NewTracker(DefaultSettings())
+	// Held at 0 to 3 s, published unidentified from 4 s on.
+	if got := takeEvery(tr, 20, 1, every); len(got) != 16 {
+		t.Fatalf("%d observations from 20 Locations 1 s apart, want 16", len(got))
+	}
+	if n := tr.Counters().Get(CounterHeldForgotten); n != 0 {
+		t.Errorf("held_forgotten %d at 1 s spacing, want 0", n)
+	}
+}
+
+// Under RecommendedSettings a transmitter heard less often than every
+// 3 s reaches the picture: a silence shorter than MaxGapS must not
+// restart the IdentifyWithinS hold (the same twenty Locations 3.5 s
+// apart).
+func TestRarelyHeardTransmitterIsPublished(t *testing.T) {
+	tr := NewTracker(RecommendedSettings())
+	got := takeEvery(tr, 20, 3.5, func(int) []odid.Message { return []odid.Message{loc(41.7)} })
+	// Held at 0 and 3.5 s, published unidentified from 7 s on.
+	if len(got) != 18 {
+		t.Fatalf("%d observations from 20 Locations 3.5 s apart, want 18; counters %v", len(got), tr.Counters().Snapshot())
+	}
+	for _, o := range got {
+		if o.Identified {
+			t.Fatalf("identified without a Basic ID: %+v", o)
+		}
+	}
+	c := tr.Counters()
+	if c.Get(CounterSilences) != 0 || c.Get(CounterHeldForgotten) != 0 || c.Get(CounterUnidentified) != 18 {
+		t.Errorf("counters %v, want no silence, nothing forgotten, 18 unidentified", c.Snapshot())
+	}
+}
+
+// The same spacing with one message per frame (Bluetooth 4 legacy
+// advertising): the Basic ID must outlive the gap to the next Location.
+func TestRarelyHeardSingleMessageFramesAreIdentified(t *testing.T) {
+	tr := NewTracker(RecommendedSettings())
+	got := takeEvery(tr, 20, 3.5, func(i int) []odid.Message {
+		if i%2 == 0 {
+			return []odid.Message{serial("SN-1")}
+		}
+		return []odid.Message{loc(41.7)}
+	})
+	if len(got) != 10 {
+		t.Fatalf("%d observations from 10 Locations, want 10; counters %v", len(got), tr.Counters().Snapshot())
+	}
+	for _, o := range got {
+		if !o.Identified || o.UAID != "SN-1" {
+			t.Fatalf("observation %+v, want SN-1", o)
+		}
+	}
+}
+
+// The absence pair: a silence longer than the recommended MaxGapS still
+// forgets the serial and restarts the hold, and the held Location it
+// drops is counted, never silent (E-09).
+func TestSilenceBeyondRecommendedGapStillForgets(t *testing.T) {
+	tr := NewTracker(RecommendedSettings())
+	gapS := tr.Settings().MaxGapS + 0.5
+	if o := tr.Take(frame(0, serial("SN-1"), loc(41.7))); o == nil || !o.Identified {
+		t.Fatalf("first frame: %+v", o)
+	}
+	if o := tr.Take(frame(gapS, loc(41.71))); o != nil {
+		t.Fatalf("after a %v s silence: %+v, want held (the serial is forgotten)", gapS, o)
+	}
+	// Silent again: the held Location is dropped unpublished.
+	if o := tr.Take(frame(2*gapS, loc(41.72))); o != nil {
+		t.Fatalf("after a second silence: %+v, want held", o)
+	}
+	c := tr.Counters()
+	if c.Get(CounterSilences) != 2 || c.Get(CounterHeldForgotten) != 1 {
+		t.Errorf("counters %v, want 2 silences and 1 held Location forgotten", c.Snapshot())
+	}
+}
+
+// A published Location forgotten with its state is not counted as lost.
+func TestPublishedLocationForgottenIsNotCounted(t *testing.T) {
+	tr := NewTracker(DefaultSettings())
+	if o := tr.Take(frame(0, serial("SN-1"), loc(41.7))); o == nil {
+		t.Fatal("not published")
+	}
+	if n := tr.Forget(100); n != 1 {
+		t.Fatalf("Forget dropped %d states, want 1", n)
+	}
+	if got := tr.Counters().Get(CounterHeldForgotten); got != 0 {
+		t.Errorf("held_forgotten %d, want 0", got)
+	}
+}
+
+// A Location held across a long gap is not shown fresher than it is: the
+// Basic ID that completes it publishes it with the receive time of the
+// frame that carried the Location.
+func TestHeldLocationKeepsItsReceiveTimeAcrossTheGap(t *testing.T) {
+	tr := NewTracker(RecommendedSettings())
+	if o := tr.Take(frame(0, loc(41.7))); o != nil {
+		t.Fatalf("published at once: %+v", o)
+	}
+	// Within MaxGapS but beyond the hold: the Basic ID arrives first.
+	laterS := tr.Settings().MaxGapS - 0.5
+	o := tr.Take(frame(laterS, serial("SN-1")))
+	if o == nil || !o.Identified {
+		t.Fatalf("Basic ID %v s after the Location: %+v, want it published identified", laterS, o)
+	}
+	if !o.RxTS.Equal(rxAt(0)) {
+		t.Errorf("RxTS %v, want the Location frame's %v (it is %v s old)", o.RxTS, rxAt(0), laterS)
+	}
+}
+
+// The guard: the recommended settings keep the silence bound at or
+// above the hold and below the TTL, and differ from the 1.x defaults in
+// MaxGapS only (review 2026-11-12 F1).
+func TestRecommendedGapCoversTheHold(t *testing.T) {
+	r := RecommendedSettings()
+	if err := r.Validate(); err != nil {
+		t.Fatalf("RecommendedSettings().Validate() = %v", err)
+	}
+	if r.MaxGapS < r.IdentifyWithinS {
+		t.Fatalf("recommended MaxGapS %v below IdentifyWithinS %v", r.MaxGapS, r.IdentifyWithinS)
+	}
+	if r.MaxGapS >= r.IdentityTTLS {
+		t.Errorf("recommended MaxGapS %v not below IdentityTTLS %v: the silence rule would never forget a fresh identity", r.MaxGapS, r.IdentityTTLS)
+	}
+	want := DefaultSettings()
+	want.MaxGapS = 9
+	if r != want {
+		t.Errorf("RecommendedSettings() = %+v, want the defaults with MaxGapS 9", r)
+	}
+	if got := NewTracker(r).Settings(); got != r {
+		t.Errorf("NewTracker(RecommendedSettings()).Settings() = %+v", got)
+	}
+}
+
+// By design until 2.0.0: the 1.x defaults, and so Settings{}, fail
+// Validate, which is how a system that still runs them finds out. When
+// the recommended values become the default this test goes.
+func TestDefaultSettingsFailValidateInV1(t *testing.T) {
+	for _, s := range []Settings{DefaultSettings(), {}} {
+		var fe *core.FieldError
+		if err := s.Validate(); !errors.As(err, &fe) || fe.Field != "MaxGapS" {
+			t.Errorf("%+v.Validate() = %v, want a FieldError on MaxGapS", s, err)
+		}
+	}
+}
+
+func TestValidateRefusesAGapBelowTheHold(t *testing.T) {
+	err := Settings{MaxGapS: 3, IdentifyWithinS: 4}.Validate()
+	var fe *core.FieldError
+	if !errors.As(err, &fe) || fe.Field != "MaxGapS" {
+		t.Fatalf("Validate() = %v, want a FieldError on MaxGapS", err)
+	}
+	// The presence pairs: equal is enough, and no wait needs no gap.
+	for _, s := range []Settings{
+		{MaxGapS: 4, IdentifyWithinS: 4},
+		{MaxGapS: 0.5, IdentifyWithinS: IdentifyAtOnceS},
+		{MaxGapS: 20, IdentifyWithinS: 4},
+	} {
+		if err := s.Validate(); err != nil {
+			t.Errorf("%+v.Validate() = %v, want nil", s, err)
+		}
+	}
+	// NewTracker keeps what it is given (the vectors pin 3 and 4): the
+	// caller validates.
+	if got := NewTracker(Settings{MaxGapS: 3, IdentifyWithinS: 4}).Settings(); got.MaxGapS != 3 {
+		t.Errorf("NewTracker changed MaxGapS to %v", got.MaxGapS)
 	}
 }

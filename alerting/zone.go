@@ -73,6 +73,15 @@ func isPlaceKind(kind string) bool {
 //   - a zone that cannot be judged (a containment error, NotEvaluated) or
 //     an identification that is absent or held (heldIdentification)
 //     holds its alerts: neither refreshed nor shown false (C-09);
+//   - under Config.ZonePolicy.WarnAltitudeUnknown (without it this is a
+//     zone that cannot be judged, above), a PROHIBITED or
+//     REQ_AUTHORISATION zone with a vertical limit and an aircraft with
+//     no usable altitude (zones.Result.AltitudeUnknown) raises the zone
+//     alert as a warning whose detail says
+//     altitude_unknown, and identification beside it as above. When the
+//     zone's alert is already active from a judgement that had an
+//     altitude, it is held instead: knowing less never replaces, and so
+//     never downgrades, what was judged (judgedWithAltitude);
 //   - every other zone, identification and height alert of the aircraft
 //     was judged false by this sample and is shown false.
 func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
@@ -103,6 +112,10 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 			continue
 		}
 		if res.Raise == nil {
+			continue
+		}
+		if res.AltitudeUnknown && m.judgedWithAltitude(key) {
+			kept = append(kept, key, idKey)
 			continue
 		}
 		m.refresh(zoneRaise(key, ac.id, res.Raise), atS, ev)
@@ -141,6 +154,22 @@ func (m *Monitor) judgeZones(ac *aircraft, tr *Track, atS float64, ev *Events) {
 		m.showFalse(key, atS, nil, ev)
 	}
 }
+
+// judgedWithAltitude reports whether the zone alert key is active from a
+// judgement that had the aircraft's altitude: a confirmed incursion, or
+// one inside the pressure band or with an unjudged limit. A later sample
+// with no altitude holds such an alert, as every sample without one does
+// without the policy flag; it refreshes only an alert that an unknown
+// altitude raised.
+func (m *Monitor) judgedWithAltitude(key string) bool {
+	s, ok := m.active[key]
+	return ok && s.Detail[detailAltitudeUnknown] != true
+}
+
+// detailAltitudeUnknown is the detail member of a zone or identification
+// alert raised for an aircraft possibly inside a zone, its altitude
+// unknown (zones.Detail.AltitudeUnknown).
+const detailAltitudeUnknown = "altitude_unknown"
 
 // heldIdentification reports whether a sample's identification is
 // treated as absent: nil; not judged because the Service Provider's
@@ -185,6 +214,7 @@ func zoneRaise(key, id string, r *zones.Raise) raise {
 	putBool("vertical_known", d.VerticalKnown)
 	putBool("within_band", d.WithinBand)
 	putBool("limit_not_judged", d.LimitNotJudged)
+	putBool(detailAltitudeUnknown, d.AltitudeUnknown)
 	if d.NotJudged != nil {
 		detail["not_judged"] = slices.Clone(d.NotJudged)
 	}
@@ -196,19 +226,25 @@ func zoneRaise(key, id string, r *zones.Raise) raise {
 
 // identificationRaise is the G-03 alert beside a zone alert: an aircraft
 // nobody can name where one must be named, the seam where the caller
-// opens an incident.
+// opens an incident. Beside a zone alert raised with the altitude
+// unknown its detail says altitude_unknown too: the aircraft is possibly
+// inside the zone, not known to be.
 func (m *Monitor) identificationRaise(key, id string, zr *zones.Raise, ident *core.Identification) raise {
+	detail := map[string]any{
+		"identifier":            zr.Detail.Identifier,
+		"restriction":           zr.Detail.Restriction,
+		"status":                string(ident.Status),
+		"identification_reason": string(ident.Reason),
+	}
+	if zr.Detail.AltitudeUnknown != nil {
+		detail[detailAltitudeUnknown] = *zr.Detail.AltitudeUnknown
+	}
 	return raise{
 		key:      key,
 		kind:     KindIdentification,
 		severity: m.cfg.IdentificationSeverity,
 		aircraft: []string{id},
-		detail: map[string]any{
-			"identifier":            zr.Detail.Identifier,
-			"restriction":           zr.Detail.Restriction,
-			"status":                string(ident.Status),
-			"identification_reason": string(ident.Reason),
-		},
+		detail:   detail,
 	}
 }
 

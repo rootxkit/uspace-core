@@ -24,7 +24,16 @@
 //     not show identification_mismatch false either, though it keeps the
 //     identity fresh: an omission is no match; it clears once a declared
 //     registration matches, or the flight ends (04 §3.2 errata
-//     2026-10-23, counted as registration_not_compared). An active pair is judged on
+//     2026-10-23, counted as registration_not_compared). An aircraft
+//     with no usable altitude inside a PROHIBITED or REQ_AUTHORISATION
+//     zone that has a vertical limit is not evaluated, silently, unless
+//     Config.ZonePolicy.WarnAltitudeUnknown is set (off in
+//     DefaultConfig in 1.x; a system sets it). With it, the zone alert
+//     is raised as a warning with altitude_unknown true (possibly
+//     inside), and identification beside it when the aircraft is
+//     unidentified; a zone alert already active from a judgement that
+//     had an altitude is held instead, never downgraded by knowing
+//     less. An active pair is judged on
 //     every sample of either aircraft wherever the other now is, so it is
 //     never shown false by falling outside the neighbour search. A
 //     resolved conflict carries both the last numbers that showed it true
@@ -35,7 +44,12 @@
 //     the others with its flying track. When an alert could be cleared
 //     both ways at once, evidence outranks silence (resolved).
 //   - landed: a sample said the aircraft is not flying (C-05, C-14; the
-//     owner's decision on plan §11 gap 4 replaces the old stale). An
+//     owner's decision on plan §11 gap 4 replaces the old stale). With
+//     Config.GroundTrust set, a sample that says so while its own speed
+//     or height over known ground is beyond the bounds is not a landing:
+//     it is judged as flying and counted as ground_status_contradicted
+//     (the status is the sender's claim). DefaultConfig sets no bounds
+//     in 1.x; a system sets DefaultGroundTrust(). An
 //     unknown flying state is not flying and not a landing: the track is
 //     held, its alerts too, and they go stale unless it flies on.
 //   - source_disabled: SwitchSource took a state that disables the source

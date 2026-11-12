@@ -388,8 +388,8 @@ type Env struct{ Ground GroundKind; GroundM float64; UndulationM *float64 }     
 type Aircraft struct{ AltAMSLM *float64; AltSource core.AltSource }
 type Policy struct{ PressureUncertaintyM float64 (250); ConditionalSeverity core.Severity (warning); MaxHeightAGLM *float64 }
 type Raise struct{ Kind string ("zone"|"height"); Severity core.Severity; Detail Detail }
-type Detail struct{ Identifier, Restriction string; VerticalKnown *bool; WithinBand *bool; LimitNotJudged *bool; NotJudged []string; HeightAGLM, AltHAEM, MaxHeightAGLM *float64 }
-type Result struct{ Raise *Raise; NotEvaluated bool; LimitNotJudged bool }   // counters zone_checks_not_evaluated, zone_limits_not_judged
+type Detail struct{ Identifier, Restriction string; VerticalKnown *bool; WithinBand *bool; LimitNotJudged *bool; NotJudged []string; AltitudeUnknown *bool; HeightAGLM, AltHAEM, MaxHeightAGLM *float64 }
+type Result struct{ Raise *Raise; NotEvaluated bool; LimitNotJudged bool; AltitudeUnknown bool }   // counters zone_checks_not_evaluated, zone_limits_not_judged, zone_altitude_unknown
 func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result        // the aircraft is already inside horizontally and the zone applies
 func JudgeHeightLimit(ac Aircraft, env Env, pol Policy) Result               // the 120 m rule; strictly greater; unknown ground = not evaluated (D-04)
 func Severity(t core.ZoneType, pol Policy) (core.Severity, bool)            // Z-10; false for NO_RESTRICTION

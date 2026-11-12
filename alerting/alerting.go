@@ -25,7 +25,9 @@ const (
 	// switched off (B-11).
 	ClearSourceDisabled ClearReason = "source_disabled"
 	// ClearLanded: an aircraft involved reported that it is not flying
-	// (disarmed, or declared on the ground). C-14 and the owner's decision
+	// (disarmed, or declared on the ground), in a sample whose own speed
+	// and height did not contradict it where Config.GroundTrust is set.
+	// C-14 and the owner's decision
 	// on plan §11 gap 4; the recorded old behaviour was ClearStale.
 	ClearLanded ClearReason = "landed"
 	// ClearFlightEnded: the caller ended the flight with Drop (spec 04
@@ -92,6 +94,16 @@ const (
 	// unknown (Track.Flying nil): not flying (C-05), but no evidence of a
 	// landing either, so active alerts are held until they go stale.
 	CounterFlyingUnknown = "flying_unknown"
+	// CounterGroundContradicted counts admitted samples that said not
+	// flying (Track.Flying false) while their own speed or height said
+	// otherwise (Config.GroundTrust): judged as flying, and nothing
+	// cleared as landed by them. Each is also counted under this name
+	// plus "_speed" and "_height" (CounterGroundContradictedSpeed,
+	// CounterGroundContradictedHeight) for each evidence that
+	// contradicted it, both when both did.
+	CounterGroundContradicted       = "ground_status_contradicted"
+	CounterGroundContradictedSpeed  = CounterGroundContradicted + "_speed"
+	CounterGroundContradictedHeight = CounterGroundContradicted + "_height"
 	// CounterAircraftEvicted counts aircraft without an active alert
 	// evicted past MaxAircraft.
 	CounterAircraftEvicted = "aircraft_evicted"
@@ -138,6 +150,57 @@ const (
 	CounterRegistrationNotCompared = "registration_not_compared"
 )
 
+// GroundTrust bounds what a sample that says it is not flying
+// (Track.Flying false) may itself show and still be believed. The status
+// is the sender's own claim, for Remote ID a broadcast nibble, and a
+// landing clears every alert of the aircraft but identification_mismatch
+// and takes it out of every check, so with a bound set the claim is
+// taken on its word only when the same sample does not contradict it:
+//
+//   - by speed: the magnitude of (VNMS, VEMS, VDMS) is above MaxSpeedMS;
+//   - by height: the altitude is a vertical position (a finite geodetic
+//     or network altitude, as for separation), the ground is known
+//     (Track.Env), and the altitude less the ground is above
+//     MaxHeightAGLM. A pressure altitude is never compared (R-09: its
+//     error exceeds any such bound), and nothing is when the ground is
+//     unknown or not configured: then speed alone can contradict.
+//
+// Either one is enough. A contradicted sample is judged as flying
+// (paired, zone-judged, held in the grid), clears nothing as landed, and
+// is counted as ground_status_contradicted. A speed or height that is
+// not known contradicts nothing.
+//
+// What a bound does not catch: an aircraft that says ground and is both
+// slower and lower than the bounds (a hover below MaxHeightAGLM), or one
+// with no velocity and no usable height. What it catches without a
+// flight: a transmitter that says ground while carried in a vehicle
+// faster than MaxSpeedMS, which is then judged as an aircraft there (a
+// false warning beats a missed critical).
+//
+// A field at zero, or +Inf, does not use that evidence; the zero
+// GroundTrust believes every declared ground status, the behaviour to
+// 1.14.0. A NaN or negative field is replaced by DefaultGroundTrust's
+// and counted as config_invalid.
+type GroundTrust struct {
+	// MaxSpeedMS is the highest speed, in m/s, at which a declared
+	// ground status is believed.
+	MaxSpeedMS float64
+	// MaxHeightAGLM is the greatest height over known ground, in metres,
+	// at which a declared ground status is believed.
+	MaxHeightAGLM float64
+}
+
+// DefaultGroundTrust returns the bounds a system should set: 3 m/s,
+// above the velocity noise of a stationary receiver and a walking pace
+// and below any cruise; and 50 m, above the combined error of a GNSS
+// altitude and a terrain model in steep terrain, so that an aircraft
+// standing on the ground or a low roof is believed. DefaultConfig does
+// not set them in 1.x (alert_lifecycle.json pins a declared ground
+// status believed at any speed); it will from the next major.
+func DefaultGroundTrust() GroundTrust {
+	return GroundTrust{MaxSpeedMS: 3, MaxHeightAGLM: 50}
+}
+
 // Config holds the monitor's thresholds; they are data (INV-03). Start
 // from DefaultConfig.
 type Config struct {
@@ -162,7 +225,9 @@ type Config struct {
 	AheadToleranceS float64
 	// Zones are the zones judged; ZonePolicy the zone thresholds (the
 	// pressure margin, the CONDITIONAL severity, the height limit; a nil
-	// MaxHeightAGLM means the height limit is not judged here).
+	// MaxHeightAGLM means the height limit is not judged here) and
+	// whether an aircraft with no usable altitude inside a restricted
+	// zone warns (WarnAltitudeUnknown, off in DefaultConfig in 1.x).
 	Zones      []*zones.Zone
 	ZonePolicy zones.Policy
 	// MismatchSeverity and IdentificationSeverity are what the two
@@ -213,6 +278,15 @@ type Config struct {
 	// unknown_operator and raises identification in an incident zone.
 	// The default becomes true in the next major.
 	HoldUnjudgedIdentification bool
+	// GroundTrust bounds the speed and height at which a sample that
+	// says it is not flying is believed; beyond either it is judged as
+	// flying and counted as ground_status_contradicted. The zero value,
+	// which DefaultConfig keeps in 1.x, believes every declared ground
+	// status: an aircraft that says ground raises and keeps no alert but
+	// identification_mismatch, whatever it does. Set it to
+	// DefaultGroundTrust() unless every source's status is trusted. The
+	// default becomes DefaultGroundTrust() in the next major.
+	GroundTrust GroundTrust
 }
 
 // DefaultConfig is the policy alert_lifecycle.json pins: cpa.DefaultPolicy
@@ -220,7 +294,8 @@ type Config struct {
 // age, 1 s ahead tolerance, zones.DefaultPolicy (250 m pressure margin), mismatch warning,
 // identification critical, 1000 m grid cells, 50 000 aircraft with at
 // most half of them from one source, one refusal event per source per
-// second, 16 sources per aircraft.
+// second, 16 sources per aircraft, and every declared ground status
+// believed (no GroundTrust).
 func DefaultConfig() Config {
 	return Config{
 		Policy:                 cpa.DefaultPolicy,
@@ -256,7 +331,9 @@ type Track struct {
 	// VNMS, VEMS, VDMS are the velocity north, east and down in m/s.
 	VNMS, VEMS, VDMS float64
 	// Flying is true for armed (MAVLink) or declared airborne (Remote ID).
-	// Nil is unknown and counts as not flying (C-05); false is a landing.
+	// Nil is unknown and counts as not flying (C-05); false is a landing,
+	// unless Config.GroundTrust is set and this sample's own speed or
+	// height contradicts it: then it is judged as flying.
 	Flying *bool
 	// CapturedAtS is where the ingest placed the sample on its own clock
 	// (T-01); RxAtS when the ingest received it. Both in seconds on the
@@ -403,6 +480,18 @@ func sanitise(c Config, counters *core.Counters) Config {
 	fix(&c.LiveMaxAgeS, d.LiveMaxAgeS)
 	fix(&c.AheadToleranceS, d.AheadToleranceS)
 	fix(&c.RefusalEventIntervalS, d.RefusalEventIntervalS)
+	// A negative ground bound would contradict every aircraft standing
+	// still, and a NaN none: the recommended bound, counted. Zero and
+	// +Inf are the documented ways to leave one off.
+	fixBound := func(v *float64, def float64) {
+		if !(*v >= 0) {
+			*v = def
+			counters.Inc(CounterConfigInvalid)
+		}
+	}
+	g := DefaultGroundTrust()
+	fixBound(&c.GroundTrust.MaxSpeedMS, g.MaxSpeedMS)
+	fixBound(&c.GroundTrust.MaxHeightAGLM, g.MaxHeightAGLM)
 	// The hysteresis must outlast what a clock ahead within the tolerance
 	// could shift (receipt and placement ahead, each by the tolerance).
 	if !(c.ClearAfterS > 2*c.AheadToleranceS) {
