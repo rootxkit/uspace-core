@@ -101,7 +101,11 @@ func TestVectorsRidIdentity(t *testing.T) {
 		if len(exp.PerStep) != len(in.Steps) {
 			t.Fatalf("%d steps, %d expected observations", len(in.Steps), len(exp.PerStep))
 		}
-		s := DefaultSettings()
+		// The file's own defaults (its description: identity_ttl_s 15,
+		// max_gap_s 3, identify_within_s 4), utm's. The module's default
+		// MaxGapS is 9 s since the 2026-11-12 review; the cases pass
+		// under either, and are run under the one they were written for.
+		s := Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: 4}
 		if v := in.Settings.IdentityTTLS; v != nil {
 			s.IdentityTTLS = *v
 		}

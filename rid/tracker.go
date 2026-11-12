@@ -32,6 +32,11 @@ const (
 	// CounterHeldReplaced counts held Locations replaced by a newer one
 	// before they were published: never shown (E-09).
 	CounterHeldReplaced = "held_replaced"
+	// CounterHeldForgotten counts held Locations dropped unpublished
+	// because their (receiver, address) fell silent for longer than
+	// MaxGapS: an aircraft that was heard and never shown (E-09). The
+	// state is also counted in silences, which counts every departure.
+	CounterHeldForgotten = "held_forgotten"
 )
 
 // Settings are the Tracker's thresholds (I-01, I-02, E-10).
@@ -40,7 +45,14 @@ type Settings struct {
 	// heard. Default 15 s: five of the standard's 3 s static periods.
 	IdentityTTLS float64
 	// MaxGapS is the longest silence after which an address is still the
-	// same aircraft. Default 3 s: three 1 s Location periods.
+	// same aircraft; after a longer one everything held for it is
+	// dropped, a held Location included. Default 9 s: three of the
+	// standard's 3 s static periods, the slowest message a receiver must
+	// hear to identify a transmitter that sends one message per
+	// advertisement. It must not be below IdentifyWithinS, or a
+	// transmitter heard less often than every MaxGapS is never published
+	// (Validate), and it stays below IdentityTTLS so that a silence
+	// still forgets an identity before its TTL would.
 	MaxGapS float64
 	// IdentifyWithinS is how long a Location without a fresh identity is
 	// held for one before it is published unidentified. Default 4 s. A
@@ -57,10 +69,13 @@ type Settings struct {
 // a zero field is the default (see NewTracker).
 const IdentifyAtOnceS = -1.0
 
-// DefaultSettings returns utm's thresholds: 15 s, 3 s, 4 s, and 50000
-// addresses.
+// DefaultSettings returns 15 s, 9 s, 4 s, and 50000 addresses: utm's
+// thresholds except MaxGapS, which was 3 s there and to 1.14.0, below
+// the 4 s hold, so that a transmitter heard less often than every 3 s
+// was never published (review 2026-11-12). rid_identity.json pins the
+// rules under utm's 3 s, which its vector test sets.
 func DefaultSettings() Settings {
-	return Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: 4, MaxTransmitters: defaultMaxTransmitters}
+	return Settings{IdentityTTLS: 15, MaxGapS: 9, IdentifyWithinS: 4, MaxTransmitters: defaultMaxTransmitters}
 }
 
 const defaultMaxTransmitters = 50000
@@ -177,6 +192,18 @@ type Tracker struct {
 // identity at once, which is never what a caller who left the field out
 // meant.
 func NewTracker(s Settings) *Tracker {
+	s = s.withDefaults()
+	return &Tracker{
+		s:         s,
+		states:    make(map[stateKey]*state),
+		addresses: make(map[string]*address),
+		recency:   list.New(),
+	}
+}
+
+// withDefaults returns s as a Tracker runs it: every field NewTracker
+// would replace holds its default.
+func (s Settings) withDefaults() Settings {
 	d := DefaultSettings()
 	if !positive(s.IdentityTTLS) {
 		s.IdentityTTLS = d.IdentityTTLS
@@ -190,12 +217,28 @@ func NewTracker(s Settings) *Tracker {
 	if s.MaxTransmitters <= 0 {
 		s.MaxTransmitters = d.MaxTransmitters
 	}
-	return &Tracker{
-		s:         s,
-		states:    make(map[stateKey]*state),
-		addresses: make(map[string]*address),
-		recency:   list.New(),
+	return s
+}
+
+// Validate reports whether the settings, as NewTracker would run them
+// (after defaulting), can publish a transmitter that is heard rarely:
+// MaxGapS must not be below IdentifyWithinS. A Location without a fresh
+// identity is held for IdentifyWithinS, and the hold restarts when the
+// address is forgotten after a silence longer than MaxGapS; with the gap
+// below the hold, a transmitter heard less often than every MaxGapS is
+// forgotten before each hold ends and is never published, identified or
+// not (only held_forgotten shows it). The error is a *core.FieldError
+// naming MaxGapS. IdentifyAtOnceS holds nothing and passes with any gap.
+//
+// NewTracker does not call it and keeps the settings it is given: a
+// caller that reads Settings from its configuration validates them and
+// refuses to start on an error.
+func (s Settings) Validate() error {
+	s = s.withDefaults()
+	if s.IdentifyWithinS > 0 && s.MaxGapS < s.IdentifyWithinS {
+		return &core.FieldError{Field: "MaxGapS", Reason: "below IdentifyWithinS: a transmitter heard less often than every MaxGapS would never be published"}
 	}
+	return nil
 }
 
 // positive reports whether v is a finite number above zero.
@@ -207,7 +250,8 @@ func positive(v float64) bool {
 func (t *Tracker) Settings() Settings { return t.s }
 
 // Counters returns the tracker's counters: identity_changes, silences,
-// unidentified, address_conflicts, evicted and held_replaced.
+// unidentified, address_conflicts, evicted, held_replaced and
+// held_forgotten.
 func (t *Tracker) Counters() *core.Counters { return &t.counters }
 
 // Transmitters returns the number of addresses held.
@@ -353,13 +397,18 @@ func (t *Tracker) dropAddress(addr *address) {
 // Forget drops every (receiver, address) state silent for longer than
 // MaxGapS at nowS, counts each in silences and returns how many it
 // dropped: whatever is heard from such an address next is not known to be
-// the same aircraft. Take calls it; a caller with a periodic tick may too.
+// the same aircraft. A state dropped while it holds a Location that was
+// never published is also counted in held_forgotten. Take calls it; a
+// caller with a periodic tick may too.
 func (t *Tracker) Forget(nowS float64) int {
 	n := 0
 	for st := t.oldest(); st != nil; st = t.oldest() {
 		// Written so that a NaN clock forgets nothing.
 		if !(nowS-st.lastHeardS > t.s.MaxGapS) {
 			break
+		}
+		if st.location != nil && !st.published {
+			t.counters.Inc(CounterHeldForgotten)
 		}
 		t.removeState(st)
 		t.counters.Inc(CounterSilences)

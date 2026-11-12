@@ -18,6 +18,52 @@ for a behaviour change the line sits under the heading of the next major
 
 - Licensed under Apache-2.0 (`LICENSE`); no code change.
 
+Three safety behaviours from the 2026-11-12 review change what a
+judgement returns for some input with no signature change, which
+`docs/RELEASING.md` section 1 classes as a major. No vector case
+changed and none was added: the lab cases that pin the new behaviour
+are still owed (`docs/RELEASING.md` section 3.1). Each entry says what
+a consumer must do.
+
+### Changed
+
+- `rid.DefaultSettings().MaxGapS` is 9 s, from 3 s. The 3 s silence
+  bound was below the 4 s `IdentifyWithinS` hold, and the hold restarts
+  when a silent address is forgotten, so a transmitter heard less often
+  than every 3 s was never published, identified or not: twenty
+  Locations 3.5 s apart gave no observation, and with one message per
+  frame (Bluetooth 4 legacy advertising) the Basic ID was forgotten
+  before the next Location arrived. 9 s is three of the standard's 3 s
+  static periods, at or above the hold and below `IdentityTTLS` (15 s),
+  so a silence still forgets an identity before its TTL would. A
+  transmitter heard at least once every 9 s is now published; one heard
+  less often is still not, and is counted (below). A Location completed
+  by a later Basic ID can now be up to 9 s old instead of 3 s; its
+  `Observation.RxTS` is the receive time of the frame that carried the
+  Location, as before. The known limit I-07 (another aircraft taking
+  over an address within `MaxGapS` joins the old serial until its own
+  Basic ID arrives) widens from 3 s to 9 s, still bounded by
+  `IdentityTTLS`. `rid_identity.json` is unchanged and passes under
+  both values; its vector test runs it under the file's own 3 s.
+  **Consumers:** one that builds its tracker from `DefaultSettings()`
+  or `Settings{}` gets the new bound on upgrade; one that sets
+  `MaxGapS` itself (3 s copied into its configuration) keeps the defect
+  until it raises the value: call `Settings.Validate` at start-up and
+  refuse to start on an error. Place observations by `RxTS`, never by
+  the time `Take` returned them. [review 2026-11-12]
+
+### Added
+
+- `rid.Settings.Validate`: refuses, with a `*core.FieldError` naming
+  `MaxGapS`, settings whose `MaxGapS` is below `IdentifyWithinS` after
+  defaulting. `NewTracker` keeps the settings it is given (the vectors
+  pin 3 s and 4 s), so the caller validates. [review 2026-11-12]
+- `rid.CounterHeldForgotten` (`held_forgotten`): held Locations dropped
+  unpublished because their address fell silent for longer than
+  `MaxGapS`. Until now these were visible only as `silences`, which
+  counts every departure. **Consumers:** export it; a rate above zero
+  is aircraft heard and never shown. [review 2026-11-12]
+
 ## [1.14.0] (SC-15 late placement)
 
 Minor to 1.13.0: `timeplace.PlaceAnchored` places input that a stalled
