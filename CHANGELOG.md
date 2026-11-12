@@ -18,12 +18,16 @@ for a behaviour change the line sits under the heading of the next major
 
 - Licensed under Apache-2.0 (`LICENSE`); no code change.
 
-Three safety behaviours from the 2026-11-12 review change what a
-judgement returns for some input with no signature change, which
-`docs/RELEASING.md` section 1 classes as a major. No vector case
-changed and none was added: the lab cases that pin the new behaviour
-are still owed (`docs/RELEASING.md` section 3.1). Each entry says what
-a consumer must do.
+Three safety behaviours from the 2026-11-12 review. The two under
+Changed alter what a judgement returns for some input with no
+signature change, which `docs/RELEASING.md` section 1 classes as a
+major even though no vector case changed. The third, `GroundTrust`,
+is additive and off by default, because switching it on by default
+changes the expected result of an existing vector case; it is listed
+under Planned for 2.0.0. No vector file changed and no case was added:
+the lab cases that pin the new behaviours are still owed
+(`docs/RELEASING.md` section 3.1). Each entry says what a consumer
+must do.
 
 ### Changed
 
@@ -105,6 +109,47 @@ a consumer must do.
   (`altitude_unknown`, omitted unless set) and
   `zones.CounterZoneAltitudeUnknown` (`zone_altitude_unknown`), for the
   raise above. [review 2026-11-12]
+- `alerting.Config.GroundTrust` (`GroundTrust{MaxSpeedMS,
+  MaxHeightAGLM}`) and `alerting.DefaultGroundTrust()` (3 m/s, 50 m): a
+  sample that says it is not flying (`Track.Flying` false) is believed
+  only while its own numbers do not contradict it. Until now such a
+  sample was a landing whatever else it said: it cleared every alert of
+  the aircraft but `identification_mismatch` and took it out of the
+  conflict, zone and height checks, and for Remote ID the status is a
+  nibble the transmitter chooses. A track declaring ground at 15 m/s
+  through a PROHIBITED zone raised nothing. With a bound set, a sample
+  whose speed (the magnitude of `VNMS`, `VEMS`, `VDMS`) is above
+  `MaxSpeedMS`, or whose height over known ground (a geodetic or
+  network altitude less `Track.Env.GroundM`) is above `MaxHeightAGLM`,
+  is judged as flying, clears nothing as landed, and is counted as
+  `ground_status_contradicted` (and `_speed`, `_height`). A pressure
+  altitude, an unknown ground and a NaN velocity contradict nothing; a
+  consistent sample is a landing as before. Not caught: a hover below
+  `MaxHeightAGLM`, or a track with no velocity and no usable height.
+  Caught without a flight: a transmitter that says ground while carried
+  in a vehicle faster than `MaxSpeedMS`. The zero value, which
+  `DefaultConfig()` keeps, is the 1.x behaviour, so no existing
+  judgement changes; a field at zero or +Inf leaves that evidence out,
+  and a NaN or negative field is replaced by the default bound and
+  counted as `config_invalid`. **Consumers:** the protection is off
+  until a system sets `cfg.GroundTrust = alerting.DefaultGroundTrust()`
+  (or its own bounds from configuration); do so in every monitor that
+  takes Remote ID or any status it does not control, pass a known
+  ground in `Track.Env` where there is a terrain model, pass a velocity
+  where the source has one, and export `ground_status_contradicted`.
+  [review 2026-11-12]
+
+### Planned for 2.0.0
+
+- `alerting`: `DefaultConfig().GroundTrust` becomes
+  `DefaultGroundTrust()`. That changes the expected result of
+  `alert_lifecycle.json#on-the-ground-raises-nothing` (two aircraft
+  that say not flying, 20 m apart, with 10 m/s closing velocities raise
+  nothing today and would raise a conflict), so it starts in the lab
+  and waits for the next major (`docs/RELEASING.md` section 3). The
+  two entries under Changed above belong under the same `## [2.0.0]`
+  heading if the release is cut as a major; the first pull request
+  that adds that heading moves them.
 
 ## [1.14.0] (SC-15 late placement)
 

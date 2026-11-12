@@ -41,7 +41,12 @@
 //     the others with its flying track. When an alert could be cleared
 //     both ways at once, evidence outranks silence (resolved).
 //   - landed: a sample said the aircraft is not flying (C-05, C-14; the
-//     owner's decision on plan §11 gap 4 replaces the old stale). An
+//     owner's decision on plan §11 gap 4 replaces the old stale). With
+//     Config.GroundTrust set, a sample that says so while its own speed
+//     or height over known ground is beyond the bounds is not a landing:
+//     it is judged as flying and counted as ground_status_contradicted
+//     (the status is the sender's claim). DefaultConfig sets no bounds
+//     in 1.x; a system sets DefaultGroundTrust(). An
 //     unknown flying state is not flying and not a landing: the track is
 //     held, its alerts too, and they go stale unless it flies on.
 //   - source_disabled: SwitchSource took a state that disables the source
