@@ -225,7 +225,9 @@ type Config struct {
 	AheadToleranceS float64
 	// Zones are the zones judged; ZonePolicy the zone thresholds (the
 	// pressure margin, the CONDITIONAL severity, the height limit; a nil
-	// MaxHeightAGLM means the height limit is not judged here).
+	// MaxHeightAGLM means the height limit is not judged here) and
+	// whether an aircraft with no usable altitude inside a restricted
+	// zone warns (WarnAltitudeUnknown, off in DefaultConfig in 1.x).
 	Zones      []*zones.Zone
 	ZonePolicy zones.Policy
 	// MismatchSeverity and IdentificationSeverity are what the two

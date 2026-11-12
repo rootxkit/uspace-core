@@ -112,6 +112,8 @@ func FuzzJudgeVertical(f *testing.F) {
 		}
 		pol := DefaultPolicy()
 		pol.PressureUncertaintyM = marginM
+		// The bit of ground that GroundKind does not use.
+		pol.WarnAltitudeUnknown = ground&4 != 0
 
 		r := JudgeVertical(z, ac, env, pol)
 
@@ -125,8 +127,11 @@ func FuzzJudgeVertical(f *testing.F) {
 			t.Fatalf("not evaluated without a reason: %+v", r)
 		}
 		// An unknown altitude warns, flagged as such and as nothing else,
-		// in the zones that warn for something unknown, and only there
-		// (review 2026-11-12 F2).
+		// in the zones that warn for something unknown, and only there,
+		// and only when the policy asks (review 2026-11-12 F2).
+		if r.AltitudeUnknown && !pol.WarnAltitudeUnknown {
+			t.Fatalf("altitude unknown raised without Policy.WarnAltitudeUnknown: %+v", r)
+		}
 		if r.AltitudeUnknown {
 			d := r.Raise
 			if d == nil || d.Severity != core.SeverityWarning || r.LimitNotJudged || r.Reasons != ReasonsOf(ReasonNoAltitude) ||
@@ -139,7 +144,7 @@ func FuzzJudgeVertical(f *testing.F) {
 		} else if r.Raise != nil && r.Raise.Detail.AltitudeUnknown != nil {
 			t.Fatalf("detail flagged altitude unknown, result not: %+v", r.Raise.Detail)
 		}
-		if r.NotEvaluated && warnsUnjudged(z.Type) && r.Reasons == ReasonsOf(ReasonNoAltitude) {
+		if pol.WarnAltitudeUnknown && r.NotEvaluated && warnsUnjudged(z.Type) && r.Reasons == ReasonsOf(ReasonNoAltitude) {
 			t.Fatalf("%s zone silent for an unknown altitude: %+v", z.Type, r)
 		}
 		// Z-09 with S-37: a PROHIBITED or REQ_AUTHORIZATION zone is never

@@ -34,11 +34,13 @@
 //     (AGL without the ground, WGS84 without the geoid; S-37) warns with
 //     limit_not_judged (Z-09); a CONDITIONAL zone with one is not
 //     evaluated, since a warning would exceed an info zone's severity.
-//     The same two types warn, with altitude_unknown and vertical_known
-//     false, for an aircraft that has no usable altitude when a limit
-//     needs one (Result.AltitudeUnknown): it is inside horizontally and
-//     possibly inside, which is said and never raised as the zone's own
-//     critical; every other zone is not evaluated then. A pressure altitude is widened by
+//     An aircraft that has no usable altitude when a limit needs one
+//     is not evaluated (no_altitude). Under Policy.WarnAltitudeUnknown,
+//     off by default in 1.x, the same two types warn instead, with
+//     altitude_unknown and vertical_known false
+//     (Result.AltitudeUnknown): it is inside horizontally and possibly
+//     inside, which is said and never raised as the zone's own
+//     critical; every other zone is still not evaluated then. A pressure altitude is widened by
 //     Policy.PressureUncertaintyM each way (R-09): inside as indicated
 //     keeps the severity, inside only the widened band warns (capped at
 //     the zone's own severity: an info zone stays info), both flagged

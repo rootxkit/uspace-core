@@ -59,11 +59,22 @@ type Policy struct {
 	// of the open category, judged at the authority only, spec 09 §2);
 	// nil when this system does not judge it.
 	MaxHeightAGLM *float64
+	// WarnAltitudeUnknown makes a PROHIBITED or REQ_AUTHORIZATION zone
+	// that has a limit needing a height raise a warning for an aircraft
+	// with no usable altitude, flagged Result.AltitudeUnknown: inside
+	// horizontally, possibly inside. False, the zero value and what
+	// DefaultPolicy keeps in 1.x, leaves that check NotEvaluated with
+	// no_altitude, silent, as to 1.14.0: a missing geoid or a broadcast
+	// altitude of "unknown" then switches every such zone off for that
+	// aircraft. A system sets it true; it becomes the default in the
+	// next major.
+	WarnAltitudeUnknown bool
 }
 
 // DefaultPolicy is the predecessor's policy: a 250 m pressure margin,
-// CONDITIONAL zones at warning, and no height limit (the authority sets
-// its own).
+// CONDITIONAL zones at warning, no height limit (the authority sets
+// its own), and no warning for an unknown altitude (WarnAltitudeUnknown
+// false).
 func DefaultPolicy() Policy {
 	return Policy{PressureUncertaintyM: 250, ConditionalSeverity: core.SeverityWarning}
 }
@@ -84,8 +95,9 @@ const (
 	// CounterZoneAltitudeUnknown counts zone raises that warn because the
 	// aircraft is inside a PROHIBITED or REQ_AUTHORIZATION zone
 	// horizontally and has no usable altitude to judge the zone's limits
-	// with (Result.AltitudeUnknown). To 1.14.0 these were silent and
-	// counted in zone_checks_not_evaluated.
+	// with (Result.AltitudeUnknown), under Policy.WarnAltitudeUnknown.
+	// Without it they are silent and counted in
+	// zone_checks_not_evaluated.
 	CounterZoneAltitudeUnknown = "zone_altitude_unknown"
 	// CounterZoneLimitNotJudged counts zone raises that warn because an
 	// AGL or WGS84 limit could not be judged (Z-09, S-37).
@@ -231,7 +243,8 @@ type Result struct {
 	// horizontally inside a PROHIBITED or REQ_AUTHORIZATION zone with no
 	// usable altitude: "possibly inside, altitude unknown", never a
 	// judged incursion. No limit was judged, and LimitNotJudged, which is
-	// about a missing ground or geoid, stays false.
+	// about a missing ground or geoid, stays false. Only under
+	// Policy.WarnAltitudeUnknown.
 	AltitudeUnknown bool
 	// Reasons says everything that was missing when NotEvaluated,
 	// LimitNotJudged or AltitudeUnknown; empty otherwise.
@@ -356,8 +369,8 @@ func atMostWarning(sev core.Severity) core.Severity {
 }
 
 // warnsUnjudged reports whether a zone type warns, rather than stays
-// silent, when a limit cannot be judged (Z-09, S-37) or the aircraft has
-// no usable altitude.
+// silent, when a limit cannot be judged (Z-09, S-37) or, under
+// Policy.WarnAltitudeUnknown, the aircraft has no usable altitude.
 func warnsUnjudged(t core.ZoneType) bool {
 	return t == core.ZoneProhibited || t == core.ZoneReqAuthorization
 }
@@ -394,17 +407,21 @@ func ptr[T any](v T) *T { return &v }
 // is judged as for any aircraft: no margin and no flag, and no altitude
 // is needed for it.
 //
-// With no usable altitude (nil, not finite, or AltSource none) and a
-// limit that needs a height, a PROHIBITED or REQ_AUTHORIZATION zone
-// raises a warning with vertical_known false and altitude_unknown true,
-// Result.AltitudeUnknown set and Reasons no_altitude: the aircraft is
-// inside the zone horizontally and possibly inside it (review
-// 2026-11-12, owner decision: knowing less about an aircraft over a
-// restricted area must not say less than an unknown ground does). It is
-// never the zone's own critical, and limit_not_judged, which names a
-// missing ground or geoid, is not set. Any other zone is NotEvaluated,
-// as an unjudged limit leaves it: a warning would exceed a CONDITIONAL
-// or USPACE zone's own severity at info.
+// With no usable altitude (nil, not finite, or AltSource none) any
+// zone with a limit that needs a height is NotEvaluated with
+// no_altitude. That is the 1.x behaviour and stays the default.
+//
+// Under pol.WarnAltitudeUnknown a PROHIBITED or REQ_AUTHORIZATION zone
+// instead raises a warning with vertical_known false and
+// altitude_unknown true, Result.AltitudeUnknown set and Reasons
+// no_altitude: the aircraft is inside the zone horizontally and
+// possibly inside it (review 2026-11-12, owner decision: knowing less
+// about an aircraft over a restricted area must not say less than an
+// unknown ground does). It is never the zone's own critical, and
+// limit_not_judged, which names a missing ground or geoid, is not set.
+// Any other zone stays NotEvaluated, as an unjudged limit leaves it: a
+// warning would exceed a CONDITIONAL or USPACE zone's own severity at
+// info.
 //
 // Fail-safe: a non-finite altitude, ground or undulation is unknown,
 // never a number that compares as outside; a zone limit that is not
@@ -443,7 +460,7 @@ func JudgeVertical(z *Zone, ac Aircraft, env Env, pol Policy) Result {
 	alt, widened, ok := altitude(ac)
 	if !ok {
 		reasons := ReasonsOf(ReasonNoAltitude)
-		if !warnsUnjudged(z.Type) {
+		if !pol.WarnAltitudeUnknown || !warnsUnjudged(z.Type) {
 			return Result{NotEvaluated: true, Reasons: reasons}
 		}
 		// Inside horizontally, and nothing to compare with any limit:

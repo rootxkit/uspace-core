@@ -26,11 +26,14 @@
 //     registration matches, or the flight ends (04 §3.2 errata
 //     2026-10-23, counted as registration_not_compared). An aircraft
 //     with no usable altitude inside a PROHIBITED or REQ_AUTHORISATION
-//     zone that has a vertical limit raises the zone alert as a warning
-//     with altitude_unknown true (possibly inside; to 1.14.0 nothing),
-//     and identification beside it when it is unidentified; a zone alert
-//     already active from a judgement that had an altitude is held
-//     instead, never downgraded by knowing less. An active pair is judged on
+//     zone that has a vertical limit is not evaluated, silently, unless
+//     Config.ZonePolicy.WarnAltitudeUnknown is set (off in
+//     DefaultConfig in 1.x; a system sets it). With it, the zone alert
+//     is raised as a warning with altitude_unknown true (possibly
+//     inside), and identification beside it when the aircraft is
+//     unidentified; a zone alert already active from a judgement that
+//     had an altitude is held instead, never downgraded by knowing
+//     less. An active pair is judged on
 //     every sample of either aircraft wherever the other now is, so it is
 //     never shown false by falling outside the neighbour search. A
 //     resolved conflict carries both the last numbers that showed it true

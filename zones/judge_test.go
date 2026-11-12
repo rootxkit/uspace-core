@@ -118,13 +118,20 @@ var noAltitude = map[string]Aircraft{
 	"nil altitude, no source": {},
 }
 
-// A PROHIBITED or REQ_AUTHORIZATION zone with a limit that needs a
-// height is never silent for an aircraft with no usable altitude: it
-// warns "possibly inside, altitude unknown" (review 2026-11-12 F2). The
-// twins: with an altitude it is judged, inside at the zone's own
-// severity with no flag and outside clear.
-func TestNoAltitudeWarnsInRestrictedZones(t *testing.T) {
+// warnPolicy is DefaultPolicy with WarnAltitudeUnknown set.
+func warnPolicy() Policy {
 	pol := DefaultPolicy()
+	pol.WarnAltitudeUnknown = true
+	return pol
+}
+
+// Under Policy.WarnAltitudeUnknown a PROHIBITED or REQ_AUTHORIZATION
+// zone with a limit that needs a height is never silent for an aircraft
+// with no usable altitude: it warns "possibly inside, altitude unknown"
+// (review 2026-11-12 F2). The twins: with an altitude it is judged,
+// inside at the zone's own severity with no flag and outside clear.
+func TestNoAltitudeWarnsInRestrictedZones(t *testing.T) {
+	pol := warnPolicy()
 	for _, zt := range []core.ZoneType{core.ZoneProhibited, core.ZoneReqAuthorization} {
 		own, _ := Severity(zt, pol)
 		for zname, z := range map[string]*Zone{
@@ -170,11 +177,42 @@ func TestNoAltitudeWarnsInRestrictedZones(t *testing.T) {
 	}
 }
 
-// Zones that do not warn for something unknown stay not evaluated
-// without an altitude (a warning would exceed a CONDITIONAL or USPACE
-// zone at info), and NO_RESTRICTION stays clear.
-func TestNoAltitudeElsewhereIsNotEvaluated(t *testing.T) {
+// The flag off is the 1.x result, exactly: DefaultPolicy does not set
+// it, and every zone type with a limit that needs a height is not
+// evaluated for no_altitude, counted as zone_checks_not_evaluated and
+// flagged nowhere. Changing this default is a major.
+func TestNoAltitudeIsNotEvaluatedByDefault(t *testing.T) {
 	pol := DefaultPolicy()
+	if pol.WarnAltitudeUnknown {
+		t.Fatal("DefaultPolicy sets WarnAltitudeUnknown: a changed default is a major (docs/RELEASING.md section 1)")
+	}
+	for _, zt := range []core.ZoneType{core.ZoneProhibited, core.ZoneReqAuthorization, core.ZoneConditional, core.ZoneUSpace} {
+		for zname, z := range map[string]*Zone{
+			"AMSL band":   zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL)),
+			"AGL ceiling": zoneOf(zt, limit(0, core.RefAGL), limit(120, core.RefAGL)),
+		} {
+			for acname, ac := range noAltitude {
+				name := string(zt) + ", " + zname + ", " + acname
+				r := JudgeVertical(z, ac, ground500, pol)
+				if r != (Result{NotEvaluated: true, Reasons: ReasonsOf(ReasonNoAltitude)}) {
+					t.Errorf("%s: got %+v (raise %+v), want exactly not evaluated for no_altitude", name, r, r.Raise)
+				}
+				var c core.Counters
+				r.Count(&c)
+				if c.Get(CounterZoneNotEvaluated) != 1 || c.Get(CounterZoneAltitudeUnknown) != 0 {
+					t.Errorf("%s: counters %v", name, c.Snapshot())
+				}
+			}
+		}
+	}
+}
+
+// Zones that do not warn for something unknown stay not evaluated
+// without an altitude even under WarnAltitudeUnknown (a warning would
+// exceed a CONDITIONAL or USPACE zone at info), and NO_RESTRICTION stays
+// clear.
+func TestNoAltitudeElsewhereIsNotEvaluated(t *testing.T) {
+	pol := warnPolicy()
 	for _, zt := range []core.ZoneType{core.ZoneConditional, core.ZoneUSpace} {
 		z := zoneOf(zt, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
 		for name, ac := range noAltitude {
@@ -199,7 +237,7 @@ func TestNoAltitudeElsewhereIsNotEvaluated(t *testing.T) {
 }
 
 func TestNoAltitude(t *testing.T) {
-	banded := zoneOf(core.ZoneConditional, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
+	banded := zoneOf(core.ZoneProhibited, limit(500, core.RefAMSL), limit(700, core.RefAMSL))
 	unbounded := zoneOf(core.ZoneProhibited, nil, nil)
 	floorAtGround := zoneOf(core.ZoneProhibited, limit(0, core.RefAGL), nil)
 	pol := DefaultPolicy()
@@ -217,7 +255,7 @@ func TestNoAltitude(t *testing.T) {
 		raised(t, name+", AGL floor at ground", JudgeVertical(floorAtGround, ac, noTerrain, pol), core.SeverityCritical)
 	}
 	// And with an altitude the banded zone is judged.
-	raised(t, "600 m", JudgeVertical(banded, geodetic(600), ground500, pol), core.SeverityWarning)
+	raised(t, "600 m", JudgeVertical(banded, geodetic(600), ground500, pol), core.SeverityCritical)
 }
 
 func TestInclusiveBounds(t *testing.T) {

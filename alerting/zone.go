@@ -73,9 +73,11 @@ func isPlaceKind(kind string) bool {
 //   - a zone that cannot be judged (a containment error, NotEvaluated) or
 //     an identification that is absent or held (heldIdentification)
 //     holds its alerts: neither refreshed nor shown false (C-09);
-//   - a PROHIBITED or REQ_AUTHORISATION zone with a vertical limit and an
-//     aircraft with no usable altitude (zones.Result.AltitudeUnknown)
-//     raises the zone alert as a warning whose detail says
+//   - under Config.ZonePolicy.WarnAltitudeUnknown (without it this is a
+//     zone that cannot be judged, above), a PROHIBITED or
+//     REQ_AUTHORISATION zone with a vertical limit and an aircraft with
+//     no usable altitude (zones.Result.AltitudeUnknown) raises the zone
+//     alert as a warning whose detail says
 //     altitude_unknown, and identification beside it as above. When the
 //     zone's alert is already active from a judgement that had an
 //     altitude, it is held instead: knowing less never replaces, and so
