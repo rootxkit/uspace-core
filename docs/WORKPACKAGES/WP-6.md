@@ -73,7 +73,7 @@ greater than `maxSpacing` (120 s) is clamped to the bound and counted.
 const NamespaceUUID = "6f1c7d52-4a0b-5c1e-9d3a-2b8e41f07a65"
 func AircraftID(idType odid.IDType, uaID string) string        // uuid5(ns, fmt.Sprintf("%d:%s", idType, uaID)); utm's exact ids
 func UnidentifiedID(transmitter string) string                 // uuid5(ns, "transmitter:"+address)
-type Settings struct{ IdentityTTLS, MaxGapS, IdentifyWithinS float64; MaxTransmitters int }   // DefaultSettings{15, 9, 4, 50000}; MaxGapS was 3 to 1.14.0
+type Settings struct{ IdentityTTLS, MaxGapS, IdentifyWithinS float64; MaxTransmitters int }   // DefaultSettings{15, 3, 4, 50000}
 type Frame struct{ Receiver, Transmitter string; Messages []odid.Message; NowS float64; RxTS time.Time }
 type Observation struct{ DroneID, Label string; Identified bool; UAID string; IDType odid.IDType; OperatorID *string; Location odid.Location; System *odid.System; Receiver, Transmitter string; RxTS time.Time }
 type Tracker struct{...};  func NewTracker(s Settings) *Tracker

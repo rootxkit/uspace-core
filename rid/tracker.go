@@ -46,13 +46,11 @@ type Settings struct {
 	IdentityTTLS float64
 	// MaxGapS is the longest silence after which an address is still the
 	// same aircraft; after a longer one everything held for it is
-	// dropped, a held Location included. Default 9 s: three of the
-	// standard's 3 s static periods, the slowest message a receiver must
-	// hear to identify a transmitter that sends one message per
-	// advertisement. It must not be below IdentifyWithinS, or a
-	// transmitter heard less often than every MaxGapS is never published
-	// (Validate), and it stays below IdentityTTLS so that a silence
-	// still forgets an identity before its TTL would.
+	// dropped, a held Location included. Default 3 s: three 1 s Location
+	// periods. That default is below IdentifyWithinS, so a transmitter
+	// heard less often than every 3 s is never published (Validate
+	// refuses it); RecommendedSettings holds 9 s, which becomes the
+	// default in the next major.
 	MaxGapS float64
 	// IdentifyWithinS is how long a Location without a fresh identity is
 	// held for one before it is published unidentified. Default 4 s. A
@@ -69,13 +67,34 @@ type Settings struct {
 // a zero field is the default (see NewTracker).
 const IdentifyAtOnceS = -1.0
 
-// DefaultSettings returns 15 s, 9 s, 4 s, and 50000 addresses: utm's
-// thresholds except MaxGapS, which was 3 s there and to 1.14.0, below
-// the 4 s hold, so that a transmitter heard less often than every 3 s
-// was never published (review 2026-11-12). rid_identity.json pins the
-// rules under utm's 3 s, which its vector test sets.
+// DefaultSettings returns utm's thresholds: 15 s, 3 s, 4 s, and 50000
+// addresses.
+//
+// They fail Validate, by design until the next major: the 3 s MaxGapS is
+// below the 4 s IdentifyWithinS hold, so a transmitter heard less often
+// than every 3 s is never published (review 2026-11-12). Changing a
+// default changes what the tracker returns for existing callers, which
+// is a major (docs/RELEASING.md section 1), so 1.x keeps the values
+// rid_identity.json was written under and a system opts in to
+// RecommendedSettings.
 func DefaultSettings() Settings {
-	return Settings{IdentityTTLS: 15, MaxGapS: 9, IdentifyWithinS: 4, MaxTransmitters: defaultMaxTransmitters}
+	return Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: 4, MaxTransmitters: defaultMaxTransmitters}
+}
+
+// RecommendedSettings returns the thresholds a system should run: 15 s,
+// 9 s, 4 s, and 50000 addresses. They are DefaultSettings with MaxGapS
+// at 9 s: three of the standard's 3 s static periods, the slowest
+// message a receiver must hear to identify a transmitter that sends one
+// message per advertisement. That is at or above IdentifyWithinS, so a
+// transmitter heard at least once every 9 s is published (Validate
+// passes), and below IdentityTTLS, so a silence still forgets an
+// identity before its TTL would. A Location completed by a later Basic
+// ID can then be up to 9 s old; Observation.RxTS says so. They become
+// DefaultSettings in the next major.
+func RecommendedSettings() Settings {
+	s := DefaultSettings()
+	s.MaxGapS = 9
+	return s
 }
 
 const defaultMaxTransmitters = 50000
@@ -232,7 +251,8 @@ func (s Settings) withDefaults() Settings {
 //
 // NewTracker does not call it and keeps the settings it is given: a
 // caller that reads Settings from its configuration validates them and
-// refuses to start on an error.
+// refuses to start on an error. DefaultSettings fails it in 1.x (its
+// MaxGapS is 3 s); RecommendedSettings passes.
 func (s Settings) Validate() error {
 	s = s.withDefaults()
 	if s.IdentifyWithinS > 0 && s.MaxGapS < s.IdentifyWithinS {
