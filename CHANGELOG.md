@@ -16,6 +16,8 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.15.0] (review 2026-11-12 safety opt-ins)
+
 - Licensed under Apache-2.0 (`LICENSE`); no code change.
 
 Three safety behaviours from the 2026-11-12 review, each additive and
