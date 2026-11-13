@@ -16,6 +16,8 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+## [1.16.0] (rid publish-held opt-in)
+
 One additive opt-in in `rid`, off by default: no existing function,
 default or judgement changes and no vector file or vector test changes,
 so this is a minor (`docs/RELEASING.md` section 1). It replaces the
