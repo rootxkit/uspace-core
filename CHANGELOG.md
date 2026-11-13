@@ -16,6 +16,127 @@ for a behaviour change the line sits under the heading of the next major
 
 ## [Unreleased]
 
+One additive opt-in in `rid`, off by default: no existing function,
+default or judgement changes and no vector file or vector test changes,
+so this is a minor (`docs/RELEASING.md` section 1). It replaces the
+`rid` opt-in of 1.15.0: `RecommendedSettings()` could not be adopted,
+because its 9 s `MaxGapS` also keeps an identity for 9 s of silence. A
+transmitter that restarts 4 s later on the same address with a new
+serial then has its Locations published under the old serial (the
+lab's SC-10, rule I-07), which is worse than the defect it fixed.
+
+### Consumers must
+
+A system that runs a Remote ID tracker changes three lines, adds a
+tick, and exports the three counters:
+
+```go
+tracker := rid.NewTracker(rid.PublishHeldSettings()) // was RecommendedSettings() or DefaultSettings()
+
+// per frame, where Take was called:
+for _, o := range tracker.TakeAll(frame) {
+	publish(o)
+}
+
+// on a periodic tick (for example 1 s), where Forget was called or
+// nothing was;
+// nowS is the clock of Frame.NowS:
+for _, o := range tracker.Sweep(nowS) {
+	publish(o)
+}
+```
+
+- A system that reads its `rid.Settings` from configuration sets
+  `PublishHeld: true` there, keeps `MaxGapS` at 3 s, calls
+  `Settings.Validate()` at start-up and refuses to start on an error.
+- `Take` and `Forget` must both go: they cannot return a flushed
+  Location, so with them the flag publishes nothing more and
+  `held_forgotten` keeps counting. `TakeAll` and `Sweep` take the same
+  lock or goroutine `Take` did.
+- Publish each returned slice in order, and place every observation by
+  `Observation.RxTS`, never by the time it was returned: a flushed
+  Location is more than `MaxGapS` old. A picture keyed by `DroneID`
+  keeps the observation with the latest `RxTS`.
+- Without the tick, a flushed Location is returned only by the next
+  frame of any transmitter: the last Location of the last transmitter
+  in range is not published until something else is heard.
+- Export `held_flushed`, `held_evicted` and `held_identity_changed`.
+  After the change `held_forgotten`, `held_evicted` and
+  `held_identity_changed` stay at zero; one above zero means a call
+  site still uses `Take` or `Forget`.
+
+### Added
+
+- `rid.Settings.PublishHeld`, `rid.PublishHeldSettings()` (15 s, 3 s,
+  4 s, 50000, `PublishHeld` true), `(*rid.Tracker).TakeAll` and
+  `(*rid.Tracker).Sweep`. They separate two rules that `MaxGapS` joined:
+  how long an identity survives a silence, and whether a Location that
+  was heard is shown. With the flag, a Location still held for an
+  identity when its (receiver, address) state is discarded is returned
+  as an unidentified observation instead of being dropped, on each of
+  the three paths that discard one: the state is forgotten after a
+  silence longer than `MaxGapS` (`held_forgotten` without the flag),
+  its address is evicted from the full table, or another Basic ID of
+  the same ID type takes the address. `TakeAll(frame)` returns those
+  first and the frame's own observation last; `Sweep(nowS)` returns the
+  ones a tick forgets. A flushed observation is what a hold that timed
+  out publishes (`UnidentifiedID(address)`, the address as label,
+  `Identified` false, the Operator ID and System its state had heard,
+  counted in `unidentified`) with the `Receiver`, `Transmitter` and
+  `RxTS` of the frame that carried the Location, and it is unidentified
+  even when an identity for the address is known again by then.
+  Guarantees: every Location given to `TakeAll` is returned exactly
+  once, or counted in `held_replaced`; the observations of one
+  (receiver, address) are returned in the order their Locations were
+  taken, within and across calls; no Location is identified by a Basic
+  ID from before a silence longer than `MaxGapS`. Not flushed: a held
+  Location replaced by a newer one of the same state (`held_replaced`,
+  at most the first `IdentifyWithinS` of a hearing), because the newer
+  one is published in its place and a second, unidentified track
+  beside an identified one would be worse. Under
+  `PublishHeldSettings()` twenty Locations 3.5 s apart give twenty
+  unidentified observations (none under `DefaultSettings()`, eighteen
+  under `RecommendedSettings()`), and the restart above is published
+  under the new serial only. Without the flag `TakeAll` is `Take` as a
+  slice and `Sweep` is `Forget`; `Take` and `Forget` are unchanged with
+  or without it. [review 2026-11-12]
+- `rid.Settings.Validate()` passes any `MaxGapS` when `PublishHeld` is
+  set: a gap below the hold then loses nothing. Without the flag it
+  refuses what it refused in 1.15.0, with the same error. It cannot
+  see whether the caller uses `TakeAll` and `Sweep`. [review 2026-11-12]
+- `rid.CounterHeldFlushed` (`held_flushed`): held Locations published
+  by the flag. `rid.CounterHeldEvicted` (`held_evicted`) and
+  `rid.CounterHeldIdentityChanged` (`held_identity_changed`): held
+  Locations dropped unpublished by an eviction or an identity change.
+  Those two drops happened uncounted until now (only `evicted` and
+  `identity_changes` moved, which count the address, not the
+  Location); they are counted under any settings and no observation
+  changes. [review 2026-11-12]
+
+### Deprecated
+
+- `rid.RecommendedSettings()`, in favour of `PublishHeldSettings()`. It
+  returns what it returned in 1.15.0 (changing it would change the
+  judgement of whoever took it, a major).
+  [review 2026-11-12]
+
+### Planned for 2.0.0
+
+- `rid`: `DefaultSettings()` becomes `PublishHeldSettings()`
+  (`PublishHeld` true, `MaxGapS` stays 3 s). This replaces the plan of
+  1.15.0 to make `MaxGapS` 9 s the default, which is withdrawn.
+  What becomes of `Take` and `Forget`, which cannot return what the
+  flag publishes, and of `RecommendedSettings()`, is decided with the
+  major. The default flip changes what the tracker returns for
+  existing callers, so it starts in the lab. Run through `TakeAll`
+  with the flag, 23 of the 24 `rid_identity.json` cases give the
+  expected per-step observations and counters, and
+  `#forgotten-transmitter-does-not-lend-its-position` differs: the
+  Location held before the silence is returned unidentified by the
+  frame after it and `unidentified` is 1, not 0 (still not completed
+  by the later Basic ID, which is what the case is about). Cases for
+  the rarely heard transmitter and for the restart are owed.
+
 ## [1.15.0] (review 2026-11-12 safety opt-ins)
 
 - Licensed under Apache-2.0 (`LICENSE`); no code change.
