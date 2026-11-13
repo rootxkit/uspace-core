@@ -44,24 +44,61 @@
 // message publishes nothing.
 //
 // The hold runs inside the (receiver, address) state, so it restarts
-// when a silence longer than MaxGapS drops the state: MaxGapS must not
-// be below IdentifyWithinS (Settings.Validate), or a transmitter heard
-// less often than every MaxGapS is never published at all. That is the
-// case of DefaultSettings in 1.x (3 s under a 4 s hold), kept because a
-// changed default is a major: a system runs RecommendedSettings (9 s),
-// under which a transmitter heard at least once every 9 s is published,
-// within 4 s plus one gap of the first frame; one heard less often is
-// not, and each Location dropped that way is counted (held_forgotten).
+// when a silence longer than MaxGapS drops the state. With MaxGapS
+// below IdentifyWithinS, the case of DefaultSettings in 1.x (3 s under
+// a 4 s hold, kept because a changed default is a major), a transmitter
+// heard less often than every MaxGapS is forgotten before each hold
+// ends and never published at all; each Location dropped that way is
+// counted (held_forgotten), and Settings.Validate refuses the settings.
+//
+// # Publishing what was heard (PublishHeld)
+//
+// A system runs PublishHeldSettings: the defaults with
+// Settings.PublishHeld, and TakeAll and Sweep in place of Take and
+// Forget. The two rules are then separate. MaxGapS (3 s) says how long
+// an identity survives a silence, and stays short. A Location that was
+// heard is published whatever happens to its state: one still held,
+// unpublished, when its state is forgotten after a silence, when its
+// address is evicted from the full table, or when another Basic ID of
+// the same ID type takes the address, is returned as an unidentified
+// observation by the call that discards it, with the receive time of
+// its own frame (held_flushed, and unidentified). So a transmitter is
+// published however rarely it is heard, and no identity is carried
+// across a silence longer than MaxGapS: a Location is identified only
+// by a Basic ID from a hearing of the address that no such silence has
+// broken, its own receiver's or the lending receiver's (I-03). The
+// one held Location still not published is one replaced by a newer
+// Location of the same state before its hold ended (held_replaced):
+// the newer one is published in its place.
+//
+// The flushed observations come back from TakeAll, before the frame's
+// own, and from Sweep. Any frame is the clock that ends every silence,
+// so TakeAll returns the flushed Locations of other addresses too. A
+// caller without a periodic Sweep gets a flushed Location only when the
+// next frame of any transmitter arrives; with a tick it gets it about
+// MaxGapS plus one tick after it was heard. The observations of one
+// (receiver, address) are returned in the order their Locations were
+// taken; across receivers the caller orders by Observation.RxTS, as it
+// must without the flag.
+//
+// RecommendedSettings (MaxGapS 9 s, from 1.15.0) is deprecated: it
+// publishes a transmitter heard at least once every 9 s by keeping the
+// identity for 9 s of silence too, which widens the known limit below
+// from 3 s to 9 s, and one heard less often is still dropped.
+//
 // A held Location that a later Basic ID completes can be up to MaxGapS
-// old: Observation.RxTS is the receive time of the frame that carried
-// the Location, so the caller places it at its true age.
+// old, and a flushed one is older than MaxGapS: Observation.RxTS is the
+// receive time of the frame that carried the Location, so the caller
+// places it at its true age.
 //
 // DroneID of an identified aircraft is AircraftID: uuid5 of NamespaceUUID
 // and "<id_type>:<ua_id>", exactly utm's ids, the same across receivers
 // and restarts (I-06).
 //
 // The table is bounded by Settings.MaxTransmitters addresses; a new
-// address at the bound evicts the one heard longest ago (evicted, E-10).
+// address at the bound evicts the one heard longest ago (evicted, E-10);
+// a Location it still held is counted (held_evicted) or, with
+// PublishHeld, published unidentified.
 //
 // # Known limit (I-07)
 //

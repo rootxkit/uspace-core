@@ -36,7 +36,23 @@ const (
 	// because their (receiver, address) fell silent for longer than
 	// MaxGapS: an aircraft that was heard and never shown (E-09). The
 	// state is also counted in silences, which counts every departure.
+	// With Settings.PublishHeld, TakeAll and Sweep publish such a
+	// Location instead (held_flushed) and this stays at zero.
 	CounterHeldForgotten = "held_forgotten"
+	// CounterHeldEvicted counts held Locations dropped unpublished
+	// because their address was evicted from a full table (E-09). The
+	// address is also counted in evicted.
+	CounterHeldEvicted = "held_evicted"
+	// CounterHeldIdentityChanged counts held Locations dropped
+	// unpublished because another Basic ID of the same ID type arrived
+	// from their (receiver, address) (E-09). The change is also counted
+	// in identity_changes.
+	CounterHeldIdentityChanged = "held_identity_changed"
+	// CounterHeldFlushed counts held Locations that TakeAll or Sweep
+	// published unidentified, under Settings.PublishHeld, because their
+	// state was forgotten, evicted or taken by another identity. Each is
+	// also counted in unidentified.
+	CounterHeldFlushed = "held_flushed"
 )
 
 // Settings are the Tracker's thresholds (I-01, I-02, E-10).
@@ -49,8 +65,8 @@ type Settings struct {
 	// dropped, a held Location included. Default 3 s: three 1 s Location
 	// periods. That default is below IdentifyWithinS, so a transmitter
 	// heard less often than every 3 s is never published (Validate
-	// refuses it); RecommendedSettings holds 9 s, which becomes the
-	// default in the next major.
+	// refuses it) unless PublishHeld is set, which is how a system runs
+	// it: PublishHeldSettings.
 	MaxGapS float64
 	// IdentifyWithinS is how long a Location without a fresh identity is
 	// held for one before it is published unidentified. Default 4 s. A
@@ -60,6 +76,23 @@ type Settings struct {
 	// address arrives at the bound, the address heard longest ago is
 	// dropped and counted as evicted. 0 or less means the default, 50000.
 	MaxTransmitters int
+	// PublishHeld makes TakeAll and Sweep publish, unidentified, a held
+	// Location that would otherwise be dropped unpublished with its
+	// state: when the state is forgotten after a silence longer than
+	// MaxGapS (held_forgotten without the flag), when its address is
+	// evicted from a full table (held_evicted), and when another Basic
+	// ID of the same ID type takes the address (held_identity_changed).
+	// So every aircraft that was heard is shown, while MaxGapS stays
+	// short and no identity is carried across a longer silence. A held
+	// Location replaced by a newer one of the same state is not flushed
+	// (held_replaced): the newer one is published in its place.
+	//
+	// Default false: exactly the behaviour without the field. Take and
+	// Forget return at most one observation and none, so they cannot
+	// hand a flushed Location back and keep dropping and counting it
+	// whatever the flag says: a caller that sets it calls TakeAll and
+	// Sweep instead. It becomes the default in the next major.
+	PublishHeld bool
 }
 
 // IdentifyAtOnceS is the IdentifyWithinS that publishes a Location
@@ -76,7 +109,7 @@ const IdentifyAtOnceS = -1.0
 // default changes what the tracker returns for existing callers, which
 // is a major (docs/RELEASING.md section 1), so 1.x keeps the values
 // rid_identity.json was written under and a system opts in to
-// RecommendedSettings.
+// PublishHeldSettings.
 func DefaultSettings() Settings {
 	return Settings{IdentityTTLS: 15, MaxGapS: 3, IdentifyWithinS: 4, MaxTransmitters: defaultMaxTransmitters}
 }
@@ -89,11 +122,34 @@ func DefaultSettings() Settings {
 // transmitter heard at least once every 9 s is published (Validate
 // passes), and below IdentityTTLS, so a silence still forgets an
 // identity before its TTL would. A Location completed by a later Basic
-// ID can then be up to 9 s old; Observation.RxTS says so. They become
-// DefaultSettings in the next major.
+// ID can then be up to 9 s old; Observation.RxTS says so.
+//
+// Deprecated: use PublishHeldSettings. The 9 s gap also keeps an
+// identity for 9 s of silence, so a transmitter that restarts on the
+// same address with another serial within 9 s has its Locations
+// published under the old serial until its own Basic ID is heard (I-07
+// widened from 3 s to 9 s; the lab's SC-10 fails), and a transmitter
+// heard less often than every 9 s is still never published. The values
+// returned are unchanged and stay so in 1.x.
 func RecommendedSettings() Settings {
 	s := DefaultSettings()
 	s.MaxGapS = 9
+	return s
+}
+
+// PublishHeldSettings returns the settings a system should run: the
+// defaults (15 s, 3 s, 4 s, 50000 addresses) with PublishHeld set. The
+// 3 s MaxGapS still forgets an identity after three missed Location
+// periods, so I-07 is as narrow as under DefaultSettings, and a
+// Location still held when its state is forgotten is published
+// unidentified by TakeAll or Sweep, so a transmitter is published
+// however rarely it is heard (Validate passes). The caller must call
+// TakeAll where it called Take and Sweep where it called Forget; with
+// Take and Forget these settings behave as DefaultSettings. They become
+// DefaultSettings in the next major.
+func PublishHeldSettings() Settings {
+	s := DefaultSettings()
+	s.PublishHeld = true
 	return s
 }
 
@@ -241,7 +297,8 @@ func (s Settings) withDefaults() Settings {
 
 // Validate reports whether the settings, as NewTracker would run them
 // (after defaulting), can publish a transmitter that is heard rarely:
-// MaxGapS must not be below IdentifyWithinS. A Location without a fresh
+// without PublishHeld, MaxGapS must not be below IdentifyWithinS. A
+// Location without a fresh
 // identity is held for IdentifyWithinS, and the hold restarts when the
 // address is forgotten after a silence longer than MaxGapS; with the gap
 // below the hold, a transmitter heard less often than every MaxGapS is
@@ -249,13 +306,20 @@ func (s Settings) withDefaults() Settings {
 // not (only held_forgotten shows it). The error is a *core.FieldError
 // naming MaxGapS. IdentifyAtOnceS holds nothing and passes with any gap.
 //
+// With PublishHeld any gap passes: the Location held when the address
+// is forgotten is published unidentified, so a gap below the hold loses
+// nothing. That is true for a caller of TakeAll and Sweep only, and
+// Validate cannot see which methods are called: with Take and Forget
+// the flag publishes nothing more, and held_forgotten above zero is the
+// sign of it.
+//
 // NewTracker does not call it and keeps the settings it is given: a
 // caller that reads Settings from its configuration validates them and
 // refuses to start on an error. DefaultSettings fails it in 1.x (its
-// MaxGapS is 3 s); RecommendedSettings passes.
+// MaxGapS is 3 s); PublishHeldSettings passes.
 func (s Settings) Validate() error {
 	s = s.withDefaults()
-	if s.IdentifyWithinS > 0 && s.MaxGapS < s.IdentifyWithinS {
+	if !s.PublishHeld && s.IdentifyWithinS > 0 && s.MaxGapS < s.IdentifyWithinS {
 		return &core.FieldError{Field: "MaxGapS", Reason: "below IdentifyWithinS: a transmitter heard less often than every MaxGapS would never be published"}
 	}
 	return nil
@@ -270,8 +334,8 @@ func positive(v float64) bool {
 func (t *Tracker) Settings() Settings { return t.s }
 
 // Counters returns the tracker's counters: identity_changes, silences,
-// unidentified, address_conflicts, evicted, held_replaced and
-// held_forgotten.
+// unidentified, address_conflicts, evicted, held_replaced,
+// held_forgotten, held_evicted, held_identity_changed and held_flushed.
 func (t *Tracker) Counters() *core.Counters { return &t.counters }
 
 // Transmitters returns the number of addresses held.
@@ -282,10 +346,109 @@ func (t *Tracker) Transmitters() int { return len(t.addresses) }
 // it arrives with a fresh identity or when the identity it was held for
 // arrives; a Location without one is held for IdentifyWithinS, then
 // published unidentified).
+//
+// A held Location whose state this frame discards is dropped and
+// counted, also with Settings.PublishHeld: Take has one observation to
+// return. TakeAll returns those too.
 func (t *Tracker) Take(f Frame) *Observation {
+	return t.take(f, nil)
+}
+
+// TakeAll applies one frame as Take does and returns every observation
+// it publishes, oldest first; nil when it publishes nothing. Without
+// Settings.PublishHeld that is Take's observation, if any, and nothing
+// else.
+//
+// With PublishHeld it returns first each held Location that the frame
+// made the tracker discard unpublished, as an unidentified observation:
+// the Locations of the states silent for longer than MaxGapS at
+// f.NowS, whatever their address or receiver (the frame is the clock
+// that ends their silence), of an address evicted to make room for the
+// frame's, and of the frame's own state when its Basic ID names another
+// identity. The frame's own observation, if any, is last.
+//
+// A flushed observation is what a hold that timed out publishes:
+// DroneID is UnidentifiedID(address), Label the address, Identified
+// false, UAID and IdentityReceiver empty, IDType 0, with the Operator
+// ID and System its state had heard, and counted in unidentified (and
+// held_flushed). It is unidentified even if an identity for the address
+// is known by then: the state it belonged to is gone, and an identity
+// is never attached across that. Receiver, Transmitter and RxTS are
+// those of the frame that carried the Location, never of the frame
+// that flushed it, which is later by more than MaxGapS for a silence:
+// the caller places it by RxTS.
+//
+// Order: the observations of one (receiver, address) are returned in
+// the order their Locations were taken, within a call and across calls
+// of TakeAll and Sweep, because a Location is flushed by the call that
+// discards its state and nothing is queued. A caller that publishes
+// each slice in order before its next call therefore never puts an
+// older Location of a receiver's view of an address after a newer one.
+// Across receivers there is no such order, with or without the flag,
+// so a picture keyed by DroneID keeps the observation with the latest
+// RxTS.
+//
+// Each Location is returned at most once across Take, TakeAll and
+// Sweep. A flushed Location is returned by the first call whose clock
+// is past its state's silence: without a periodic Sweep that is the
+// next frame of any transmitter, which may be much later.
+func (t *Tracker) TakeAll(f Frame) []*Observation {
+	var out []*Observation
+	if o := t.take(f, t.sink(&out)); o != nil {
+		out = append(out, o)
+	}
+	return out
+}
+
+// Sweep is Forget for a caller that set Settings.PublishHeld: it drops
+// every (receiver, address) state silent for longer than MaxGapS at
+// nowS, counts each in silences, and returns the Locations they still
+// held, unpublished, as unidentified observations (see TakeAll),
+// longest silent first; nil when there is none. Without PublishHeld it
+// returns nil and counts them in held_forgotten, as Forget does. A
+// caller runs it on a periodic tick, so that the last Location of a
+// transmitter that fell silent is published about MaxGapS plus one
+// tick after it was heard, not when some other transmitter is next
+// heard.
+func (t *Tracker) Sweep(nowS float64) []*Observation {
+	var out []*Observation
+	t.forget(nowS, t.sink(&out))
+	return out
+}
+
+// sink returns where a call that can return several observations has
+// the flushed ones appended: out under PublishHeld, nil (drop and
+// count) without it.
+func (t *Tracker) sink(out *[]*Observation) *[]*Observation {
+	if !t.s.PublishHeld {
+		return nil
+	}
+	return out
+}
+
+// discard accounts for the Location st holds when st, or what st knew,
+// is dropped: nothing when it holds none or published it; else it is
+// appended to sink as an unidentified observation, or, with no sink,
+// counted in dropped.
+func (t *Tracker) discard(st *state, dropped string, sink *[]*Observation) {
+	if st.location == nil || st.published {
+		return
+	}
+	if sink == nil {
+		t.counters.Inc(dropped)
+		return
+	}
+	t.counters.Inc(CounterUnidentified)
+	t.counters.Inc(CounterHeldFlushed)
+	*sink = append(*sink, st.observation(nil, ""))
+	st.published = true
+}
+
+// take is Take; held Locations it discards go to sink (see discard).
+func (t *Tracker) take(f Frame, sink *[]*Observation) *Observation {
 	// Before this frame counts as hearing the address: a silence ends here.
-	t.Forget(f.NowS)
-	st := t.stateFor(f)
+	t.forget(f.NowS, sink)
+	st := t.stateFor(f, sink)
 	st.lastHeardS = f.NowS
 	t.recency.MoveToBack(st.recency)
 
@@ -293,7 +456,7 @@ func (t *Tracker) Take(f Frame) *Observation {
 	// said before, and must not drop a Location in the same pack.
 	for _, m := range f.Messages {
 		if b, ok := basicID(m); ok && identified(b) {
-			t.learn(st, b, f.NowS)
+			t.learn(st, b, f.NowS, sink)
 		}
 	}
 	for _, m := range f.Messages {
@@ -367,7 +530,7 @@ func identified(b odid.BasicID) bool {
 
 // stateFor returns the frame's (receiver, address) state, creating it,
 // and evicting the address heard longest ago when the table is full.
-func (t *Tracker) stateFor(f Frame) *state {
+func (t *Tracker) stateFor(f Frame, sink *[]*Observation) *state {
 	key := stateKey{f.Receiver, f.Transmitter}
 	if st, ok := t.states[key]; ok {
 		return st
@@ -379,7 +542,7 @@ func (t *Tracker) stateFor(f Frame) *state {
 			if oldest == nil {
 				break
 			}
-			t.dropAddress(oldest.transmitter)
+			t.dropAddress(oldest.transmitter, sink)
 			t.counters.Inc(CounterEvicted)
 		}
 		addr = &address{}
@@ -402,9 +565,10 @@ func (t *Tracker) oldest() *state {
 	return st
 }
 
-// dropAddress forgets every receiver's view of an address.
-func (t *Tracker) dropAddress(addr *address) {
+// dropAddress forgets every receiver's view of an evicted address.
+func (t *Tracker) dropAddress(addr *address, sink *[]*Observation) {
 	for _, st := range addr.states {
+		t.discard(st, CounterHeldEvicted, sink)
 		t.recency.Remove(st.recency)
 		delete(t.states, st.key)
 	}
@@ -418,18 +582,22 @@ func (t *Tracker) dropAddress(addr *address) {
 // MaxGapS at nowS, counts each in silences and returns how many it
 // dropped: whatever is heard from such an address next is not known to be
 // the same aircraft. A state dropped while it holds a Location that was
-// never published is also counted in held_forgotten. Take calls it; a
-// caller with a periodic tick may too.
+// never published is also counted in held_forgotten, also with
+// Settings.PublishHeld: Forget has no observation to return, Sweep
+// does. Take calls it; a caller with a periodic tick may too.
 func (t *Tracker) Forget(nowS float64) int {
+	return t.forget(nowS, nil)
+}
+
+// forget is Forget; held Locations it discards go to sink (see discard).
+func (t *Tracker) forget(nowS float64, sink *[]*Observation) int {
 	n := 0
 	for st := t.oldest(); st != nil; st = t.oldest() {
 		// Written so that a NaN clock forgets nothing.
 		if !(nowS-st.lastHeardS > t.s.MaxGapS) {
 			break
 		}
-		if st.location != nil && !st.published {
-			t.counters.Inc(CounterHeldForgotten)
-		}
+		t.discard(st, CounterHeldForgotten, sink)
 		t.removeState(st)
 		t.counters.Inc(CounterSilences)
 		n++
@@ -503,7 +671,7 @@ func better(a, b *identity) bool {
 }
 
 // learn records a Basic ID heard by st (I-01, I-04).
-func (t *Tracker) learn(st *state, b odid.BasicID, nowS float64) {
+func (t *Tracker) learn(st *state, b odid.BasicID, nowS float64, sink *[]*Observation) {
 	// One address with two fresh identities of one ID type, from this
 	// receiver or another: two radios on one address, or a spoofer. Not a
 	// reboot, which falls silent first.
@@ -523,6 +691,7 @@ func (t *Tracker) learn(st *state, b odid.BasicID, nowS float64) {
 		// Another aircraft on this address: nothing it said before is
 		// this one's, a held Location included.
 		t.counters.Inc(CounterIdentityChanges)
+		t.discard(st, CounterHeldIdentityChanged, sink)
 		st.identities = st.identities[:0]
 		st.location = nil
 		st.published = false
