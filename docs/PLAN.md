@@ -1,7 +1,7 @@
 # uspace-core implementation plan
 
 Status: plan for parallel implementation by independent agents; the work packages are
-implemented and released (latest tag `v1.15.0`). Written on branch
+implemented and released (latest tag `v1.16.0`). Written on branch
 `plan/initial`. Inputs: the spec at `uspace-lab/docs/spec/` (especially
 `00 §6`, `00 §6.3`, `04`, `05`, `07` G-M1..G-M3, `09`), the knowledge base
 at `uspace-lab/knowledge/` (`LESSONS.md`, 18 vector files, `scenarios.md`,
